@@ -35,6 +35,7 @@ async def run() -> int:
                 for _, title, first_paragraph in rows
             ]
             vectors = embedder.encode(texts, normalize_embeddings=True)
+            assert vectors.shape[1] == 768, f"embedding dim mismatch: got {vectors.shape[1]}, expected 768"
 
             for (article_id, _, _), vector in zip(rows, vectors, strict=True):
                 session.add(

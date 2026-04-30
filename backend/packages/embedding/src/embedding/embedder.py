@@ -12,6 +12,6 @@ def get_embedder() -> SentenceTransformer:
         os.environ.setdefault("HF_HOME", settings.hf_home)
         _model = SentenceTransformer(
             settings.embedding_model_name,
-            trust_remote_code=True,
+            trust_remote_code=True,  # required by google/embeddinggemma-300m custom pooling code
         )
     return _model

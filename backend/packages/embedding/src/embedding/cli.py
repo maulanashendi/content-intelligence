@@ -1,18 +1,13 @@
 import asyncio
-import logging
-import sys
 
 import click
 from core.config import settings
+from core.logging import configure_logging
 
 
 @click.command()
 def run() -> None:
-    logging.basicConfig(
-        level=settings.log_level,
-        stream=sys.stdout,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    configure_logging(settings.log_level)
     count = asyncio.run(_run())
     click.echo(f"Embedded {count} articles")
 
