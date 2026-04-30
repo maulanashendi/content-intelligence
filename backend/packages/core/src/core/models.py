@@ -16,9 +16,12 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+_gen_uuid = text("gen_random_uuid()")
 
 
 class Base(DeclarativeBase):
@@ -50,11 +53,11 @@ class InsightRecommendation(enum.Enum):
 class ContentSource(Base):
     __tablename__ = "content_source"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     name: Mapped[str] = mapped_column(String, nullable=False)
     url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     source_type: Mapped[SourceType] = mapped_column(Enum(SourceType), nullable=False)
-    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), nullable=False)
     status: Mapped[SourceStatus | None] = mapped_column(Enum(SourceStatus))
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
@@ -66,7 +69,7 @@ class ContentSource(Base):
 class Article(Base):
     __tablename__ = "article"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("content_source.id"), nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
     url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
@@ -90,11 +93,11 @@ class Article(Base):
 class ArticleEmbedding(Base):
     __tablename__ = "article_embedding"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     article_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("article.id"), unique=True, nullable=False)
     model_name: Mapped[str] = mapped_column(String, nullable=False)
     model_version: Mapped[str | None] = mapped_column(String)
-    embedding: Mapped[list | None] = mapped_column(Vector(768))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     article: Mapped["Article"] = relationship(back_populates="embedding")
@@ -103,7 +106,7 @@ class ArticleEmbedding(Base):
 class ArticleGscMetric(Base):
     __tablename__ = "article_gsc_metric"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     article_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("article.id"), nullable=False)
     clicks: Mapped[int | None] = mapped_column(Integer)
     impressions: Mapped[int | None] = mapped_column(Integer)
@@ -123,10 +126,10 @@ class ArticleGscMetric(Base):
 class TrendSignal(Base):
     __tablename__ = "trend_signal"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     keyword: Mapped[str] = mapped_column(String, nullable=False)
     interest_score: Mapped[float | None] = mapped_column(Float)
-    region: Mapped[str] = mapped_column(String, default="ID", nullable=False)
+    region: Mapped[str] = mapped_column(String, server_default="ID", nullable=False)
     captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
@@ -153,7 +156,7 @@ class TrendSignalArticle(Base):
 class ClusterRun(Base):
     __tablename__ = "cluster_run"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     algorithm: Mapped[ClusterAlgorithm | None] = mapped_column(Enum(ClusterAlgorithm))
     algorithm_version: Mapped[str | None] = mapped_column(String)
     params: Mapped[dict | None] = mapped_column(JSONB)
@@ -167,12 +170,12 @@ class ClusterRun(Base):
 class ArticleCluster(Base):
     __tablename__ = "article_cluster"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cluster_run.id"), nullable=False)
     label: Mapped[str | None] = mapped_column(String)
-    centroid: Mapped[list | None] = mapped_column(Vector(768))
+    centroid: Mapped[list[float] | None] = mapped_column(Vector(768))
     member_count: Mapped[int | None] = mapped_column(Integer)
-    is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_current: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     __table_args__ = (
@@ -201,7 +204,7 @@ class ArticleClusterMember(Base):
 class ClusterInsight(Base):
     __tablename__ = "cluster_insight"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid)
     cluster_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("article_cluster.id"), unique=True, nullable=False)
     trend_velocity: Mapped[float | None] = mapped_column(Float)
     novelty_score: Mapped[float | None] = mapped_column(Float)
