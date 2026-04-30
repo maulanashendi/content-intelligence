@@ -1,4 +1,9 @@
-# HDBSCAN wrapper.
-# min_cluster_size and min_samples loaded from core.config.
-# Returns cluster_id per article plus relevance_score (probability output by HDBSCAN).
-# Articles labeled as noise (cluster_id = -1) are skipped, not persisted.
+import hdbscan
+import numpy as np
+from core.config import settings
+
+
+def cluster(vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=settings.hdbscan_min_cluster_size)
+    clusterer.fit(vectors)
+    return clusterer.labels_, clusterer.probabilities_

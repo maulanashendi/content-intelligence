@@ -1,7 +1,31 @@
-# Entry function: run() — performs full ingestion pass.
-# 1. Fetch ~10 RSS sources in parallel via httpx + feedparser.
-# 2. Parse Tempo internal sitemap.
-# 3. Parse Google Trends RSS feeds.
-# 4. Upsert articles with ON CONFLICT (url) DO NOTHING.
-# 5. Upsert trend_signal + trend_signal_article rows in a transaction.
-# 6. Update content_source.status to 'active' on success or 'error' on failure.
+import logging
+
+import httpx
+from core.config import settings
+from core.db import get_session
+
+from ingest.rss import ingest_rss
+from ingest.sitemap import ingest_sitemap
+from ingest.trends import ingest_trends
+
+logger = logging.getLogger(__name__)
+
+
+async def run() -> dict:
+    totals: dict[str, int] = {}
+    timeout = httpx.Timeout(settings.ingest_timeout_seconds)
+    async with httpx.AsyncClient(timeout=timeout) as client, get_session() as session:
+        rss_count = await ingest_rss(session, client)
+        totals["rss"] = rss_count
+        logger.info("rss: %d articles processed", rss_count)
+
+        sitemap_count = await ingest_sitemap(session, client)
+        totals["sitemap"] = sitemap_count
+        logger.info("sitemap: %d articles processed", sitemap_count)
+
+        trends_count = await ingest_trends(session, client)
+        totals["trends"] = trends_count
+        logger.info("trends: %d signals processed", trends_count)
+
+    logger.info("ingest complete: %s", totals)
+    return totals
