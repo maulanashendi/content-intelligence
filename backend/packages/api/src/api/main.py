@@ -1,2 +1,22 @@
-# FastAPI app instance with /api/v1 prefix.
-# Mounts routers from routes/. No auth code — handled by upstream gateway.
+import logging
+
+from fastapi import FastAPI
+from pythonjsonlogger import jsonlogger
+
+from api.routes import clusters, health
+
+
+def _configure_logging() -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(jsonlogger.JsonFormatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
+_configure_logging()
+
+app = FastAPI(title="Editor Intelligence API", version="1.0.0")
+app.include_router(clusters.router, prefix="/api/v1")
+app.include_router(health.router, prefix="/api/v1")
