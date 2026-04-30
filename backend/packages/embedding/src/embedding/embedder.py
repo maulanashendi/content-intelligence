@@ -1,4 +1,17 @@
-# Singleton embedder.
-# Loads google/embeddinggemma-300m once via sentence-transformers and reuses
-# the model across all batch calls within a pipeline run.
-# Switching models requires schema migration + re-embed (see docs/decisions.md D4).
+import os
+
+from core.config import settings
+from sentence_transformers import SentenceTransformer
+
+_model: SentenceTransformer | None = None
+
+
+def get_embedder() -> SentenceTransformer:
+    global _model
+    if _model is None:
+        os.environ.setdefault("HF_HOME", settings.hf_home)
+        _model = SentenceTransformer(
+            settings.embedding_model_name,
+            trust_remote_code=True,
+        )
+    return _model
