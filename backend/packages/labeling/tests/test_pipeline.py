@@ -74,9 +74,7 @@ async def test_labels_current_clusters():
 
 
 @pytest.mark.asyncio
-async def test_skips_non_current_clusters():
-    non_current_cluster = _make_cluster(label=None)
-
+async def test_returns_zero_counts_when_no_clusters():
     with (
         patch("labeling.pipeline.get_session") as mock_session_ctx,
         patch("labeling.pipeline._load_current_clusters", return_value=[]),
@@ -88,7 +86,6 @@ async def test_skips_non_current_clusters():
 
     assert result["labeled"] == 0
     assert result["skipped"] == 0
-    assert non_current_cluster.label is None
 
 
 @pytest.mark.asyncio

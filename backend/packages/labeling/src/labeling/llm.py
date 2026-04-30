@@ -38,7 +38,6 @@ def get_llm() -> Any:
             filename=MODEL_FILENAME,
             n_ctx=2048,
             n_gpu_layers=-1,
-            flash_attn=True,
             verbose=False,
         )
     return _llm
