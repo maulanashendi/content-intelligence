@@ -32,14 +32,22 @@ async def _seed_article(session, source_id):
     return article
 
 
+def _make_embedder():
+    mock = MagicMock()
+
+    def fake_encode(texts, *, normalize_embeddings=True):
+        return np.zeros((len(texts), 768), dtype=np.float32)
+
+    mock.encode.side_effect = fake_encode
+    return mock
+
+
 @pytest.mark.asyncio
 async def test_run_embeds_unembedded_articles(db_session):
     source = await _seed_source(db_session)
     article = await _seed_article(db_session, source.id)
 
-    fake_vectors = np.zeros((1, 768), dtype=np.float32)
-    mock_embedder = MagicMock()
-    mock_embedder.encode.return_value = fake_vectors
+    mock_embedder = _make_embedder()
 
     @asynccontextmanager
     async def mock_get_session():
@@ -75,7 +83,7 @@ async def test_run_is_noop_when_all_embedded(db_session):
     )
     await db_session.flush()
 
-    mock_embedder = MagicMock()
+    mock_embedder = _make_embedder()
 
     @asynccontextmanager
     async def mock_get_session():

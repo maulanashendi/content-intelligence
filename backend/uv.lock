@@ -74,7 +74,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-json-logger" },
     { name = "sqlalchemy" },
-    { name = "python-json-logger" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -85,7 +84,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2" },
     { name = "python-json-logger", specifier = ">=2.0" },
     { name = "sqlalchemy", specifier = ">=2" },
-    { name = "python-json-logger", specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
