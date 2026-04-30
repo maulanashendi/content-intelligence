@@ -37,7 +37,7 @@ def _load_model_and_tokenizer() -> tuple[AutoModelForCausalLM, AutoTokenizer]:
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch.float32,
+            torch_dtype=torch.bfloat16,
             device_map="cpu",
         )
 
