@@ -1,9 +1,10 @@
 import asyncio
-import logging
 
 import click
+from core.config import settings
+from core.logging import configure_logging
 
-logging.basicConfig(level="INFO", format="%(levelname)s %(name)s %(message)s")
+configure_logging(settings.log_level)
 
 
 @click.group()

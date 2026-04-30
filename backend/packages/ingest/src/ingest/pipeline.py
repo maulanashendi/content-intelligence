@@ -2,7 +2,6 @@ import logging
 
 import httpx
 from core.config import settings
-from core.db import get_session
 
 from ingest.rss import ingest_rss
 from ingest.sitemap import ingest_sitemap
@@ -14,16 +13,16 @@ logger = logging.getLogger(__name__)
 async def run() -> dict:
     totals: dict[str, int] = {}
     timeout = httpx.Timeout(settings.ingest_timeout_seconds)
-    async with httpx.AsyncClient(timeout=timeout) as client, get_session() as session:
-        rss_count = await ingest_rss(session, client)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        rss_count = await ingest_rss(client)
         totals["rss"] = rss_count
         logger.info("rss: %d articles processed", rss_count)
 
-        sitemap_count = await ingest_sitemap(session, client)
+        sitemap_count = await ingest_sitemap(client)
         totals["sitemap"] = sitemap_count
         logger.info("sitemap: %d articles processed", sitemap_count)
 
-        trends_count = await ingest_trends(session, client)
+        trends_count = await ingest_trends(client)
         totals["trends"] = trends_count
         logger.info("trends: %d signals processed", trends_count)
 

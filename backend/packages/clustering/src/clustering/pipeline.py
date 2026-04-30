@@ -13,7 +13,7 @@ from core.models import (
     ClusterAlgorithm,
     ClusterRun,
 )
-from sqlalchemy import select, true, update
+from sqlalchemy import func, select, true, update
 
 from clustering.clusterer import cluster as hdbscan_cluster
 from clustering.reducer import reduce as umap_reduce
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 async def run() -> None:
-    started_at = datetime.now(UTC)
+    started_at = datetime.now(UTC).replace(tzinfo=None)
     embeddings, article_ids = await _load_recent_embeddings()
 
     if len(embeddings) == 0:
@@ -46,12 +46,12 @@ async def run() -> None:
 
 
 async def _load_recent_embeddings() -> tuple[np.ndarray, list[uuid.UUID]]:
-    cutoff = datetime.now(UTC) - timedelta(days=settings.clustering_window_days)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=settings.clustering_window_days)
     async with get_session() as session:
         stmt = (
             select(ArticleEmbedding.article_id, ArticleEmbedding.embedding)
             .join(Article, ArticleEmbedding.article_id == Article.id)
-            .where(Article.created_at >= cutoff)
+            .where(func.coalesce(Article.published_at, Article.created_at) >= cutoff)
             .where(ArticleEmbedding.embedding.isnot(None))
         )
         result = await session.execute(stmt)
@@ -86,13 +86,13 @@ async def _persist_clusters(
             .values(is_current=False)
         )
 
-        run = ClusterRun(
+        cluster_run = ClusterRun(
             algorithm=ClusterAlgorithm.hdbscan,
             params=params,
             started_at=started_at,
-            finished_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC).replace(tzinfo=None),
         )
-        session.add(run)
+        session.add(cluster_run)
         await session.flush()
 
         unique_labels = sorted(set(labels.tolist()) - {-1})
@@ -106,7 +106,7 @@ async def _persist_clusters(
             centroid = cluster_embeddings.mean(axis=0).tolist()
 
             cluster = ArticleCluster(
-                run_id=run.id,
+                run_id=cluster_run.id,
                 centroid=centroid,
                 member_count=len(member_indices),
                 is_current=True,
