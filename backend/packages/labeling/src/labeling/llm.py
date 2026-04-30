@@ -21,26 +21,30 @@ def _load_model_and_tokenizer() -> tuple[AutoModelForCausalLM, AutoTokenizer]:
     os.environ["HF_HOME"] = settings.hf_home
 
     model_name = settings.llm_model_name
-    logger.info("loading LLM %s (4-bit quantized)", model_name)
-
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,
-    )
+    logger.info("loading LLM %s", model_name)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        quantization_config=bnb_config,
-        device_map="auto",
-    )
-    model.eval()
 
-    logger.info(
-        "LLM loaded (%.1f GB)",
-        torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0,
-    )
+    if torch.cuda.is_available():
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            quantization_config=bnb_config,
+            device_map="auto",
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float32,
+            device_map="cpu",
+        )
+
+    model.eval()
+    logger.info("LLM loaded (device=%s)", next(model.parameters()).device)
     return model, tokenizer
 
 
