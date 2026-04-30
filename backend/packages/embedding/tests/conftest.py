@@ -1,9 +1,8 @@
 import pytest_asyncio
+from core.config import settings
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
-
-from core.config import settings
 
 
 @pytest_asyncio.fixture
@@ -11,6 +10,8 @@ async def db_session():
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
     async with engine.connect() as conn:
         await conn.begin()
+        # Defensive sweep of committed state so the nested txn sees a clean slate.
+        # The outer conn.rollback() at teardown restores everything — no data loss.
         for table in (
             "cluster_insight",
             "article_cluster_member",

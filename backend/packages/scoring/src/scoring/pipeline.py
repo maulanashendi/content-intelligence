@@ -120,7 +120,6 @@ async def _cluster_interest_scores(session: AsyncSession, cluster_id: UUID) -> l
     return list((await session.execute(stmt)).scalars())
 
 
-
 async def _has_underperformed_internal_articles(
     session: AsyncSession,
     article_ids: Sequence[UUID],

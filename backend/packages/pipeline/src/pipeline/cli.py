@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import time
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import click
 from core.config import settings
@@ -8,54 +10,58 @@ from core.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 
-_STEPS = ("ingest", "embed", "cluster", "label", "score")
+
+async def _ingest() -> dict[str, Any]:
+    from ingest.pipeline import run
+
+    return await run()
+
+
+async def _embed() -> int:
+    from embedding.pipeline import run
+
+    return await run()
+
+
+async def _cluster() -> None:
+    from clustering.pipeline import run
+
+    await run()
+
+
+async def _label() -> dict[str, int]:
+    from labeling.pipeline import run
+
+    return await run()
+
+
+async def _score() -> int:
+    from scoring.pipeline import run
+
+    return await run()
+
+
+_STEP_RUNNERS: dict[str, Callable[[], Coroutine[Any, Any, Any]]] = {
+    "ingest": _ingest,
+    "embed": _embed,
+    "cluster": _cluster,
+    "label": _label,
+    "score": _score,
+}
 
 
 async def _run_step(step: str) -> None:
-    match step:
-        case "ingest":
-            from ingest.pipeline import run
-
-            result = await run()
-            logger.info("ingest complete", extra=result)
-        case "embed":
-            from embedding.pipeline import run
-
-            count = await run()
-            logger.info("embed complete", extra={"count": count})
-        case "cluster":
-            from clustering.pipeline import run
-
-            await run()
-            logger.info("cluster complete")
-        case "label":
-            from labeling.pipeline import run
-
-            result = await run()
-            logger.info("label complete", extra=result)
-        case "score":
-            from scoring.pipeline import run
-
-            count = await run()
-            logger.info("score complete", extra={"cluster_count": count})
-        case _:
-            raise click.UsageError(f"unknown step: {step}")
+    result = await _STEP_RUNNERS[step]()
+    logger.info("%s complete", step, extra={"counts": result})
 
 
-@click.group()
-def cli() -> None:
-    pass
-
-
-@cli.command("run-daily")
-def run_daily() -> None:
-    configure_logging(settings.log_level)
+async def _run_daily() -> None:
     started_at = time.perf_counter()
     logger.info("pipeline started")
 
-    for step in _STEPS:
+    for step in _STEP_RUNNERS:
         step_start = time.perf_counter()
-        asyncio.run(_run_step(step))
+        await _run_step(step)
         logger.info(
             "step finished",
             extra={"step": step, "elapsed_s": round(time.perf_counter() - step_start, 2)},
@@ -67,11 +73,26 @@ def run_daily() -> None:
     )
 
 
-@cli.command()
-@click.argument("step", type=click.Choice(_STEPS))
-def run_step(step: str) -> None:
+@click.group()
+def cli() -> None:
+    pass
+
+
+@cli.command("run-daily")
+def run_daily() -> None:
     configure_logging(settings.log_level)
-    asyncio.run(_run_step(step))
+    asyncio.run(_run_daily())
+
+
+for _step_name in _STEP_RUNNERS:
+
+    def _make_command(name: str) -> None:
+        @cli.command(name)
+        def _step_cmd() -> None:
+            configure_logging(settings.log_level)
+            asyncio.run(_run_step(name))
+
+    _make_command(_step_name)
 
 
 if __name__ == "__main__":

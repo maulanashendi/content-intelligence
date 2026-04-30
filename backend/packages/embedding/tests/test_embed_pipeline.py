@@ -4,10 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from sqlalchemy import select
-
 from core.models import Article, ArticleEmbedding, ContentSource, SourceType
 from embedding.pipeline import run
+from sqlalchemy import select
 
 
 async def _seed_source(session):
