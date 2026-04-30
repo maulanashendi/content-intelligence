@@ -99,20 +99,24 @@ External APIs were rejected to keep operational scope inside the team's control 
 
 ---
 
-## D6. HuggingFace transformers direct, not Ollama
+## D6. `llama-cpp-python` with GGUF, not HuggingFace transformers or Ollama
 
-**Context.** Local LLM serving has multiple options. Ollama is the most common purpose-built tool for it.
+**Context.** Local LLM serving has multiple options. The original plan was `transformers` directly. CPU performance validation showed that PyTorch CPU inference for Gemma 2B — even with bitsandbytes 4-bit (`nf4`) — runs 5–30 s per cluster label. At ~30 clusters per daily run that is 5–15 minutes, and bitsandbytes `nf4` has no AVX2 or Metal acceleration path.
 
 **Options considered.**
 - Ollama as a sidecar service
-- `transformers` library called directly in the pipeline process
+- `transformers` + `bitsandbytes` called directly in the pipeline process
 - `llama-cpp-python` with GGUF models
 
-**Decision.** `transformers` directly, embedded in the pipeline Python process.
+**Decision.** `llama-cpp-python` with GGUF `Q4_K_M` quantization, embedded in the pipeline Python process.
 
-**Rationale.** The labeling step runs ~30 inferences once per day in a batch context. There is no real-time concurrency, no streaming, no multiple consumers. Adding Ollama means a separate service, a separate model registry, and HTTP overhead for no benefit. The embedding pipeline already uses HF; using HF for the LLM keeps the stack consistent and the model cache unified.
+**Rationale.** `llama-cpp-python` is a thin Python binding over `llama.cpp`, which is written in C++ and uses SIMD (AVX2 on x86, NEON on ARM) and Metal acceleration on Apple Silicon. For the same Gemma 2B model and comparable quantization depth, it runs 3–5× faster than PyTorch CPU inference with no GPU requirement. `Q4_K_M` is the recommended quantization level: K-quants assign different bit widths per tensor type (better quality/size than uniform quantization), and the `M` (medium) variant preserves output quality better than `S` for short multilingual text — relevant because Bahasa Indonesia is lower-resource and label quality is the primary UI surface (D5). On-disk size is ~1.6 GB; runtime RAM ~2 GB.
 
-**Implication.** If labeling moves to a real-time, multi-consumer pattern in the future, Ollama becomes worth reconsidering. If CPU performance is insufficient for the chosen model, `llama-cpp-python` with GGUF is the next step before adding a service.
+Dropping `transformers`, `bitsandbytes`, and `accelerate` from the `labeling` package also removes ~3 GB from the pipeline Docker image. `torch` is retained because `sentence-transformers` (embedding) requires it as a backend.
+
+Ollama remains rejected: it adds a separate sidecar service and HTTP overhead for a batch-only, single-consumer workload.
+
+**Implication.** The active GGUF model is `bartowski/gemma-2-2b-it-GGUF` (`gemma-2-2b-it-Q4_K_M.gguf`). `llama_cpp.Llama.from_pretrained` downloads and caches it to `settings.hf_home`. If label quality in Bahasa Indonesia proves marginal after validation, test `Q5_K_M` (slightly larger, ~2.0 GB disk, ~2.4 GB RAM) as the next step up before changing the model family. If labeling ever moves to a real-time multi-consumer pattern, revisit Ollama at that point.
 
 ---
 
