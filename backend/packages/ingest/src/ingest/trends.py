@@ -78,6 +78,7 @@ async def _resolve_source(session: AsyncSession, article_url: str) -> uuid.UUID 
 
 
 async def ingest_trends(client: httpx.AsyncClient) -> int:
+    """One transaction per trend keyword so a failure on one does not roll back earlier writes."""
     try:
         resp = await client.get(TRENDS_RSS_URL)
         resp.raise_for_status()

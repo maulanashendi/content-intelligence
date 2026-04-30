@@ -9,6 +9,7 @@ dependencies = [
   "pgvector>=0.3",
   "pydantic>=2.9",
   "pydantic-settings>=2.5",
+  "python-json-logger>=2.0",
 ]
 
 [build-system]
