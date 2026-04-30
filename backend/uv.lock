@@ -89,6 +89,9 @@ source = { editable = "packages/api" }
 dependencies = [
     { name = "core" },
     { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "python-json-logger" },
+    { name = "sqlalchemy" },
     { name = "python-json-logger" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -97,6 +100,9 @@ dependencies = [
 requires-dist = [
     { name = "core", editable = "packages/core" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "python-json-logger", specifier = ">=2.0" },
+    { name = "sqlalchemy", specifier = ">=2" },
     { name = "python-json-logger", specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
@@ -320,6 +326,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "alembic" },
+    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -331,6 +338,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "alembic", specifier = ">=1.13" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
