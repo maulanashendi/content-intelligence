@@ -67,7 +67,6 @@ def generate_label(articles: list[dict[str, str | None]]) -> str:
         outputs = model.generate(
             **inputs,
             max_new_tokens=MAX_NEW_TOKENS,
-            temperature=0,
             do_sample=False,
         )
 
