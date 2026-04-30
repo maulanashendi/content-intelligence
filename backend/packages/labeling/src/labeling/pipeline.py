@@ -44,28 +44,30 @@ async def run() -> dict[str, int]:
 
     async with get_session() as session:
         clusters = await _load_current_clusters(session)
-        logger.info("found %d current clusters to label", len(clusters))
+        logger.info("found current clusters to label", extra={"cluster_count": len(clusters)})
 
         for cluster in clusters:
             articles = await _get_top_articles(session, cluster.id)
             if not articles:
-                logger.warning("cluster %s has no articles, skipping", cluster.id)
+                logger.warning("cluster has no articles", extra={"cluster_id": str(cluster.id)})
                 skipped += 1
                 continue
 
             try:
                 label = generate_label(articles)
             except Exception:
-                logger.exception("failed to generate label for cluster %s", cluster.id)
+                logger.exception(
+                    "failed to generate cluster label", extra={"cluster_id": str(cluster.id)}
+                )
                 skipped += 1
                 continue
 
             cluster.label = label
             labeled += 1
-            logger.info("cluster %s labeled: %s", cluster.id, label)
+            logger.info("cluster labeled", extra={"cluster_id": str(cluster.id), "label": label})
 
         await session.commit()
 
     result = {"labeled": labeled, "skipped": skipped}
-    logger.info("labeling complete: %s", result)
+    logger.info("labeling complete", extra=result)
     return result
