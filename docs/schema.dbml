@@ -34,7 +34,7 @@ Table content_source {
 
 Table article {
   id uuid [pk, default: `gen_random_uuid()`]
-  source_id uuid [ref: > content_source.id]
+  source_id uuid [not null, ref: > content_source.id]
   title varchar [not null]
   url varchar [unique, not null]
   first_paragraph text
