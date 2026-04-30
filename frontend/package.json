@@ -1,0 +1,14 @@
+{
+  "name": "frontend",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "bun --filter @ei-fe/app run dev",
+    "build": "bun --filter @ei-fe/app run build",
+    "test": "bun test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "gen:api": "bun --filter @ei-fe/api run gen:api"
+  }
+}

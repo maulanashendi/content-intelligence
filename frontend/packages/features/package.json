@@ -1,0 +1,14 @@
+{
+  "name": "@ei-fe/features",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ei-fe/core": "workspace:*",
+    "@ei-fe/api": "workspace:*",
+    "@ei-fe/ui": "workspace:*"
+  }
+}

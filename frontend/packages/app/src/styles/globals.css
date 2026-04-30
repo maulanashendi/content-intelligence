@@ -1,0 +1,13 @@
+/*
+ * Global stylesheet.
+ * @import "tailwindcss";
+ *
+ * :root must define CSS custom properties mirroring @ei-fe/core/tokens.ts
+ * (decisions.md D17). Keep in manual sync.
+ *
+ * shadcn primitives expect: --background, --foreground, --primary, --secondary,
+ * --muted, --accent, --destructive, --border, --input, --ring, --radius
+ * plus our domain tokens for recommendation colors.
+ *
+ * No component-specific CSS here. Use Tailwind classes inside components.
+ */

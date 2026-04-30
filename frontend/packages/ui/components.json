@@ -1,0 +1,16 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "default",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "../app/tailwind.config.ts",
+    "css": "../app/src/styles/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "@ei-fe/ui/primitives",
+    "utils": "@ei-fe/ui/lib/cn"
+  }
+}

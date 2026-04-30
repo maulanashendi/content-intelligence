@@ -1,0 +1,154 @@
+Enum source_type {
+  rss
+  internal
+}
+
+Enum source_status {
+  active
+  error
+  blocked
+}
+
+Enum cluster_algorithm {
+  hdbscan
+  kmeans
+}
+
+Enum insight_recommendation {
+  trending
+  worth_writing
+  saturated
+}
+
+Table content_source {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar
+  url varchar [unique]
+  source_type source_type
+  is_enabled bool [default: true]
+  status source_status
+  last_fetched_at timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+Table article {
+  id uuid [pk, default: `gen_random_uuid()`]
+  source_id uuid [ref: > content_source.id]
+  title varchar [not null]
+  url varchar [unique, not null]
+  first_paragraph text
+  last_paragraph text
+  published_at timestamp
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    source_id
+    published_at
+  }
+}
+
+// One active embedding per article. Switching embedding model = schema
+// migration (vector dim) + re-embed everything. model_name + model_version
+// keep audit trail of what generated the current vector.
+Table article_embedding {
+  id uuid [pk, default: `gen_random_uuid()`]
+  article_id uuid [unique, ref: > article.id]
+  model_name varchar [not null]
+  model_version varchar
+  embedding vector(768)
+  created_at timestamp [default: `now()`]
+}
+
+// Reference-only. Read by the scoring job to flag underperforming internal
+// articles as rewrite candidates (PRD §1). Never returned to the FE — only
+// derived signals (e.g. cluster_insight.internal_underperformed) cross out.
+Table article_gsc_metric {
+  id uuid [pk, default: `gen_random_uuid()`]
+  article_id uuid [ref: > article.id]
+  clicks int
+  impressions int
+  ctr float
+  avg_position float
+  period_start date
+  period_end date
+  fetched_at timestamp [default: `now()`]
+
+  indexes {
+    (article_id, period_start, period_end) [unique]
+  }
+}
+
+// Google Trends keyword + traffic. Articles surfaced by Trends are stored
+// in `article` (linked via trend_signal_article) so they flow through the
+// same embedding + clustering pipeline as RSS/internal articles.
+Table trend_signal {
+  id uuid [pk, default: `gen_random_uuid()`]
+  keyword varchar [not null]
+  interest_score float
+  region varchar [default: 'ID']
+  captured_at timestamp [not null]
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    (keyword, captured_at) [unique]
+    captured_at
+  }
+}
+
+Table trend_signal_article {
+  trend_signal_id uuid [ref: > trend_signal.id]
+  article_id uuid [ref: > article.id]
+
+  indexes {
+    (trend_signal_id, article_id) [pk]
+    article_id
+  }
+}
+
+Table cluster_run {
+  id uuid [pk, default: `gen_random_uuid()`]
+  algorithm cluster_algorithm
+  algorithm_version varchar
+  params jsonb
+  started_at timestamp [default: `now()`]
+  finished_at timestamp
+  notes text
+}
+
+Table article_cluster {
+  id uuid [pk, default: `gen_random_uuid()`]
+  run_id uuid [ref: > cluster_run.id]
+  label varchar
+  centroid vector(768)
+  member_count int
+  is_current bool [default: true]
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    run_id
+    is_current
+  }
+}
+
+Table article_cluster_member {
+  cluster_id uuid [ref: > article_cluster.id]
+  article_id uuid [ref: > article.id]
+  relevance_score float
+
+  indexes {
+    (cluster_id, article_id) [pk]
+    article_id
+  }
+}
+
+Table cluster_insight {
+  id uuid [pk, default: `gen_random_uuid()`]
+  cluster_id uuid [ref: - article_cluster.id]
+  trend_velocity float
+  novelty_score float
+  coverage_score float
+  recommendation insight_recommendation
+  summary text
+  calculated_at timestamp [default: `now()`]
+}

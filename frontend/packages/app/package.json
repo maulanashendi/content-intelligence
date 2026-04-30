@@ -1,0 +1,17 @@
+{
+  "name": "@ei-fe/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ei-fe/core": "workspace:*",
+    "@ei-fe/api": "workspace:*",
+    "@ei-fe/ui": "workspace:*",
+    "@ei-fe/features": "workspace:*"
+  }
+}

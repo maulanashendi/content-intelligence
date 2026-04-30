@@ -1,0 +1,51 @@
+[project]
+name = "editor-intelligence"
+version = "0.1.0"
+description = "Editorial intelligence dashboard — clustering trending topics for Tempo's editorial team"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+core = { workspace = true }
+ingest = { workspace = true }
+embedding = { workspace = true }
+clustering = { workspace = true }
+labeling = { workspace = true }
+scoring = { workspace = true }
+api = { workspace = true }
+pipeline = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.7",
+  "mypy>=1.13",
+  "alembic>=1.13",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages"]
+python_files = ["test_*.py"]
+
+[tool.mypy]
+python_version = "3.11"
+strict_optional = true
+warn_unused_ignores = true
+ignore_missing_imports = true
