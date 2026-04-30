@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from pythonjsonlogger import jsonlogger
@@ -15,8 +16,12 @@ def _configure_logging() -> None:
     root.setLevel(logging.INFO)
 
 
-_configure_logging()
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    _configure_logging()
+    yield
 
-app = FastAPI(title="Editor Intelligence API", version="1.0.0")
+
+app = FastAPI(title="Editor Intelligence API", version="1.0.0", lifespan=_lifespan)
 app.include_router(clusters.router, prefix="/api/v1")
 app.include_router(health.router, prefix="/api/v1")

@@ -57,7 +57,7 @@ def _to_summary(cluster: ArticleCluster, insight: ClusterInsight) -> ClusterSumm
 
 @router.get("/morning", response_model=list[ClusterSummary])
 async def morning_clusters(session: SessionDep) -> list[ClusterSummary]:
-    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
+    thirty_days_ago = (datetime.now(UTC) - timedelta(days=30)).replace(tzinfo=None)
 
     # Exclude clusters where Tempo already published an article on this topic recently.
     has_internal_recent = (
@@ -115,7 +115,7 @@ async def cluster_detail(cluster_id: uuid.UUID, session: SessionDep) -> ClusterD
     cluster_stmt = (
         select(ArticleCluster, ClusterInsight)
         .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
-        .where(ArticleCluster.id == cluster_id)
+        .where(ArticleCluster.id == cluster_id, ArticleCluster.is_current.is_(True))
     )
     row = (await session.execute(cluster_stmt)).one_or_none()
     if row is None:
