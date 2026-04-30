@@ -1,14 +1,15 @@
 import logging
 import re
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import feedparser
 import httpx
+from core.db import get_session
 from core.models import (
     Article,
     ContentSource,
-    SourceType,
     TrendSignal,
     TrendSignalArticle,
 )
@@ -68,31 +69,15 @@ def _parse_trends_feed(feed: feedparser.FeedParserDict, now: datetime) -> list[d
 
 
 async def _resolve_source(session: AsyncSession, article_url: str) -> uuid.UUID | None:
-    from urllib.parse import urlparse
-
     host = urlparse(article_url).hostname or ""
     result = await session.execute(
         select(ContentSource).where(ContentSource.url.ilike(f"%{host}%"))
     )
     source = result.scalar_one_or_none()
-    if source:
-        return source.id
-
-    result = await session.execute(
-        select(ContentSource).where(ContentSource.source_type == SourceType.rss).limit(1)
-    )
-    fallback = result.scalar_one_or_none()
-    if fallback:
-        logger.warning(
-            "trends: no source match for host=%s, falling back to source=%s",
-            host,
-            fallback.name,
-        )
-        return fallback.id
-    return None
+    return source.id if source else None
 
 
-async def ingest_trends(session: AsyncSession, client: httpx.AsyncClient) -> int:
+async def ingest_trends(client: httpx.AsyncClient) -> int:
     try:
         resp = await client.get(TRENDS_RSS_URL)
         resp.raise_for_status()
@@ -101,7 +86,7 @@ async def ingest_trends(session: AsyncSession, client: httpx.AsyncClient) -> int
         logger.exception("failed to fetch Google Trends RSS")
         return 0
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     parsed_trends = _parse_trends_feed(feed, now)
     if not parsed_trends:
         logger.info("trends: no trending topics found")
@@ -109,60 +94,61 @@ async def ingest_trends(session: AsyncSession, client: httpx.AsyncClient) -> int
 
     total_signals = 0
 
-    for trend in parsed_trends:
-        async with session.begin():
-            signal_stmt = pg_insert(TrendSignal).values(
-                keyword=trend["keyword"],
-                interest_score=trend["interest_score"],
-                captured_at=trend["captured_at"],
-            )
-            signal_stmt = signal_stmt.on_conflict_do_nothing(
-                constraint="uq_trend_signal_keyword_captured_at"
-            )
-            await session.execute(signal_stmt)
-
-            result = await session.execute(
-                select(TrendSignal).where(
-                    TrendSignal.keyword == trend["keyword"],
-                    TrendSignal.captured_at == trend["captured_at"],
+    async with get_session() as session:
+        for trend in parsed_trends:
+            async with session.begin():
+                signal_stmt = pg_insert(TrendSignal).values(
+                    keyword=trend["keyword"],
+                    interest_score=trend["interest_score"],
+                    captured_at=trend["captured_at"],
                 )
-            )
-            signal = result.scalar_one_or_none()
-            if signal is None:
-                continue
+                signal_stmt = signal_stmt.on_conflict_do_nothing(
+                    constraint="uq_trend_signal_keyword_captured_at"
+                )
+                await session.execute(signal_stmt)
 
-            for article_data in trend["articles"]:
-                source_id = await _resolve_source(session, article_data["url"])
-                if source_id is None:
-                    logger.warning(
-                        "trends: skipping article url=%s (no source)", article_data["url"]
+                result = await session.execute(
+                    select(TrendSignal).where(
+                        TrendSignal.keyword == trend["keyword"],
+                        TrendSignal.captured_at == trend["captured_at"],
                     )
+                )
+                signal = result.scalar_one_or_none()
+                if signal is None:
                     continue
 
-                article_stmt = pg_insert(Article).values(
-                    source_id=source_id,
-                    title=article_data["title"],
-                    url=article_data["url"],
-                    published_at=now,
-                )
-                article_stmt = article_stmt.on_conflict_do_nothing(index_elements=["url"])
-                await session.execute(article_stmt)
+                for article_data in trend["articles"]:
+                    source_id = await _resolve_source(session, article_data["url"])
+                    if source_id is None:
+                        logger.debug(
+                            "trends: skipping article url=%s (no source match)", article_data["url"]
+                        )
+                        continue
 
-                article_result = await session.execute(
-                    select(Article).where(Article.url == article_data["url"])
-                )
-                article = article_result.scalar_one_or_none()
-                if article is None:
-                    continue
+                    article_stmt = pg_insert(Article).values(
+                        source_id=source_id,
+                        title=article_data["title"],
+                        url=article_data["url"],
+                        published_at=None,
+                    )
+                    article_stmt = article_stmt.on_conflict_do_nothing(index_elements=["url"])
+                    await session.execute(article_stmt)
 
-                join_stmt = pg_insert(TrendSignalArticle).values(
-                    trend_signal_id=signal.id,
-                    article_id=article.id,
-                )
-                join_stmt = join_stmt.on_conflict_do_nothing(constraint="trend_signal_article_pkey")
-                await session.execute(join_stmt)
+                    article_result = await session.execute(
+                        select(Article).where(Article.url == article_data["url"])
+                    )
+                    article = article_result.scalar_one_or_none()
+                    if article is None:
+                        continue
 
-            total_signals += 1
+                    join_stmt = pg_insert(TrendSignalArticle).values(
+                        trend_signal_id=signal.id,
+                        article_id=article.id,
+                    )
+                    join_stmt = join_stmt.on_conflict_do_nothing(constraint="trend_signal_article_pkey")
+                    await session.execute(join_stmt)
+
+                total_signals += 1
 
     logger.info("trends: processed %d trending topics", total_signals)
     return total_signals
