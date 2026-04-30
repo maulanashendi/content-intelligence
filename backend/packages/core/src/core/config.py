@@ -8,9 +8,6 @@ class Settings(BaseSettings):
 
     embedding_model_name: str = "google/embeddinggemma-300m"
     embedding_model_version: str = ""
-    llm_model_name: str = "google/gemma-2-2b-it"
-    llm_model_version: str = ""
-
     hf_home: str = "/models"
 
     log_level: str = "INFO"

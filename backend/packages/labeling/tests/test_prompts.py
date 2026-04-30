@@ -10,11 +10,10 @@ def test_format_messages_basic():
 
     assert len(messages) == 1
     assert messages[0]["role"] == "user"
-    content = messages[0]["content"]
-    assert prompts.SYSTEM_PROMPT in content
-    assert "Harga beras naik" in content
-    assert "Gandum impor turun" in content
-    assert "2" in content
+    assert prompts.SYSTEM_PROMPT in messages[0]["content"]
+    assert "Harga beras naik" in messages[0]["content"]
+    assert "Gandum impor turun" in messages[0]["content"]
+    assert "2 artikel" in messages[0]["content"]
 
 
 def test_format_messages_empty_first_paragraph():
@@ -22,8 +21,8 @@ def test_format_messages_empty_first_paragraph():
         {"title": "Test title", "first_paragraph": None},
     ]
     messages = prompts.format_messages(articles)
-    content = messages[0]["content"]
-    assert "Test title" in content
+    assert "Test title" in messages[0]["content"]
+    assert "Paragraf awal: -" in messages[0]["content"]
 
 
 def test_system_prompt_is_string():

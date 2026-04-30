@@ -1,81 +1,55 @@
 import logging
 import os
+from typing import Any
 
-import torch
 from core.config import settings
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from labeling.prompts import format_messages
 
 logger = logging.getLogger(__name__)
 
-_model = None
-_tokenizer = None
+_llm: Any | None = None
 
-MAX_NEW_TOKENS = 50
+MODEL_REPO_ID = "bartowski/gemma-2-2b-it-GGUF"
+MODEL_FILENAME = "gemma-2-2b-it-Q4_K_M.gguf"
+MAX_TOKENS = 24
 
 
-def _load_model_and_tokenizer() -> tuple[AutoModelForCausalLM, AutoTokenizer]:
-    os.environ["HF_HOME"] = settings.hf_home
+def _load_llama_class() -> type[Any]:
+    try:
+        from llama_cpp import Llama
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("llama-cpp-python is not installed for the labeling package") from exc
 
-    model_name = settings.llm_model_name
-    logger.info("loading LLM %s", model_name)
+    return Llama
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    if torch.cuda.is_available():
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
+def get_llm() -> Any:
+    global _llm
+    if _llm is None:
+        os.environ.setdefault("HF_HOME", settings.hf_home)
+        llama_cls = _load_llama_class()
+        logger.info(
+            "loading labeling llm",
+            extra={"repo_id": MODEL_REPO_ID, "model_filename": MODEL_FILENAME},
         )
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            quantization_config=bnb_config,
-            device_map="auto",
+        _llm = llama_cls.from_pretrained(
+            repo_id=MODEL_REPO_ID,
+            filename=MODEL_FILENAME,
+            n_ctx=2048,
+            n_gpu_layers=-1,
+            verbose=False,
         )
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.bfloat16,
-            device_map="cpu",
-        )
-
-    model.eval()
-    logger.info("LLM loaded (device=%s)", next(model.parameters()).device)
-    return model, tokenizer
-
-
-def get_model_and_tokenizer() -> tuple[AutoModelForCausalLM, AutoTokenizer]:
-    global _model, _tokenizer
-    if _model is None:
-        _model, _tokenizer = _load_model_and_tokenizer()
-    return _model, _tokenizer
+    return _llm
 
 
 def generate_label(articles: list[dict[str, str | None]]) -> str:
-    model, tokenizer = get_model_and_tokenizer()
-
+    llm = get_llm()
     messages = format_messages(articles)
-
-    inputs = tokenizer.apply_chat_template(
-        messages,
-        return_tensors="pt",
-        return_dict=True,
-        add_generation_prompt=True,
-    ).to(model.device)
-
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=MAX_NEW_TOKENS,
-            do_sample=False,
-        )
-
-    generated_ids = outputs[0][inputs["input_ids"].shape[-1] :]
-    label = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
-
-    if len(label) > 200:
-        label = label[:197] + "..."
-
-    return label
+    response = llm.create_chat_completion(
+        messages=messages,
+        temperature=0,
+        max_tokens=MAX_TOKENS,
+    )
+    content = response["choices"][0]["message"]["content"]
+    return content.strip().splitlines()[0].strip(" .,:;!?\"'")

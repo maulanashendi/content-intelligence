@@ -5,10 +5,8 @@ description = "Generate cluster labels using a small local LLM (Gemma 2B class)"
 requires-python = ">=3.11"
 dependencies = [
   "core",
-  "transformers>=4.45",
-  "torch>=2.4",
-  "bitsandbytes>=0.44",
-  "accelerate>=1.0",
+  "llama-cpp-python>=0.3",
+  "huggingface-hub>=0.30",
   "click>=8.1",
 ]
 

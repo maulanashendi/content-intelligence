@@ -1,38 +1,21 @@
 from unittest.mock import MagicMock, patch
 
-import torch
-from labeling.llm import generate_label, get_model_and_tokenizer
-
-
-class _FakeBatchEncoding(dict):
-    def to(self, device):
-        return self
-
-
-def _mock_model_and_tokenizers():
-    model = MagicMock()
-    model.device = torch.device("cpu")
-
-    input_ids = torch.tensor([[1, 2, 3]])
-    fake_output = torch.tensor([[1, 2, 3, 101, 202, 203]])
-    model.generate.return_value = fake_output
-
-    tokenizer = MagicMock()
-    tokenizer.apply_chat_template.return_value = _FakeBatchEncoding(
-        {
-            "input_ids": input_ids,
-            "attention_mask": torch.tensor([[1, 1, 1]]),
-        }
-    )
-    tokenizer.decode.return_value = "Lonjakan harga beras premium Q2"
-
-    return model, tokenizer
+from labeling.llm import generate_label, get_llm
 
 
 def test_generate_label_returns_string():
-    model, tokenizer = _mock_model_and_tokenizers()
+    llm = MagicMock()
+    llm.create_chat_completion.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "content": "Lonjakan harga beras premium",
+                }
+            }
+        ]
+    }
 
-    with patch("labeling.llm.get_model_and_tokenizer", return_value=(model, tokenizer)):
+    with patch("labeling.llm.get_llm", return_value=llm):
         label = generate_label(
             [
                 {"title": "Harga beras naik", "first_paragraph": "Melonjak tajam."},
@@ -41,45 +24,48 @@ def test_generate_label_returns_string():
 
     assert isinstance(label, str)
     assert len(label) > 0
-    assert label == "Lonjakan harga beras premium Q2"
+    assert label == "Lonjakan harga beras premium"
 
 
-def test_generate_label_truncates_long_output():
-    model, tokenizer = _mock_model_and_tokenizers()
-    tokenizer.decode.return_value = "x" * 300
+def test_generate_label_strips_punctuation_and_newlines():
+    llm = MagicMock()
+    llm.create_chat_completion.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "content": "Harga beras premium terus naik.\nPenjelasan tambahan",
+                }
+            }
+        ]
+    }
 
-    with patch("labeling.llm.get_model_and_tokenizer", return_value=(model, tokenizer)):
+    with patch("labeling.llm.get_llm", return_value=llm):
         label = generate_label(
             [
                 {"title": "Test", "first_paragraph": "Test"},
             ]
         )
 
-    assert len(label) <= 200
-    assert label.endswith("...")
+    assert label == "Harga beras premium terus naik"
 
 
 def test_singleton_loaded_once():
     import labeling.llm as mod
 
-    original_model = mod._model
-    original_tokenizer = mod._tokenizer
+    original_llm = mod._llm
 
     try:
-        mod._model = None
-        mod._tokenizer = None
+        mod._llm = None
 
-        mock_model = MagicMock()
-        mock_tokenizer = MagicMock()
+        mock_llama_class = MagicMock()
+        mock_llm = MagicMock()
+        mock_llama_class.from_pretrained.return_value = mock_llm
 
-        with patch(
-            "labeling.llm._load_model_and_tokenizer", return_value=(mock_model, mock_tokenizer)
-        ):
-            m1, t1 = get_model_and_tokenizer()
-            m2, t2 = get_model_and_tokenizer()
+        with patch("labeling.llm._load_llama_class", return_value=mock_llama_class):
+            llm1 = get_llm()
+            llm2 = get_llm()
 
-        assert m1 is m2
-        assert t1 is t2
+        assert llm1 is llm2
+        mock_llama_class.from_pretrained.assert_called_once()
     finally:
-        mod._model = original_model
-        mod._tokenizer = original_tokenizer
+        mod._llm = original_llm

@@ -46,14 +46,18 @@ async def test_get_top_articles():
 
 
 @pytest.mark.asyncio
-async def test_run_labels_clusters():
-    cluster = _make_cluster()
+async def test_labels_current_clusters():
+    cluster_one = _make_cluster()
+    cluster_two = _make_cluster()
 
     with (
         patch("labeling.pipeline.get_session") as mock_session_ctx,
-        patch("labeling.pipeline._load_current_clusters", return_value=[cluster]),
+        patch("labeling.pipeline._load_current_clusters", return_value=[cluster_one, cluster_two]),
         patch("labeling.pipeline._get_top_articles") as mock_get_articles,
-        patch("labeling.pipeline.generate_label", return_value="Lonjakan harga beras"),
+        patch(
+            "labeling.pipeline.generate_label",
+            side_effect=["Lonjakan harga beras", "Harga gula ikut naik"],
+        ),
     ):
         mock_session = AsyncMock()
         mock_session_ctx.return_value.__aenter__.return_value = mock_session
@@ -63,19 +67,17 @@ async def test_run_labels_clusters():
 
         result = await run()
 
-    assert result["labeled"] == 1
+    assert result["labeled"] == 2
     assert result["skipped"] == 0
-    assert cluster.label == "Lonjakan harga beras"
+    assert cluster_one.label == "Lonjakan harga beras"
+    assert cluster_two.label == "Harga gula ikut naik"
 
 
 @pytest.mark.asyncio
-async def test_run_skips_empty_cluster():
-    cluster = _make_cluster()
-
+async def test_returns_zero_counts_when_no_clusters():
     with (
         patch("labeling.pipeline.get_session") as mock_session_ctx,
-        patch("labeling.pipeline._load_current_clusters", return_value=[cluster]),
-        patch("labeling.pipeline._get_top_articles", return_value=[]),
+        patch("labeling.pipeline._load_current_clusters", return_value=[]),
     ):
         mock_session = AsyncMock()
         mock_session_ctx.return_value.__aenter__.return_value = mock_session
@@ -83,11 +85,11 @@ async def test_run_skips_empty_cluster():
         result = await run()
 
     assert result["labeled"] == 0
-    assert result["skipped"] == 1
+    assert result["skipped"] == 0
 
 
 @pytest.mark.asyncio
-async def test_run_skips_on_llm_error():
+async def test_skips_cluster_on_llm_error():
     cluster = _make_cluster()
 
     with (

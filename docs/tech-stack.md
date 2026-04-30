@@ -39,20 +39,18 @@ This document lists every concrete library and runtime choice in the project, wi
 | Library | Used for | Rationale |
 |---------|----------|-----------|
 | `sentence-transformers` 3.2+ | Embedding inference | Simplest wrapper over HF for `embeddinggemma-300m` |
-| `transformers` 4.45+ | LLM inference for cluster labeling | Same HF ecosystem as embedding |
-| `torch` 2.4+ | Tensor backend | Required by transformers; CPU-only acceptable at MVP scale |
-| `bitsandbytes` 0.44+ | 4-bit quantization | Cuts Gemma 2B RAM footprint to ~1.5GB |
-| `accelerate` 1.0+ | HF device mapping | Required helper for transformers + bitsandbytes |
+| `llama-cpp-python` 0.3+ | LLM inference for cluster labeling | C++ backend (llama.cpp) with SIMD, AVX2, Metal — 3–5× faster than PyTorch CPU for same model/quantization depth |
+| `torch` 2.4+ | Tensor backend for `sentence-transformers` | Required by sentence-transformers; not used by labeling |
 | `umap-learn` 0.5+ | Dimensionality reduction | Best practice before HDBSCAN on high-dim embeddings |
 | `hdbscan` 0.8.38+ | Clustering | Algorithm specified by PRD |
 | `scikit-learn` 1.5+ | Utility: TF-IDF, vector ops, helpers | Standard ML toolkit for non-DL tasks |
 
 ## Active models
 
-| Purpose | Model | Output / Footprint |
-|---------|-------|--------------------|
-| Embedding | `google/embeddinggemma-300m` | 768-dim output, ~300MB on disk |
-| LLM labeling | Gemma 2 2B (4-bit quantized) — pending spike validation | ~1.5GB RAM at runtime |
+| Purpose | Model | Format | Output / Footprint |
+|---------|-------|--------|--------------------|
+| Embedding | `google/embeddinggemma-300m` | HuggingFace (sentence-transformers) | 768-dim, ~300MB on disk |
+| LLM labeling | `bartowski/gemma-2-2b-it-GGUF` — `gemma-2-2b-it-Q4_K_M.gguf` | GGUF Q4_K_M | ~1.6GB on disk, ~2GB RAM |
 
 Switching the embedding model requires a schema migration (vector dimension) and a full re-embed of all articles. See `decisions.md` (D4).
 
@@ -95,7 +93,8 @@ The Dockerfile is multi-stage. The `api` image excludes torch and transformers �
 
 | Rejected | Reason |
 |----------|--------|
-| Ollama for local LLM serving | Adds a separate service to manage. `transformers` directly is simpler and consistent with our embedding pipeline. |
+| Ollama for local LLM serving | Adds a separate sidecar service and HTTP overhead for a batch-only, single-consumer workload. |
+| `transformers` + `bitsandbytes` for LLM labeling | PyTorch CPU inference for Gemma 2B runs 5–30 s per inference even with bitsandbytes nf4, which has no AVX2 or Metal path. `llama-cpp-python` with GGUF is 3–5× faster on the same hardware. |
 | Celery / RabbitMQ / Redis Streams | One daily batch job. A queue adds infrastructure with no scaling benefit at this load. |
 | APScheduler / Prefect / Dagster | OS-level cron is sufficient for a single daily job. |
 | Kubernetes / microservices split | Single VPS, single team, single user persona. Premature distribution. |
@@ -117,7 +116,7 @@ For a VPS hosting both `api` and `pipeline` plus Postgres in development:
 |------|----------------------|
 | Postgres working set | ~2GB |
 | Embedding model loaded | ~300MB |
-| LLM (Gemma 2B 4-bit) loaded | ~1.5GB |
+| LLM (Gemma 2B Q4_K_M GGUF) loaded | ~2GB |
 | UMAP + HDBSCAN peak (during clustering) | ~1GB |
 | Python processes overhead | ~500MB each |
 | **Suggested minimum** | **8GB RAM, 4 vCPU, 50GB disk** |
