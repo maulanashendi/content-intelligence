@@ -19,7 +19,7 @@ from core.models import (
 from scoring import pipeline as scoring_pipeline
 from scoring.coverage import CoverageInputs, compute_coverage_score
 from scoring.novelty import compute_novelty_score
-from scoring.pipeline import run
+from scoring.pipeline import _load_cluster_facts, run
 from scoring.velocity import compute_trend_velocity
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,6 +68,64 @@ def test_compute_coverage_score_rewards_competitor_gap() -> None:
     )
 
     assert no_internal > recent_internal
+
+
+async def test_load_cluster_facts_deduplicates_articles_but_keeps_all_interest_scores(
+    session: AsyncSession,
+) -> None:
+    source = ContentSource(
+        id=uuid.uuid4(),
+        name="Detik",
+        url=f"https://detik-{uuid.uuid4()}.test",
+        source_type=SourceType.rss,
+    )
+    run_row = ClusterRun(id=uuid.uuid4())
+    cluster = ArticleCluster(
+        id=uuid.uuid4(),
+        run_id=run_row.id,
+        label="Rice prices",
+        member_count=1,
+        is_current=True,
+    )
+    article = Article(
+        id=uuid.uuid4(),
+        source_id=source.id,
+        title="Harga beras naik",
+        url=f"https://detik.test/rice-{uuid.uuid4()}",
+        published_at=NOW - timedelta(hours=4),
+    )
+    signals = [
+        TrendSignal(
+            id=uuid.uuid4(),
+            keyword="Harga beras",
+            interest_score=92.0,
+            captured_at=NOW - timedelta(hours=1),
+        ),
+        TrendSignal(
+            id=uuid.uuid4(),
+            keyword="Harga pangan",
+            interest_score=88.0,
+            captured_at=NOW - timedelta(hours=2),
+        ),
+    ]
+
+    session.add_all([source, run_row, cluster, article, *signals])
+    await session.flush()
+    session.add_all(
+        [
+            ArticleClusterMember(cluster_id=cluster.id, article_id=article.id),
+            *(TrendSignalArticle(trend_signal_id=signal.id, article_id=article.id) for signal in signals),
+        ]
+    )
+    await session.flush()
+
+    facts = await _load_cluster_facts(session, cluster.id, NOW)
+
+    assert facts.competitor_articles == 1
+    assert facts.internal_articles == 0
+    assert facts.recent_internal_articles == 0
+    assert facts.published_at_values == [article.published_at]
+    assert sorted(facts.interest_scores) == [88.0, 92.0]
 
 
 async def test_run_persists_cluster_insights_with_recommendations(

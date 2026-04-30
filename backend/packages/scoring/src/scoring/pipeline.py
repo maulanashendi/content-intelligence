@@ -33,7 +33,7 @@ RECENT_INTERNAL_WINDOW_DAYS = 30
 @dataclass(slots=True)
 class ClusterArticleFacts:
     published_at_values: list[datetime | None]
-    interest_scores: list[float | None]
+    interest_scores: list[float]
     competitor_articles: int
     internal_articles: int
     recent_internal_articles: int
@@ -63,12 +63,10 @@ async def _load_cluster_facts(
 ) -> ClusterArticleFacts:
     recent_internal_cutoff = now - timedelta(days=RECENT_INTERNAL_WINDOW_DAYS)
 
-    article_rows = (
-        await session.execute(_cluster_article_stmt(cluster_id))
-    ).all()
+    article_rows = (await session.execute(_cluster_article_stmt(cluster_id))).all()
+    interest_scores = await _cluster_interest_scores(session, cluster_id)
 
     published_at_values = [row.published_at for row in article_rows]
-    interest_scores = [row.interest_score for row in article_rows if row.interest_score is not None]
 
     competitor_articles = sum(1 for row in article_rows if row.source_type == SourceType.rss)
     internal_articles = sum(1 for row in article_rows if row.source_type == SourceType.internal)
@@ -101,25 +99,33 @@ def _cluster_article_stmt(cluster_id: UUID) -> Select[tuple[Any, ...]]:
             Article.id.label("article_id"),
             Article.published_at,
             ContentSource.source_type,
-            TrendSignal.interest_score,
         )
         .select_from(ArticleClusterMember)
         .join(Article, Article.id == ArticleClusterMember.article_id)
         .join(ContentSource, ContentSource.id == Article.source_id)
-        .outerjoin(TrendSignalArticle, TrendSignalArticle.article_id == Article.id)
-        .outerjoin(TrendSignal, TrendSignal.id == TrendSignalArticle.trend_signal_id)
         .where(ArticleClusterMember.cluster_id == cluster_id)
     )
+
+
+async def _cluster_interest_scores(session: AsyncSession, cluster_id: UUID) -> list[float]:
+    stmt = (
+        select(TrendSignal.interest_score)
+        .select_from(ArticleClusterMember)
+        .join(Article, Article.id == ArticleClusterMember.article_id)
+        .join(TrendSignalArticle, TrendSignalArticle.article_id == Article.id)
+        .join(TrendSignal, TrendSignal.id == TrendSignalArticle.trend_signal_id)
+        .where(ArticleClusterMember.cluster_id == cluster_id)
+        .where(TrendSignal.interest_score.is_not(None))
+    )
+    return list((await session.execute(stmt)).scalars())
 
 
 async def _has_underperformed_internal_articles(
     session: AsyncSession,
     article_ids: Sequence[UUID],
 ) -> bool:
-    stmt = (
-        select(ArticleGscMetric.ctr, ArticleGscMetric.avg_position)
-        .where(ArticleGscMetric.article_id.in_(article_ids))
-        .order_by(ArticleGscMetric.fetched_at.desc())
+    stmt = select(ArticleGscMetric.ctr, ArticleGscMetric.avg_position).where(
+        ArticleGscMetric.article_id.in_(article_ids)
     )
     rows = (await session.execute(stmt)).all()
     return any(
