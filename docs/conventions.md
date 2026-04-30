@@ -164,6 +164,18 @@ uv run uvicorn api.main:app --reload --app-dir packages/api/src
 uv run python -m pipeline.cli run-daily
 ```
 
+## Datetimes
+
+All datetime values are **naive UTC** — `TIMESTAMP WITHOUT TIME ZONE` in Postgres. Never insert an aware datetime; strip the timezone with `.replace(tzinfo=None)` before persisting:
+
+```python
+from datetime import UTC, datetime
+
+now = datetime.now(UTC).replace(tzinfo=None)
+```
+
+Do not use `datetime.utcnow()` — deprecated since Python 3.12.
+
 ## Code style
 
 - Run `ruff check .` and `ruff format .` before committing. The project's root `pyproject.toml` configures ruff.
