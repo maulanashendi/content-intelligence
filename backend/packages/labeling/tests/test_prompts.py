@@ -11,6 +11,7 @@ def test_format_messages_basic():
     assert len(messages) == 1
     assert messages[0]["role"] == "user"
     content = messages[0]["content"]
+    assert prompts.SYSTEM_PROMPT in content
     assert "Harga beras naik" in content
     assert "Gandum impor turun" in content
     assert "2" in content

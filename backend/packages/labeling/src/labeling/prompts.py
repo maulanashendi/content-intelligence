@@ -28,11 +28,10 @@ def format_messages(articles: list[dict[str, str | None]]) -> list[dict[str, str
             )
         )
 
-    user_content = USER_PROMPT.format(
-        count=len(articles),
-        articles="\n".join(entries),
+    user_content = (
+        SYSTEM_PROMPT
+        + "\n\n"
+        + USER_PROMPT.format(count=len(articles), articles="\n".join(entries))
     )
 
-    return [
-        {"role": "user", "content": user_content},
-    ]
+    return [{"role": "user", "content": user_content}]

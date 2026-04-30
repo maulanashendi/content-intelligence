@@ -5,7 +5,7 @@ import torch
 from core.config import settings
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from labeling.prompts import SYSTEM_PROMPT, format_messages
+from labeling.prompts import format_messages
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +13,6 @@ _model = None
 _tokenizer = None
 
 MAX_NEW_TOKENS = 50
-
-_SYSTEM_MESSAGE = {"role": "system", "content": SYSTEM_PROMPT}
 
 
 def _load_model_and_tokenizer() -> tuple[AutoModelForCausalLM, AutoTokenizer]:
@@ -58,7 +56,7 @@ def get_model_and_tokenizer() -> tuple[AutoModelForCausalLM, AutoTokenizer]:
 def generate_label(articles: list[dict[str, str | None]]) -> str:
     model, tokenizer = get_model_and_tokenizer()
 
-    messages = [_SYSTEM_MESSAGE] + format_messages(articles)
+    messages = format_messages(articles)
 
     inputs = tokenizer.apply_chat_template(
         messages,
