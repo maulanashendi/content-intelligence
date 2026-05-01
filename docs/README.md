@@ -30,13 +30,14 @@ Read these files top to bottom. Each file assumes you have read everything above
 | 2 | `prd.md` | Product context, personas, happy path, what is explicitly out of scope |
 | 3 | `architecture.md` | System structure, modules, data flow, dependency graph |
 | 4 | `schema.dbml` | Database tables, columns, relationships |
-| 5 | `tech-stack.md` | Concrete libraries and versions, what was rejected and why |
-| 6 | `conventions.md` | Code layout rules, import boundaries, dev workflow |
-| 7 | `constraints.md` | What NOT to build, deferred features, schema invariants (backend + frontend) |
-| 8 | `frontend.md` | Frontend architecture: packages, dependencies, routing, data layer, conventions |
-| 9 | `decisions.md` | Rationale behind every non-obvious choice (backend: D1–D11, frontend: D12–D18) |
+| 5 | `api_contract.md` | HTTP contract — live and proposed endpoints, error envelope, open conflicts |
+| 6 | `tech-stack.md` | Concrete libraries and versions, what was rejected and why |
+| 7 | `conventions.md` | Code layout rules, import boundaries, dev workflow |
+| 8 | `constraints.md` | What NOT to build, deferred features, schema invariants (backend + frontend) |
+| 9 | `frontend.md` | Frontend architecture: packages, dependencies, routing, data layer, conventions |
+| 10 | `decisions.md` | Rationale behind every non-obvious choice (backend: D1–D11, frontend: D12–D18) |
 
-Estimated reading time end-to-end: 75-105 minutes.
+Estimated reading time end-to-end: 85-115 minutes.
 
 ## Mental model you should hold after reading
 
