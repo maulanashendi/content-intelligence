@@ -1,9 +1,6 @@
 import logging
 
-import httpx
-from core.config import settings
-
-from ingest.rss import ingest_rss
+from ingest.rss import ingest_rss, make_http_client
 from ingest.sitemap import ingest_sitemap
 from ingest.trends import ingest_trends
 
@@ -12,8 +9,7 @@ logger = logging.getLogger(__name__)
 
 async def run() -> dict:
     totals: dict[str, int] = {}
-    timeout = httpx.Timeout(settings.ingest_timeout_seconds)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with make_http_client() as client:
         rss_count = await ingest_rss(client)
         totals["rss"] = rss_count
         logger.info("rss: %d articles processed", rss_count)

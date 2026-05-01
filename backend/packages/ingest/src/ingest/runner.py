@@ -8,11 +8,10 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import asyncpg
-import httpx
 from core.config import settings
 from core.db import get_session
 from core.models import ContentSource, SourceStatus, SourceType
-from ingest.rss import BlockedError, _set_source_status, fetch_and_store_source
+from ingest.rss import BlockedError, _set_source_status, fetch_and_store_source, make_http_client
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -97,8 +96,7 @@ async def _fetch_one_source(source_id: UUID) -> None:
     if _is_blocked(sid):
         return
 
-    timeout = httpx.Timeout(settings.ingest_timeout_seconds)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with make_http_client() as client:
         try:
             count = await fetch_and_store_source(client, sid, surl, sname)
             logger.info("immediate source=%s ingested %d articles", sname, count)
@@ -125,8 +123,6 @@ async def _run_once() -> None:
     if skipped:
         logger.info("skipping %d blocked source(s)", skipped)
 
-    timeout = httpx.Timeout(settings.ingest_timeout_seconds)
-
     async def _handle(source_id: UUID, source_url: str, source_name: str) -> None:
         try:
             count = await fetch_and_store_source(client, source_id, source_url, source_name)
@@ -136,7 +132,7 @@ async def _run_once() -> None:
         except Exception:
             logger.exception("source=%s fetch failed", source_name)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with make_http_client() as client:
         await asyncio.gather(*[_handle(*s) for s in active])
 
 
