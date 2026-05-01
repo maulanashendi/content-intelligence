@@ -1,26 +1,26 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { clusterKeys } from "@ei-fe/api"
+import { articleKeys } from "@ei-fe/api"
 import { PageHead, RefreshCw } from "@ei-fe/ui"
-import { DeferredView } from "@ei-fe/features"
+import { ArticleView } from "@ei-fe/features"
 
-export function DeferredRoute() {
+export function ArticleRoute() {
   const queryClient = useQueryClient()
   return (
     <>
       <PageHead
-        title="Ditunda"
-        subtitle="Topik jenuh — kompetitor sudah banyak menulis"
+        title="Artikel"
+        subtitle="Semua artikel yang telah diingest, terbaru lebih dulu"
         action={
           <button
             className="btn btn-ghost"
-            onClick={() => queryClient.invalidateQueries({ queryKey: clusterKeys.all })}
+            onClick={() => queryClient.invalidateQueries({ queryKey: articleKeys.all })}
           >
             <RefreshCw className="icon" style={{ width: 13, height: 13 }} />
             Refresh
           </button>
         }
       />
-      <DeferredView />
+      <ArticleView />
     </>
   )
 }

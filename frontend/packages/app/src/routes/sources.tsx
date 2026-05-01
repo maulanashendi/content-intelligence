@@ -38,7 +38,6 @@ export function SourcesRoute() {
         </div>
         <div className="page-actions">
           <Link to="/sources/rss" className="btn">+ RSS Feed</Link>
-          <Link to="/sources/api" className="btn">+ API Source</Link>
         </div>
       </div>
 
