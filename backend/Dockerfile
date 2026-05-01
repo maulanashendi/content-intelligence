@@ -34,6 +34,47 @@ ENV PATH="/app/.venv/bin:$PATH" \
 EXPOSE 8000
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+# ============ API dev — venv only, source via bind mount ============
+FROM python:3.11-slim AS api-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=api-build /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+EXPOSE 8000
+CMD ["uvicorn", "api.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--reload", \
+     "--reload-dir", "/app/packages/core/src", \
+     "--reload-dir", "/app/packages/api/src"]
+
+# ============ Ingest worker — no ML stack ============
+FROM deps AS ingest-build
+RUN uv sync --package ingest --no-dev
+
+FROM python:3.11-slim AS ingest
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=ingest-build /app/.venv /app/.venv
+COPY --from=ingest-build /app/packages/core /app/packages/core
+COPY --from=ingest-build /app/packages/ingest /app/packages/ingest
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+CMD ["python", "-m", "ingest.cli", "serve"]
+
+# ============ Ingest dev — venv only, source via bind mount ============
+FROM python:3.11-slim AS ingest-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=ingest-build /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+CMD ["python", "-m", "ingest.cli", "serve"]
+
 # ============ Pipeline target — full ML stack ============
 FROM deps AS pipeline-build
 RUN uv sync --package pipeline --no-dev
@@ -44,6 +85,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=pipeline-build /app/.venv /app/.venv
 COPY --from=pipeline-build /app/packages /app/packages
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/models
+ENTRYPOINT ["python", "-m", "pipeline.cli"]
+CMD ["run-daily"]
+
+# ============ Pipeline dev — venv only, source via bind mount ============
+FROM python:3.11-slim AS pipeline-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=pipeline-build /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/models
