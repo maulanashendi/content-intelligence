@@ -20,5 +20,13 @@ def run():
     click.echo(f"ingest complete: {totals}")
 
 
+@cli.command()
+def seed():
+    from ingest.seed import seed_sources
+
+    inserted = asyncio.run(seed_sources())
+    click.echo(f"seeded {inserted} new sources")
+
+
 if __name__ == "__main__":
     cli()
