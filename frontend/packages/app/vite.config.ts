@@ -17,6 +17,10 @@ export default defineConfig({
     target: "es2022",
   },
   server: {
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     proxy: {
       "/api/v1": {
         target: process.env["VITE_BACKEND_URL"] ?? "http://localhost:8000",

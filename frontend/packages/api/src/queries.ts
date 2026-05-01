@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query"
-import { apiGet } from "./client.js"
-import { clusterKeys, articleKeys } from "./keys.js"
-import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema } from "./schemas.js"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
+import { clusterKeys, articleKeys, sourceKeys } from "./keys.js"
+import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema } from "./schemas.js"
 
 export function useMorningClusters() {
   return useQuery({
@@ -28,5 +28,52 @@ export function useArticles(page: number = 1, pageSize: number = 20) {
   return useQuery({
     queryKey: articleKeys.list(page, pageSize),
     queryFn: () => apiGet(`/articles?page=${page}&page_size=${pageSize}`, PaginatedArticlesSchema),
+  })
+}
+
+export function useSources() {
+  return useQuery({
+    queryKey: sourceKeys.list(),
+    queryFn: () => apiGet("/sources", ContentSourceListSchema),
+  })
+}
+
+export function useCreateSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { url: string; name: string; is_enabled: boolean }) =>
+      apiPost("/sources", body, ContentSourceSchema),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sourceKeys.list() }),
+  })
+}
+
+export function useDeleteSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/sources/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sourceKeys.list() }),
+  })
+}
+
+export function useToggleSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, is_enabled }: { id: string; is_enabled: boolean }) =>
+      apiPatch(`/sources/${id}`, { is_enabled }, ContentSourceSchema),
+    onMutate: async ({ id, is_enabled }) => {
+      await qc.cancelQueries({ queryKey: sourceKeys.list() })
+      const prev = qc.getQueryData(sourceKeys.list())
+      qc.setQueryData(sourceKeys.list(), (old: unknown) => {
+        if (!Array.isArray(old)) return old
+        return old.map((s: { id: string; is_enabled: boolean }) =>
+          s.id === id ? { ...s, is_enabled } : s,
+        )
+      })
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(sourceKeys.list(), ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: sourceKeys.list() }),
   })
 }
