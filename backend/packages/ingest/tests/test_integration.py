@@ -39,7 +39,7 @@ async def test_run_once_inserts_articles_into_db(rss_source, rss_feed_xml: str) 
     mock_cm.__aenter__ = AsyncMock(return_value=mock_http)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("ingest.runner.httpx.AsyncClient", return_value=mock_cm):
+    with patch("ingest.runner.make_http_client", return_value=mock_cm):
         await _run_once()
 
     async with get_session() as session:
@@ -70,7 +70,7 @@ async def test_run_once_skips_blocked_source_does_not_insert(
     mock_cm.__aenter__ = AsyncMock(return_value=mock_http)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("ingest.runner.httpx.AsyncClient", return_value=mock_cm):
+    with patch("ingest.runner.make_http_client", return_value=mock_cm):
         await _run_once()
 
     mock_http.get.assert_not_called()

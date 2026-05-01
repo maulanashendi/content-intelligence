@@ -6,11 +6,13 @@ import pytest
 from core.db import get_session
 from core.models import Article, ContentSource, SourceStatus, SourceType
 from ingest.rss import (
+    DEFAULT_HEADERS,
     BlockedError,
     _html_to_text,
     _parse_entry,
     fetch_and_store_source,
     ingest_rss,
+    make_http_client,
 )
 from sqlalchemy import select
 
@@ -318,3 +320,144 @@ async def test_ingest_rss_idempotent_second_run_inserts_zero(
             await session.execute(select(Article).where(Article.source_id == rss_source.id))
         ).scalars().all()
     assert len(rows) == 2
+
+
+# ---------------------------------------------------------------------------
+# make_http_client — anti-WAF defaults (regression: coconuts.co/jakarta/feed/
+# was returning 302 to a RunCloud block page because httpx default UA is
+# python-httpx/x.y and follow_redirects defaults to False)
+# ---------------------------------------------------------------------------
+
+
+def test_make_http_client_user_agent_is_not_default_python_httpx() -> None:
+    client = make_http_client()
+    try:
+        ua = client.headers.get("User-Agent", "")
+        assert "python-httpx" not in ua.lower(), (
+            f"Default httpx UA is blocked by RunCloud/Cloudflare WAFs; "
+            f"got UA={ua!r}"
+        )
+        assert ua, "User-Agent must not be empty"
+    finally:
+        # AsyncClient.aclose is async; for a never-used client, sync close
+        # via the underlying transport is sufficient and avoids needing a
+        # running loop in this unit test.
+        pass
+
+
+def test_make_http_client_advertises_rss_mime_types() -> None:
+    client = make_http_client()
+    accept = client.headers.get("Accept", "")
+    assert "application/rss+xml" in accept
+    assert "application/atom+xml" in accept
+
+
+def test_make_http_client_follows_redirects() -> None:
+    client = make_http_client()
+    assert client.follow_redirects is True, (
+        "Feeds commonly redirect to canonicalized URLs (e.g. /feed → /feed/); "
+        "follow_redirects must be True or every redirected feed silently "
+        "fails."
+    )
+
+
+def test_make_http_client_uses_configured_timeout() -> None:
+    from core.config import settings
+
+    client = make_http_client()
+    assert client.timeout.connect == float(settings.ingest_timeout_seconds)
+    assert client.timeout.read == float(settings.ingest_timeout_seconds)
+
+
+def test_default_headers_module_constant_includes_required_fields() -> None:
+    assert "User-Agent" in DEFAULT_HEADERS
+    assert "Accept" in DEFAULT_HEADERS
+    assert "python-httpx" not in DEFAULT_HEADERS["User-Agent"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Redirect handling — coconuts.co regression. Use httpx.MockTransport to
+# simulate a 302 → 200 chain without hitting the network.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fetch_and_store_source_follows_redirect_to_real_feed(
+    rss_source: ContentSource, rss_feed_xml: str
+) -> None:
+    requests_seen: list[str] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        requests_seen.append(str(request.url))
+        if request.url.path == "/feed":
+            return httpx.Response(
+                302,
+                headers={"location": "https://example.com/feed/canonical"},
+            )
+        return httpx.Response(
+            200,
+            text=rss_feed_xml,
+            headers={"content-type": "application/rss+xml"},
+        )
+
+    transport = httpx.MockTransport(_handler)
+    async with httpx.AsyncClient(
+        transport=transport,
+        headers=DEFAULT_HEADERS,
+        follow_redirects=True,
+    ) as client:
+        count = await fetch_and_store_source(
+            client, rss_source.id, "https://example.com/feed", rss_source.name
+        )
+
+    assert count == 2
+    assert len(requests_seen) == 2
+    assert requests_seen[0].endswith("/feed")
+    assert requests_seen[1].endswith("/feed/canonical")
+
+
+@pytest.mark.asyncio
+async def test_fetch_without_follow_redirects_would_fail_on_302() -> None:
+    """Locks in the bug we fixed: a client without follow_redirects raises
+    HTTPStatusError on the WAF redirect, which is exactly what made
+    coconuts.co show up as status='error' in the DB."""
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302,
+            headers={"location": "https://example.com/RUNCLOUD-7G-WAF-BLOCKED"},
+        )
+
+    transport = httpx.MockTransport(_handler)
+    async with httpx.AsyncClient(transport=transport, follow_redirects=False) as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            await fetch_and_store_source(
+                client, uuid.uuid4(), "https://example.com/feed", "WAF Test"
+            )
+
+
+@pytest.mark.asyncio
+async def test_fetch_sends_configured_user_agent_to_origin(
+    rss_source: ContentSource, rss_feed_xml: str
+) -> None:
+    captured_ua: list[str] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        captured_ua.append(request.headers.get("user-agent", ""))
+        return httpx.Response(
+            200,
+            text=rss_feed_xml,
+            headers={"content-type": "application/rss+xml"},
+        )
+
+    transport = httpx.MockTransport(_handler)
+    async with httpx.AsyncClient(
+        transport=transport, headers=DEFAULT_HEADERS, follow_redirects=True
+    ) as client:
+        await fetch_and_store_source(
+            client, rss_source.id, "https://example.com/feed", rss_source.name
+        )
+
+    assert len(captured_ua) == 1
+    assert "python-httpx" not in captured_ua[0].lower()
+    assert captured_ua[0] == DEFAULT_HEADERS["User-Agent"]

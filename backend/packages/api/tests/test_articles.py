@@ -298,6 +298,27 @@ async def test_list_articles_published_at_serializes_iso8601(
     assert parsed.replace(tzinfo=None) == pub.replace(microsecond=parsed.microsecond)
 
 
+async def test_list_articles_timestamps_carry_utc_z_suffix(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Backend stores naive datetimes (UTC by convention). Wire format MUST
+    end in `Z` so the frontend can format in Asia/Jakarta without guessing
+    the source timezone (regression: rendering as user-local was 7h off)."""
+    source = _source(name="UTC Z Source")
+    article = _article(
+        source.id,
+        title="UTC Z Article",
+        published_at=_NOW - timedelta(hours=1),
+    )
+    session.add_all([source, article])
+    await session.flush()
+
+    items = await _all_items(client)
+    item = next(i for i in items if i["id"] == str(article.id))
+    assert item["created_at"].endswith("Z"), item["created_at"]
+    assert item["published_at"].endswith("Z"), item["published_at"]
+
+
 async def test_list_articles_join_multiple_sources_distinct_names(
     session: AsyncSession, client: AsyncClient
 ) -> None:

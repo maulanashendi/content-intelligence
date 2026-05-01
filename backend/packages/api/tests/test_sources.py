@@ -297,8 +297,21 @@ async def test_status_and_last_fetched_at_round_trip(
     row = next(r for r in resp.json() if r["name"] == "Status Source")
     assert row["status"] == "active"
     assert row["last_fetched_at"] is not None
-    parsed = datetime.fromisoformat(row["last_fetched_at"])
-    assert parsed.replace(tzinfo=None, microsecond=0) == fetched_at.replace(microsecond=0)
+    assert row["last_fetched_at"].endswith("Z"), row["last_fetched_at"]
+    parsed = datetime.fromisoformat(row["last_fetched_at"].replace("Z", "+00:00"))
+    assert parsed.astimezone(UTC).replace(tzinfo=None, microsecond=0) == fetched_at.replace(microsecond=0)
+
+
+@pytest.mark.asyncio
+async def test_source_timestamps_carry_utc_z_suffix(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await _seed_source(session, url="https://utc-z.example.com/feed", name="UTC Z")
+    resp = await client.get("/api/v1/sources")
+    assert resp.status_code == 200
+    row = next(r for r in resp.json() if r["name"] == "UTC Z")
+    for field in ("created_at", "updated_at"):
+        assert row[field].endswith("Z"), f"{field}={row[field]!r}"
 
 
 @pytest.mark.asyncio
