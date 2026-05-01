@@ -1,1 +1,1 @@
-// Re-export DeferredView only.
+export { DeferredView } from "./deferred-view.js"

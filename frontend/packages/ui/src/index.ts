@@ -1,4 +1,18 @@
-// Public API of @ei-fe/ui.
-// Re-export: cn helper, all primitives (Button, Badge, Skeleton, Table,
-// Tooltip, ...), state components (EmptyState, ErrorState, LoadingState),
-// layout components (Sidebar, StatusBar, PageHead), icon registry.
+export { cn } from "./lib/cn.js"
+
+export { RecommendationBadge } from "./primitives/badge.js"
+export { Button } from "./primitives/button.js"
+export type { ButtonProps } from "./primitives/button.js"
+export { Skeleton } from "./primitives/skeleton.js"
+export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from "./primitives/table.js"
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./primitives/tooltip.js"
+
+export { Sidebar } from "./layout/sidebar.js"
+export { PageHead } from "./layout/page-head.js"
+export { StatusBar } from "./layout/status-bar.js"
+
+export { LoadingState } from "./states/loading-state.js"
+export { ErrorState } from "./states/error-state.js"
+export { EmptyState } from "./states/empty-state.js"
+
+export * from "./icons.js"

@@ -4,7 +4,8 @@
     "rootDir": "src",
     "outDir": "dist",
     "composite": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "types": ["react", "react-dom"]
   },
   "include": ["src/**/*"],
   "references": [
