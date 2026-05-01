@@ -28,5 +28,12 @@ def seed():
     click.echo(f"seeded {inserted} new sources")
 
 
+@cli.command()
+def serve():
+    from ingest.runner import run_loop
+
+    asyncio.run(run_loop())
+
+
 if __name__ == "__main__":
     cli()
