@@ -66,9 +66,10 @@ There is **no pagination in v1**. Every list endpoint returns the full result se
 
 ### Date / time
 
-- All timestamps are ISO-8601 UTC with the `Z` suffix: `2026-04-30T06:00:12Z`.
-- The backend stores naive UTC in PostgreSQL `TIMESTAMP` (no time zone column); the API serializes them as `Z`-suffixed strings.
-- The frontend renders in `Asia/Jakarta` (`fmtTime` helpers); the contract is UTC.
+- **Wire format: ISO-8601 UTC with the `Z` suffix.** Example: `2026-04-30T06:00:12Z`. Microseconds may be present (`2026-04-30T06:00:12.345678Z`). This is enforced by `api.types.UtcDateTime`, a Pydantic `Annotated` type that wraps every datetime field in API responses; tests assert the trailing `Z` (`test_list_articles_timestamps_carry_utc_z_suffix`, `test_source_timestamps_carry_utc_z_suffix`). Without the `Z`, JS `new Date()` interprets the string as the user's local time, which historically displayed timestamps 7 hours wrong for WIB users.
+- **Backend storage**: naive UTC in PostgreSQL `TIMESTAMP` (no time zone column). Conversion to `Z`-tagged on the way out.
+- **Frontend display: WIB / Asia/Jakarta (GMT+7).** All user-facing timestamps go through the helpers in `frontend/packages/core/src/format.ts` — `formatDate`, `formatDateTime`, `formatTime`, `formatRelative` — each of which sets `timeZone: "Asia/Jakarta"` and locale `id-ID`. Components must NOT call `new Date(iso).toLocaleString(...)` inline; use the helpers so the timezone is applied uniformly.
+- **Defensive parsing**: the helpers tolerate strings without an explicit timezone by treating them as UTC (appending `Z`). This bridges any legacy naive-string callers and avoids regressions if a future endpoint forgets `UtcDateTime`.
 
 ### Identifiers
 
