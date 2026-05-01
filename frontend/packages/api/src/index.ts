@@ -1,5 +1,4 @@
-// Public API of @ei-fe/api.
-// Re-export: client (only the configured singleton), query keys factory,
-// query hooks (useMorningClusters, useClusterDetail, useDeferredClusters),
-// Zod-inferred types for response shapes.
-// Do NOT export raw fetch wrapper internals or generated.ts directly.
+export { clusterKeys } from "./keys.js"
+export { useMorningClusters, useDeferredClusters, useClusterDetail, clusterDetailQueryOptions } from "./queries.js"
+export type { ClusterSummary, ClusterList, ArticleMember, ClusterDetail } from "./schemas.js"
+export { ClusterSummarySchema, ClusterListSchema, ArticleMemberSchema, ClusterDetailSchema } from "./schemas.js"

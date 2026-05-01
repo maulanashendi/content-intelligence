@@ -1,1 +1,47 @@
-[]
+[
+  {
+    "id": "a1b2c3d4-0002-4000-8000-000000000001",
+    "label": "Pemilu AS Dampak Ekonomi Indonesia",
+    "member_count": 45,
+    "trend_velocity": 22.1,
+    "novelty_score": 0.18,
+    "coverage_score": 0.94,
+    "recommendation": "saturated"
+  },
+  {
+    "id": "a1b2c3d4-0002-4000-8000-000000000002",
+    "label": "Kasus Korupsi e-KTP Kelanjutan",
+    "member_count": 38,
+    "trend_velocity": 17.4,
+    "novelty_score": 0.12,
+    "coverage_score": 0.89,
+    "recommendation": "saturated"
+  },
+  {
+    "id": "a1b2c3d4-0002-4000-8000-000000000003",
+    "label": "Perubahan Iklim COP29 Dampak RI",
+    "member_count": 29,
+    "trend_velocity": 14.8,
+    "novelty_score": 0.22,
+    "coverage_score": 0.91,
+    "recommendation": "saturated"
+  },
+  {
+    "id": "a1b2c3d4-0002-4000-8000-000000000004",
+    "label": "Kenaikan UMP DKI Jakarta 2025",
+    "member_count": 52,
+    "trend_velocity": 11.2,
+    "novelty_score": 0.09,
+    "coverage_score": 0.97,
+    "recommendation": "saturated"
+  },
+  {
+    "id": "a1b2c3d4-0002-4000-8000-000000000005",
+    "label": "Proyek IKN Nusantara Progres Terbaru",
+    "member_count": 67,
+    "trend_velocity": 8.5,
+    "novelty_score": 0.15,
+    "coverage_score": 0.96,
+    "recommendation": "saturated"
+  }
+]

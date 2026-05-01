@@ -1,1 +1,92 @@
-[]
+[
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000001",
+    "label": "Kenaikan Harga BBM Pertamina",
+    "member_count": 23,
+    "trend_velocity": 87.5,
+    "novelty_score": 0.72,
+    "coverage_score": 0.31,
+    "recommendation": "trending"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000002",
+    "label": "Sidang MK Sengketa Pilkada Kaltim",
+    "member_count": 18,
+    "trend_velocity": 71.2,
+    "novelty_score": 0.65,
+    "coverage_score": 0.44,
+    "recommendation": "worth_writing"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000003",
+    "label": "Korupsi Dana Desa Jawa Tengah",
+    "member_count": 31,
+    "trend_velocity": 68.0,
+    "novelty_score": 0.88,
+    "coverage_score": 0.22,
+    "recommendation": "worth_writing"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000004",
+    "label": "Pengesahan RUU PPRT DPR",
+    "member_count": 12,
+    "trend_velocity": 61.5,
+    "novelty_score": 0.55,
+    "coverage_score": 0.60,
+    "recommendation": "worth_writing"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000005",
+    "label": "Prabowo-Xi Jinping Bilateral Bali",
+    "member_count": 9,
+    "trend_velocity": 54.8,
+    "novelty_score": 0.41,
+    "coverage_score": 0.72,
+    "recommendation": "trending"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000006",
+    "label": "BPJS Kesehatan Iuran Kelas Baru",
+    "member_count": 15,
+    "trend_velocity": 48.3,
+    "novelty_score": 0.60,
+    "coverage_score": 0.38,
+    "recommendation": "worth_writing"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000007",
+    "label": "Kebakaran Hutan Kalimantan Barat",
+    "member_count": 7,
+    "trend_velocity": 44.1,
+    "novelty_score": 0.77,
+    "coverage_score": 0.28,
+    "recommendation": "worth_writing"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000008",
+    "label": "Startup Teknologi PHK Gelombang Kedua",
+    "member_count": 20,
+    "trend_velocity": 39.6,
+    "novelty_score": 0.49,
+    "coverage_score": 0.55,
+    "recommendation": "worth_writing"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000009",
+    "label": "Rupiah Melemah Terhadap Dolar AS",
+    "member_count": 11,
+    "trend_velocity": 35.2,
+    "novelty_score": 0.33,
+    "coverage_score": 0.81,
+    "recommendation": "worth_writing"
+  },
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000010",
+    "label": "Seleksi CPNS 2025 Kemenpan RB",
+    "member_count": 8,
+    "trend_velocity": 29.9,
+    "novelty_score": 0.58,
+    "coverage_score": 0.40,
+    "recommendation": "worth_writing"
+  }
+]

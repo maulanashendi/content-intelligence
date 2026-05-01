@@ -1,13 +1,31 @@
-// Hand-written Zod schemas for runtime validation of API responses.
-// Mirror generated.ts shape but enforce at runtime.
-// Schemas:
-//   ClusterSchema: id, label, member_count, competitor_count,
-//     sample_headline, trend_velocity, novelty_score, coverage_score,
-//     recommendation (enum), created_at (ISO).
-//   ClusterListSchema: array of ClusterSchema.
-//   ArticleMemberSchema: article_id, title, source_name, source_type,
-//     url, published_at, first_paragraph, relevance_score.
-//   ClusterDetailSchema: ClusterSchema fields + members: ArticleMemberSchema[].
-//   DeferredClusterSchema: ClusterSchema fields + days_deferred (int).
-//   DeferredListSchema: array of DeferredClusterSchema.
-// Export inferred types for use in queries.ts and feature components.
+import { z } from "zod"
+
+export const ClusterSummarySchema = z.object({
+  id: z.string().uuid(),
+  label: z.string().nullable(),
+  member_count: z.number().int().nullable(),
+  trend_velocity: z.number().nullable(),
+  novelty_score: z.number().nullable(),
+  coverage_score: z.number().nullable(),
+  recommendation: z.enum(["trending", "worth_writing", "saturated"]).nullable(),
+})
+export type ClusterSummary = z.infer<typeof ClusterSummarySchema>
+
+export const ClusterListSchema = z.array(ClusterSummarySchema)
+export type ClusterList = z.infer<typeof ClusterListSchema>
+
+export const ArticleMemberSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  url: z.string(),
+  first_paragraph: z.string().nullable(),
+  published_at: z.string().nullable(),
+  source_name: z.string(),
+  relevance_score: z.number().nullable(),
+})
+export type ArticleMember = z.infer<typeof ArticleMemberSchema>
+
+export const ClusterDetailSchema = ClusterSummarySchema.extend({
+  members: z.array(ArticleMemberSchema),
+})
+export type ClusterDetail = z.infer<typeof ClusterDetailSchema>

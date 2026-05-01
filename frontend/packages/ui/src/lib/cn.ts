@@ -1,3 +1,6 @@
-// className composition helper used by every primitive.
-// cn(...inputs) = twMerge(clsx(inputs)).
-// Standard shadcn pattern.
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}

@@ -1,2 +1,6 @@
-// Public API of @ei-fe/core. Only re-exports — no logic here.
-// Re-export from: env, tokens, types, format, errors.
+export { env } from "./env.js"
+export { tokens } from "./tokens.js"
+export type { Tokens } from "./tokens.js"
+export type { Recommendation } from "./types.js"
+export { ApiError, isApiError, toUserMessage } from "./errors.js"
+export { formatScore, formatVelocity, formatRelative, formatDate } from "./format.js"

@@ -1,6 +1,32 @@
-// TanStack Query hooks consumed by feature views.
-// useMorningClusters():    GET /api/v1/clusters/morning,  schema: ClusterListSchema
-// useClusterDetail(id):    GET /api/v1/clusters/{id},     schema: ClusterDetailSchema
-// useDeferredClusters():   GET /api/v1/clusters/deferred, schema: DeferredListSchema
-// Defaults handled by QueryClient in @ei-fe/app/providers.tsx
-// (staleTime 5min, gcTime 30min, refetchOnWindowFocus true, refetchInterval off).
+import { useQuery } from "@tanstack/react-query"
+import { apiGet } from "./client.js"
+import { clusterKeys } from "./keys.js"
+import { ClusterListSchema, ClusterDetailSchema } from "./schemas.js"
+
+export function useMorningClusters() {
+  return useQuery({
+    queryKey: clusterKeys.morning(),
+    queryFn: () => apiGet("/clusters/morning", ClusterListSchema),
+  })
+}
+
+export function useDeferredClusters() {
+  return useQuery({
+    queryKey: clusterKeys.deferred(),
+    queryFn: () => apiGet("/clusters/deferred", ClusterListSchema),
+  })
+}
+
+export function useClusterDetail(id: string) {
+  return useQuery({
+    queryKey: clusterKeys.detail(id),
+    queryFn: () => apiGet(`/clusters/${id}`, ClusterDetailSchema),
+  })
+}
+
+export function clusterDetailQueryOptions(id: string) {
+  return {
+    queryKey: clusterKeys.detail(id),
+    queryFn: () => apiGet(`/clusters/${id}`, ClusterDetailSchema),
+  }
+}

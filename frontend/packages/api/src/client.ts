@@ -1,9 +1,31 @@
-// Thin fetch wrapper. Single responsibility per call:
-//   1. Prepend env.VITE_API_BASE_URL.
-//   2. fetch() with default headers (Accept: application/json).
-//   3. Parse JSON.
-//   4. Validate against a Zod schema passed by caller.
-//   5. Throw ApiError on non-2xx OR Zod parse failure.
-// No retry (TanStack Query owns retry).
-// No interceptors. No auth — gateway handles it (decisions.md D10).
-// Export: apiGet<TSchema>(path, schema) → Promise<z.infer<TSchema>>.
+import { z } from "zod"
+import { ApiError, env } from "@ei-fe/core"
+
+export async function apiGet<TSchema extends z.ZodTypeAny>(
+  path: string,
+  schema: TSchema,
+): Promise<z.infer<TSchema>> {
+  const url = `${env.apiBase}${path}`
+  const res = await fetch(url, { headers: { Accept: "application/json" } })
+
+  if (!res.ok) {
+    const requestId = res.headers.get("x-request-id") ?? undefined
+    const body = await res.text().catch(() => "")
+    let message = `HTTP ${res.status}`
+    try {
+      const json = JSON.parse(body) as { detail?: string }
+      if (json.detail) message = json.detail
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, message, requestId)
+  }
+
+  const json: unknown = await res.json()
+  const parsed = schema.safeParse(json)
+  if (!parsed.success) {
+    console.error("[api] schema validation failed", parsed.error.flatten())
+    throw new ApiError(0, "Respons API tidak sesuai skema.")
+  }
+  return parsed.data as z.infer<TSchema>
+}

@@ -1,1 +1,65 @@
-{}
+{
+  "id": "a1b2c3d4-0001-4000-8000-000000000001",
+  "label": "Kenaikan Harga BBM Pertamina",
+  "member_count": 23,
+  "trend_velocity": 87.5,
+  "novelty_score": 0.72,
+  "coverage_score": 0.31,
+  "recommendation": "trending",
+  "members": [
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000001",
+      "title": "Pertamina Naikkan Harga BBM Non-Subsidi per 1 Mei 2025",
+      "url": "https://www.kompas.com/ekonomi/pertamina-bbm-naik",
+      "first_paragraph": "PT Pertamina (Persero) resmi menaikkan harga BBM non-subsidi jenis Pertamax, Dexlite, dan Pertamina Dex mulai 1 Mei 2025. Kenaikan ini dipicu oleh melemahnya nilai tukar rupiah dan kenaikan harga minyak mentah dunia.",
+      "published_at": "2025-04-30T06:30:00Z",
+      "source_name": "Kompas",
+      "relevance_score": 0.97
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000002",
+      "title": "Harga Pertamax Tembus Rp 14.500, Masyarakat Keluhkan Beban",
+      "url": "https://www.cnnindonesia.com/ekonomi/pertamax-14500",
+      "first_paragraph": "Harga Pertamax di SPBU Pertamina kini mencapai Rp 14.500 per liter, naik dari sebelumnya Rp 13.700. Kenaikan ini disambut keluhan dari masyarakat kelas menengah.",
+      "published_at": "2025-04-30T08:15:00Z",
+      "source_name": "CNN Indonesia",
+      "relevance_score": 0.92
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000003",
+      "title": "DPR Minta Pemerintah Jelaskan Alasan Kenaikan BBM",
+      "url": "https://www.detik.com/finance/berita/dpr-bbm-naik",
+      "first_paragraph": "Komisi VII DPR RI meminta pemerintah segera menjelaskan alasan di balik keputusan menaikkan harga BBM non-subsidi. Sejumlah anggota dewan khawatir kenaikan ini akan memicu inflasi.",
+      "published_at": "2025-04-30T09:45:00Z",
+      "source_name": "Detik Finance",
+      "relevance_score": 0.88
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000004",
+      "title": "Pengusaha Logistik Keberatan Harga BBM Naik, Ancam Naikkan Tarif",
+      "url": "https://www.bisnis.com/ekonomi/logistik-bbm",
+      "first_paragraph": "Asosiasi Pengusaha Truk dan Logistik Indonesia menyatakan keberatan atas kenaikan harga BBM dan mengancam akan menaikkan tarif pengiriman barang hingga 15 persen.",
+      "published_at": "2025-04-30T11:00:00Z",
+      "source_name": "Bisnis Indonesia",
+      "relevance_score": 0.84
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000005",
+      "title": "Ekonom: Kenaikan BBM Bisa Picu Inflasi 0,4 Persen",
+      "url": "https://www.tempo.co/ekonomi/inflasi-bbm",
+      "first_paragraph": "Ekonom dari LPEM UI memperkirakan kenaikan harga BBM non-subsidi akan mendorong inflasi sebesar 0,4 persen pada bulan Mei 2025, terutama melalui transmisi ke harga transportasi.",
+      "published_at": "2025-04-30T13:20:00Z",
+      "source_name": "Tempo",
+      "relevance_score": 0.81
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000006",
+      "title": "SPBU Swasta Ikut Naikkan Harga BBM Setelah Pertamina",
+      "url": "https://www.republika.co.id/ekonomi/spbu-swasta-bbm",
+      "first_paragraph": "Menyusul kenaikan harga BBM oleh Pertamina, sejumlah SPBU swasta seperti Shell, BP-AKR, dan Vivo juga menaikkan harga produk mereka. Shell V-Power kini dibanderol Rp 16.100 per liter.",
+      "published_at": "2025-04-30T14:50:00Z",
+      "source_name": "Republika",
+      "relevance_score": 0.76
+    }
+  ]
+}
