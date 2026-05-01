@@ -78,9 +78,13 @@ def cli() -> None:
     pass
 
 
+def _configure() -> None:
+    configure_logging(settings.log_level, file_path=settings.log_dir / "pipeline.log")
+
+
 @cli.command("run-daily")
 def run_daily() -> None:
-    configure_logging(settings.log_level)
+    _configure()
     asyncio.run(_run_daily())
 
 
@@ -89,7 +93,7 @@ for _step_name in _STEP_RUNNERS:
     def _make_command(name: str) -> None:
         @cli.command(name)
         def _step_cmd() -> None:
-            configure_logging(settings.log_level)
+            _configure()
             asyncio.run(_run_step(name))
 
     _make_command(_step_name)

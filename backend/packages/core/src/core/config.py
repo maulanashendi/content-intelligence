@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +13,7 @@ class Settings(BaseSettings):
     hf_home: str = "/models"
 
     log_level: str = "INFO"
+    log_dir: Path = Path("logs")
 
     clustering_window_days: int = 30
     hdbscan_min_cluster_size: int = 5
