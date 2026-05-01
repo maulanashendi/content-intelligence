@@ -1,9 +1,7 @@
-import asyncio
 import logging
 
 from core.db import get_session
 from core.models import ContentSource, SourceStatus, SourceType
-from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 logger = logging.getLogger(__name__)
