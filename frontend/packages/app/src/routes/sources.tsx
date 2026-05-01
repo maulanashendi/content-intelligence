@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import { useSources, useDeleteSource, useToggleSource } from "@ei-fe/api"
+import { formatDateTime } from "@ei-fe/core"
 import { LoadingState, ErrorState, EmptyState } from "@ei-fe/ui"
 
 const STATUS_DOT: Record<string, string> = {
@@ -96,7 +97,7 @@ export function SourcesRoute() {
                     <td><span className={TYPE_BADGE[s.source_type] ?? "badge"}>{TYPE_LABEL[s.source_type] ?? s.source_type}</span></td>
                     <td className="mono faint" style={{ fontSize: 11.5, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</td>
                     <td className="mono faint" style={{ fontSize: 11.5 }}>
-                      {s.last_fetched_at ? new Date(s.last_fetched_at).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      {formatDateTime(s.last_fetched_at)}
                     </td>
                     <td className="num right">{s.article_count_24h}</td>
                     <td>

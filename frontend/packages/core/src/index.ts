@@ -3,4 +3,11 @@ export { tokens } from "./tokens.js"
 export type { Tokens } from "./tokens.js"
 export type { Recommendation } from "./types.js"
 export { ApiError, isApiError, toUserMessage } from "./errors.js"
-export { formatScore, formatVelocity, formatRelative, formatDate } from "./format.js"
+export {
+  formatScore,
+  formatVelocity,
+  formatRelative,
+  formatDate,
+  formatDateTime,
+  formatTime,
+} from "./format.js"

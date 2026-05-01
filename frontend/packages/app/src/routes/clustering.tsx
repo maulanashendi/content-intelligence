@@ -69,8 +69,12 @@ const TREND_SIGNALS = [
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
 
+function parseIso(iso: string): Date {
+  return /Z|[+-]\d{2}:?\d{2}$/.test(iso) ? new Date(iso) : new Date(iso + "Z")
+}
+
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleString("id-ID", {
+  return parseIso(iso).toLocaleString("id-ID", {
     day: "numeric", month: "short",
     hour: "2-digit", minute: "2-digit",
     timeZone: "Asia/Jakarta",
@@ -79,7 +83,7 @@ function fmtTime(iso: string): string {
 
 function duration(start: string, end: string | null): string {
   if (!end) return "—"
-  const ms = new Date(end).getTime() - new Date(start).getTime()
+  const ms = parseIso(end).getTime() - parseIso(start).getTime()
   const s = Math.round(ms / 1000)
   return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`
 }

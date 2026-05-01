@@ -1,3 +1,5 @@
+import { formatTime } from "@ei-fe/core"
+
 /* Dummy data matching TrendSignal schema: keyword, interest_score, region, captured_at */
 const TREND_SIGNALS = [
   { keyword: "Kenaikan Harga BBM", interest_score: 94, captured_at: "2025-04-30T06:00:00Z", article_count: 23 },
@@ -34,11 +36,7 @@ const FLAG_LABEL: Record<NonNullable<Flag>, string> = {
 }
 
 function formatCaptured(iso: string): string {
-  return new Date(iso).toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta",
-  }) + " wib"
+  return formatTime(iso) + " wib"
 }
 
 export function TrendSignalCard() {
