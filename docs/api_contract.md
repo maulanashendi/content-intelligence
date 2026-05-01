@@ -107,6 +107,46 @@ There is **no pagination in v1**. Every list endpoint returns the full result se
 }
 ```
 
+### `Article`
+
+Flat article row for the `/articles` list. Distinct from `ArticleMember` — no cluster context, no `relevance_score`.
+
+| field             | type              | nullable | notes                                                        |
+| ----------------- | ----------------- | -------- | ------------------------------------------------------------ |
+| `id`              | uuid              | no       | `article.id`                                                 |
+| `title`           | string            | no       | from `article.title`                                         |
+| `url`             | string            | no       | from `article.url`                                           |
+| `first_paragraph` | string            | yes      | from `article.first_paragraph`                               |
+| `published_at`    | string (ISO-8601) | yes      | from `article.published_at`                                  |
+| `created_at`      | string (ISO-8601) | no       | from `article.created_at`; default sort key                  |
+| `source_name`     | string            | no       | denormalized join from `content_source.name`                 |
+| `source_type`     | enum              | no       | `"rss" \| "internal"` — from `content_source.source_type`   |
+
+```json
+{
+  "id": "11111111-2222-3333-4444-555555555555",
+  "title": "Premium Rice Tops Rp18,000/kg at Wholesale Market",
+  "url": "https://kompas.com/berita/abc",
+  "first_paragraph": "Premium rice prices at the Cipinang wholesale market…",
+  "published_at": "2026-04-28T09:12:00Z",
+  "created_at": "2026-04-28T09:15:00Z",
+  "source_name": "Kompas",
+  "source_type": "rss"
+}
+```
+
+### `PaginatedArticles`
+
+Envelope returned by `GET /api/v1/articles`.
+
+| field         | type              | nullable | notes                                             |
+| ------------- | ----------------- | -------- | ------------------------------------------------- |
+| `items`       | array of `Article`| no       | page slice; empty array on an out-of-range page   |
+| `total`       | integer           | no       | total rows matching the query (before slicing)    |
+| `page`        | integer           | no       | current page number (1-based)                     |
+| `page_size`   | integer           | no       | rows per page as applied                          |
+| `total_pages` | integer           | no       | `ceil(total / page_size)`; `1` when `total = 0`  |
+
 ### `ArticleMember`
 
 | field             | type              | nullable | notes                                              |
@@ -368,7 +408,70 @@ Full detail for a single cluster, including its member articles.
 
 ## 5. Endpoints — PROPOSED
 
-Three new read-only endpoints, all backed by tables that already have data writers in the pipeline. None require a constraints amendment, schema migration, or new dependency. Ship order is independent — pick whichever the FE needs first.
+Four new read-only endpoints, all backed by tables that already have data writers in the pipeline. None require a constraints amendment, schema migration, or new dependency. Ship order is independent — pick whichever the FE needs first.
+
+### 5.0 `GET /api/v1/articles`
+
+**Status**: PROPOSED
+**Used by**: `/article` route via `useArticles` (`@ei-fe/api`)
+**Backed by**: not yet implemented
+
+Paginated list of all ingested articles, newest first.
+
+**Path params** — (none)
+
+**Query params**
+
+| name        | type    | required | default | notes                                                |
+| ----------- | ------- | -------- | ------- | ---------------------------------------------------- |
+| `page`      | integer | no       | `1`     | 1-based; values < 1 → `422`                          |
+| `page_size` | integer | no       | `20`    | upper bound `100`; values outside `[1, 100]` → `422` |
+
+**Response 200** — `PaginatedArticles`
+
+```json
+{
+  "items": [
+    {
+      "id": "11111111-2222-3333-4444-555555555555",
+      "title": "Premium Rice Tops Rp18,000/kg at Wholesale Market",
+      "url": "https://kompas.com/berita/abc",
+      "first_paragraph": "Premium rice prices at the Cipinang wholesale market…",
+      "published_at": "2026-04-28T09:12:00Z",
+      "created_at": "2026-04-28T09:15:00Z",
+      "source_name": "Kompas",
+      "source_type": "rss"
+    }
+  ],
+  "total": 4812,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 241
+}
+```
+
+When no articles exist yet:
+
+```json
+{ "items": [], "total": 0, "page": 1, "page_size": 20, "total_pages": 1 }
+```
+
+**Errors**
+
+| status | when                                          | body            |
+| ------ | --------------------------------------------- | --------------- |
+| 422    | `page < 1` or `page_size` not in `[1, 100]`   | FastAPI default |
+| 500    | DB error                                      | FastAPI default |
+
+**Notes / constraints**
+
+- Default sort: `article.created_at` DESC (most recently ingested first). Sort order is not configurable in v1.
+- Both `rss` and `internal` articles are included. There is no filter param in v1.
+- `source_name` and `source_type` are derived via join on `content_source`; computed at request time.
+- An out-of-range `page` (e.g., `page=999` when only 3 pages exist) returns `200` with `items: []` — not `404`.
+- `total_pages` is always at least `1` even when `total = 0`.
+
+---
 
 ### 5.1 `GET /api/v1/cluster-runs/latest`
 

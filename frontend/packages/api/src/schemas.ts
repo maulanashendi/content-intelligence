@@ -1,5 +1,26 @@
 import { z } from "zod"
 
+export const ArticleSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  url: z.string(),
+  first_paragraph: z.string().nullable(),
+  published_at: z.string().nullable(),
+  created_at: z.string(),
+  source_name: z.string(),
+  source_type: z.enum(["rss", "internal"]),
+})
+export type Article = z.infer<typeof ArticleSchema>
+
+export const PaginatedArticlesSchema = z.object({
+  items: z.array(ArticleSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  page_size: z.number().int(),
+  total_pages: z.number().int(),
+})
+export type PaginatedArticles = z.infer<typeof PaginatedArticlesSchema>
+
 export const ClusterSummarySchema = z.object({
   id: z.string().uuid(),
   label: z.string().nullable(),

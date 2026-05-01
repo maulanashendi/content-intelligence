@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom"
 
 const EDITORIAL_NAV = [
   { to: "/morning", label: "Morning Brief" },
-  { to: "/deferred", label: "Ditunda" },
+  { to: "/article", label: "Artikel" },
 ]
 
 const PIPELINE_NAV = [
@@ -12,8 +12,6 @@ const PIPELINE_NAV = [
 const SOURCES_NAV = [
   { to: "/sources", label: "Content Sources", exact: true },
   { to: "/sources/rss", label: "Input RSS" },
-  { to: "/sources/api", label: "Input API" },
-  { to: "/sources/schema", label: "Check Schema" },
 ]
 
 function NavItem({ to, label, exact }: { to: string; label: string; exact?: boolean }) {
