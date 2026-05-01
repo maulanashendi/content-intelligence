@@ -7,10 +7,10 @@ interface ArticleTableProps {
 function SourceTypeBadge({ type }: { type: "rss" | "internal" }) {
   return (
     <span
-      className={`badge badge-${type === "internal" ? "internal" : "default"}`}
+      className={`badge ${type === "internal" ? "badge-watching" : "badge-active"}`}
       style={{ fontSize: 10.5 }}
     >
-      {type === "internal" ? "Internal" : "RSS"}
+      {type === "internal" ? "internal" : "rss"}
     </span>
   )
 }

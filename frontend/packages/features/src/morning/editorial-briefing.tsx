@@ -29,91 +29,107 @@ export function EditorialBriefing({ clusters }: EditorialBriefingProps) {
         <span className="card-meta">generated {now()} · berdasarkan data terkini</span>
       </div>
       <div className="briefing-body">
-        <p className="briefing-greeting">
-          <span className="serif">Selamat pagi, Redaksi.</span>{" "}
-          Berikut kondisi siklus berita dari {clusters.length} kluster aktif hari ini — dan di mana Tempo masih punya ruang.
-        </p>
+        {clusters.length === 0 ? (
+          <p
+            style={{
+              color: "var(--fg-faint)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 13,
+              textAlign: "center",
+              padding: "16px 0",
+            }}
+          >
+            tidak ada
+          </p>
+        ) : (
+          <>
+            <p className="briefing-greeting">
+              <span className="serif">Selamat pagi, Redaksi.</span>{" "}
+              Berikut kondisi siklus berita dari {clusters.length} kluster aktif hari ini — dan di mana Tempo masih punya ruang.
+            </p>
 
-        {topVelocity.length > 0 && (
-          <div className="briefing-section">
-            <div className="briefing-h">Paling Panas Saat Ini</div>
-            <ul className="briefing-list">
-              {topVelocity.map((c) => (
-                <li key={c.id}>
-                  <strong>{c.label}</strong> mendominasi tren (velocity {c.trend_velocity?.toFixed(1)}).{" "}
-                  {c.member_count} artikel dari berbagai outlet —{" "}
-                  {(c.coverage_score ?? 0) > 0.6
-                    ? "cerita sudah padat, butuh sudut baru."
-                    : "masih ada ruang untuk investigasi."}
-                </li>
-              ))}
-            </ul>
-          </div>
+            {topVelocity.length > 0 && (
+              <div className="briefing-section">
+                <div className="briefing-h">Paling Panas Saat Ini</div>
+                <ul className="briefing-list">
+                  {topVelocity.map((c) => (
+                    <li key={c.id}>
+                      <strong>{c.label}</strong> mendominasi tren (velocity {c.trend_velocity?.toFixed(1)}).{" "}
+                      {c.member_count} artikel dari berbagai outlet —{" "}
+                      {(c.coverage_score ?? 0) > 0.6
+                        ? "cerita sudah padat, butuh sudut baru."
+                        : "masih ada ruang untuk investigasi."}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {highNovelty.length > 0 && (
+              <div className="briefing-section">
+                <div className="briefing-h">Nilai Novelty Tinggi — Worth Writing</div>
+                <ul className="briefing-list">
+                  {highNovelty.map((c) => (
+                    <li key={c.id}>
+                      <strong>{c.label}</strong> — novelty{" "}
+                      {c.novelty_score != null ? Math.round(c.novelty_score * 100) : "—"}%,{" "}
+                      coverage {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}%.{" "}
+                      {(c.coverage_score ?? 1) < 0.4 ? (
+                        <em>Belum banyak yang menulis — lane terbuka.</em>
+                      ) : (
+                        "Kompetitor sudah masuk tapi masih tipis."
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {lowCoverage.length > 0 && (
+              <div className="briefing-section">
+                <div className="briefing-h">Di Mana Tempo Punya Lane</div>
+                <ul className="briefing-list">
+                  {lowCoverage.map((c) => (
+                    <li key={c.id}>
+                      <strong>{c.label}</strong> — coverage hanya{" "}
+                      {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}%.{" "}
+                      <em>
+                        {c.member_count != null && c.member_count < 10
+                          ? "Volume masih rendah, kompetitor belum masuk penuh."
+                          : "Ada celah sudut analisis yang belum ditulis."}
+                      </em>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {trending.length > 0 && (
+              <div className="briefing-section">
+                <div className="briefing-h">Yang Perlu Dipantau</div>
+                <ul className="briefing-list">
+                  {trending.map((c) => (
+                    <li key={c.id}>
+                      <strong>{c.label}</strong> — sedang trending dengan velocity {c.trend_velocity?.toFixed(1)}.
+                      {" "}Pantau pergerakan 6 jam ke depan sebelum memutuskan sudut tulisan.
+                    </li>
+                  ))}
+                  {clusters.filter((c) => (c.coverage_score ?? 0) > 0.8).slice(0, 1).map((c) => (
+                    <li key={c.id + "-warn"}>
+                      <strong>{c.label}</strong> coverage sudah {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}% — pertimbangkan deprioritisasi.
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="briefing-foot">
+              <span className="mono faint" style={{ fontSize: 10.5 }}>
+                ringkasan berdasarkan {clusters.length} kluster aktif · {clusters.reduce((s, c) => s + (c.member_count ?? 0), 0)} artikel total
+              </span>
+            </div>
+          </>
         )}
-
-        {highNovelty.length > 0 && (
-          <div className="briefing-section">
-            <div className="briefing-h">Nilai Novelty Tinggi — Worth Writing</div>
-            <ul className="briefing-list">
-              {highNovelty.map((c) => (
-                <li key={c.id}>
-                  <strong>{c.label}</strong> — novelty{" "}
-                  {c.novelty_score != null ? Math.round(c.novelty_score * 100) : "—"}%,{" "}
-                  coverage {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}%.{" "}
-                  {(c.coverage_score ?? 1) < 0.4 ? (
-                    <em>Belum banyak yang menulis — lane terbuka.</em>
-                  ) : (
-                    "Kompetitor sudah masuk tapi masih tipis."
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {lowCoverage.length > 0 && (
-          <div className="briefing-section">
-            <div className="briefing-h">Di Mana Tempo Punya Lane</div>
-            <ul className="briefing-list">
-              {lowCoverage.map((c) => (
-                <li key={c.id}>
-                  <strong>{c.label}</strong> — coverage hanya{" "}
-                  {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}%.{" "}
-                  <em>
-                    {c.member_count != null && c.member_count < 10
-                      ? "Volume masih rendah, kompetitor belum masuk penuh."
-                      : "Ada celah sudut analisis yang belum ditulis."}
-                  </em>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {trending.length > 0 && (
-          <div className="briefing-section">
-            <div className="briefing-h">Yang Perlu Dipantau</div>
-            <ul className="briefing-list">
-              {trending.map((c) => (
-                <li key={c.id}>
-                  <strong>{c.label}</strong> — sedang trending dengan velocity {c.trend_velocity?.toFixed(1)}.
-                  {" "}Pantau pergerakan 6 jam ke depan sebelum memutuskan sudut tulisan.
-                </li>
-              ))}
-              {clusters.filter((c) => (c.coverage_score ?? 0) > 0.8).slice(0, 1).map((c) => (
-                <li key={c.id + "-warn"}>
-                  <strong>{c.label}</strong> coverage sudah {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}% — pertimbangkan deprioritisasi.
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="briefing-foot">
-          <span className="mono faint" style={{ fontSize: 10.5 }}>
-            ringkasan berdasarkan {clusters.length} kluster aktif · {clusters.reduce((s, c) => s + (c.member_count ?? 0), 0)} artikel total
-          </span>
-        </div>
       </div>
     </div>
   )

@@ -41,24 +41,41 @@ export function ClusterTable({ clusters, onRowClick }: ClusterTableProps) {
           </tr>
         </thead>
         <tbody>
-          {clusters.map((c, i) => (
-            <tr
-              key={c.id}
-              className="row-clickable"
-              onClick={() => onRowClick(c.id)}
-            >
-              <BucketCell label={c.label} index={i} />
-              <td>
-                <RecommendationBadge recommendation={c.recommendation} />
+          {clusters.length === 0 ? (
+            <tr>
+              <td
+                colSpan={6}
+                style={{
+                  textAlign: "center",
+                  padding: "24px 0",
+                  color: "var(--fg-faint)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 13,
+                }}
+              >
+                tidak ada
               </td>
-              <td>
-                <VelocityBar velocity={c.trend_velocity} />
-              </td>
-              <td className="num">{formatScore(c.novelty_score)}</td>
-              <td className="num">{formatScore(c.coverage_score)}</td>
-              <td className="num right">{c.member_count ?? "—"}</td>
             </tr>
-          ))}
+          ) : (
+            clusters.map((c, i) => (
+              <tr
+                key={c.id}
+                className="row-clickable"
+                onClick={() => onRowClick(c.id)}
+              >
+                <BucketCell label={c.label} index={i} />
+                <td>
+                  <RecommendationBadge recommendation={c.recommendation} />
+                </td>
+                <td>
+                  <VelocityBar velocity={c.trend_velocity} />
+                </td>
+                <td className="num">{formatScore(c.novelty_score)}</td>
+                <td className="num">{formatScore(c.coverage_score)}</td>
+                <td className="num right">{c.member_count ?? "—"}</td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
