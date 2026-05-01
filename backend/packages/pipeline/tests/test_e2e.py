@@ -1,0 +1,145 @@
+import logging
+import time
+import uuid
+from datetime import UTC, datetime
+
+import numpy as np
+import pytest
+from core.config import settings
+from core.db import get_session
+from core.models import Article, ClusterInsight, ContentSource
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+
+GSC_FORBIDDEN_KEY_TOKENS = ("gsc", "impressions", "clicks", "position", "ctr")
+
+ARTICLES_PER_CLUSTER = 6
+NUM_CLUSTERS = 3
+EMBEDDING_DIM = 768
+
+
+def _build_fake_embedder() -> object:
+    """Returns a sentence-transformers-shaped stub.
+
+    Each input text starts with `<cluster_idx>|`; the stub emits an axis-aligned
+    one-hot vector for that cluster plus tiny gaussian noise, then L2-normalizes.
+    Three clusters land on three orthogonal axes — UMAP+HDBSCAN recovers them
+    deterministically.
+    """
+    rng = np.random.default_rng(seed=42)
+
+    class _Embedder:
+        def encode(self, texts, normalize_embeddings: bool = True, **_: object) -> np.ndarray:
+            vectors = np.zeros((len(texts), EMBEDDING_DIM), dtype=np.float32)
+            for i, raw in enumerate(texts):
+                cluster_idx = int(raw.split("|", 1)[0])
+                vectors[i, cluster_idx % NUM_CLUSTERS] = 1.0
+                vectors[i] += rng.normal(scale=0.005, size=EMBEDDING_DIM).astype(np.float32)
+            if normalize_embeddings:
+                norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+                vectors = vectors / norms
+            return vectors
+
+    return _Embedder()
+
+
+def _assert_no_gsc_keys(payload: object, where: str) -> None:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            lowered = key.lower()
+            for forbidden in GSC_FORBIDDEN_KEY_TOKENS:
+                assert forbidden not in lowered, f"GSC-flavored key '{key}' leaked at {where}"
+            _assert_no_gsc_keys(value, where)
+    elif isinstance(payload, list):
+        for item in payload:
+            _assert_no_gsc_keys(item, where)
+
+
+@pytest.mark.asyncio
+async def test_e2e_pipeline_and_api(
+    rss_source: ContentSource, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # 18 samples vs default umap_target_dimensions=30 — UMAP needs n_samples > n_components.
+    # Drop to 5 for the test only; clustering shape isn't sensitive at this scale.
+    monkeypatch.setattr(settings, "umap_target_dimensions", 5)
+
+    source_id = rss_source.id
+
+    async def fake_ingest_rss(_client: object) -> int:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        async with get_session() as session:
+            for cluster_idx in range(NUM_CLUSTERS):
+                for member_idx in range(ARTICLES_PER_CLUSTER):
+                    session.add(
+                        Article(
+                            id=uuid.uuid4(),
+                            source_id=source_id,
+                            title=f"{cluster_idx}|article {cluster_idx}-{member_idx}",
+                            url=f"https://fake.example.com/{cluster_idx}/{member_idx}/{uuid.uuid4()}",
+                            published_at=now,
+                        )
+                    )
+            await session.commit()
+        return NUM_CLUSTERS * ARTICLES_PER_CLUSTER
+
+    async def fake_ingest_sitemap(_client: object) -> int:
+        return 0
+
+    async def fake_ingest_trends(_client: object) -> int:
+        return 0
+
+    monkeypatch.setattr("ingest.pipeline.ingest_rss", fake_ingest_rss)
+    monkeypatch.setattr("ingest.pipeline.ingest_sitemap", fake_ingest_sitemap)
+    monkeypatch.setattr("ingest.pipeline.ingest_trends", fake_ingest_trends)
+    monkeypatch.setattr("embedding.pipeline.get_embedder", _build_fake_embedder)
+
+    label_counter = {"n": 0}
+
+    def fake_label(_articles: list[dict[str, str | None]]) -> str:
+        label_counter["n"] += 1
+        return f"Topic {label_counter['n']}"
+
+    monkeypatch.setattr("labeling.pipeline.generate_label", fake_label)
+
+    from pipeline.cli import _run_daily
+
+    caplog.set_level(logging.INFO)
+    await _run_daily()
+
+    finished = [r for r in caplog.records if r.getMessage() == "pipeline finished"]
+    assert finished, "expected a 'pipeline finished' log record"
+    elapsed = getattr(finished[-1], "total_elapsed_s", None)
+    assert isinstance(elapsed, float), f"expected float total_elapsed_s, got {elapsed!r}"
+
+    async with get_session() as session:
+        recommendations = list(
+            (await session.execute(select(ClusterInsight.recommendation))).scalars()
+        )
+    assert recommendations, "scoring did not upsert any cluster_insight rows"
+    accepted = {"trending", "worth_writing"}
+    actionable = [r for r in recommendations if r.value in accepted]
+    assert actionable, (
+        f"expected ≥1 trending/worth_writing cluster, got {[r.value for r in recommendations]}"
+    )
+
+    from api.main import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        for path in ("/api/v1/health", "/api/v1/clusters/morning", "/api/v1/clusters/deferred"):
+            t0 = time.perf_counter()
+            resp = await client.get(path)
+            took = time.perf_counter() - t0
+            assert resp.status_code == 200, f"{path} → {resp.status_code}: {resp.text}"
+            assert took < 0.5, f"{path} took {took:.3f}s"
+            _assert_no_gsc_keys(resp.json(), path)
+
+        morning = (await client.get("/api/v1/clusters/morning")).json()
+        assert morning, "expected ≥1 cluster in /clusters/morning"
+        cluster_id = morning[0]["id"]
+
+        t0 = time.perf_counter()
+        resp = await client.get(f"/api/v1/clusters/{cluster_id}")
+        took = time.perf_counter() - t0
+        assert resp.status_code == 200
+        assert took < 0.5, f"/clusters/{{id}} took {took:.3f}s"
+        _assert_no_gsc_keys(resp.json(), f"/clusters/{cluster_id}")
