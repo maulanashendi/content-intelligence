@@ -11,8 +11,8 @@ import asyncpg
 import httpx
 from core.config import settings
 from core.db import get_session
-from core.models import ContentSource, SourceType
-from ingest.rss import BlockedError, fetch_and_store_source
+from core.models import ContentSource, SourceStatus, SourceType
+from ingest.rss import BlockedError, _set_source_status, fetch_and_store_source
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -104,8 +104,10 @@ async def _fetch_one_source(source_id: UUID) -> None:
             logger.info("immediate source=%s ingested %d articles", sname, count)
         except BlockedError:
             _mark_blocked(sid, sname)
+            await _set_source_status(sid, SourceStatus.blocked)
         except Exception:
             logger.exception("immediate source=%s fetch failed", sname)
+            await _set_source_status(sid, SourceStatus.error)
 
 
 async def _run_once() -> None:
