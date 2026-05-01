@@ -7,7 +7,7 @@ import { Providers } from "./providers.js"
 async function bootstrap() {
   if (import.meta.env.DEV) {
     const { worker } = await import("./mocks/browser.js")
-    await worker.start({ onUnhandledRequest: "bypass" })
+    await worker.start({ onUnhandledRequest: "bypass" }).catch(console.warn)
   }
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
