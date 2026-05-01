@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import SessionDep
+from api.types import UtcDateTime
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,9 @@ class SourceResponse(BaseModel):
     source_type: str
     is_enabled: bool
     status: str | None
-    last_fetched_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
+    last_fetched_at: UtcDateTime | None
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
     article_count_24h: int
 
 

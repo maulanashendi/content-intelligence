@@ -1,6 +1,5 @@
 import math
 import uuid
-from datetime import datetime
 
 from core.models import Article, ContentSource
 from fastapi import APIRouter, Query
@@ -8,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from api.deps import SessionDep
+from api.types import UtcDateTime
 
 router = APIRouter(prefix="/articles", tags=["articles"])
 
@@ -17,8 +17,8 @@ class ArticleResponse(BaseModel):
     title: str
     url: str
     first_paragraph: str | None
-    published_at: datetime | None
-    created_at: datetime
+    published_at: UtcDateTime | None
+    created_at: UtcDateTime
     source_name: str
     source_type: str
 
