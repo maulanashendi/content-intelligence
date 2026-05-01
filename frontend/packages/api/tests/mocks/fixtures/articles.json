@@ -1,0 +1,38 @@
+{
+  "items": [
+    {
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "title": "Pertamina Naikkan Harga BBM Non-Subsidi per 1 Mei 2025",
+      "url": "https://kompas.com/read/2025/05/01/bbm-naik",
+      "first_paragraph": "Pertamina resmi menaikkan harga BBM non-subsidi mulai 1 Mei 2025.",
+      "published_at": "2025-04-30T08:14:00",
+      "created_at": "2025-04-30T08:20:00",
+      "source_name": "Kompas",
+      "source_type": "rss"
+    },
+    {
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "title": "Pemerintah Kaji Dampak Kenaikan BBM terhadap Inflasi",
+      "url": "https://tempo.co/read/2025/05/01/inflasi-bbm",
+      "first_paragraph": null,
+      "published_at": "2025-04-30T07:50:00",
+      "created_at": "2025-04-30T07:55:00",
+      "source_name": "Tempo",
+      "source_type": "internal"
+    },
+    {
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "title": "DPR Minta Pemerintah Jelaskan Alasan Kenaikan BBM",
+      "url": "https://detik.com/news/2025/05/01/dpr-bbm",
+      "first_paragraph": "DPR meminta pemerintah segera memberikan penjelasan resmi.",
+      "published_at": "2025-04-30T07:22:00",
+      "created_at": "2025-04-30T07:30:00",
+      "source_name": "Detik.com",
+      "source_type": "rss"
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 1
+}

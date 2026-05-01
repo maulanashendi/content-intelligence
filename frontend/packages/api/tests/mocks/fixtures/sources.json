@@ -1,0 +1,38 @@
+[
+  {
+    "id": "a1b2c3d4-0001-4000-8000-000000000001",
+    "name": "Kompas RSS",
+    "url": "https://rss.kompas.com/nasional",
+    "source_type": "rss",
+    "is_enabled": true,
+    "status": "active",
+    "last_fetched_at": "2026-04-30T06:12:00",
+    "created_at": "2025-11-01T00:00:00",
+    "updated_at": "2026-04-30T06:12:00",
+    "article_count_24h": 142
+  },
+  {
+    "id": "a1b2c3d4-0002-4000-8000-000000000002",
+    "name": "Tempo Internal",
+    "url": "https://www.tempo.co/sitemap.xml",
+    "source_type": "internal",
+    "is_enabled": true,
+    "status": "active",
+    "last_fetched_at": "2026-04-30T06:14:00",
+    "created_at": "2025-11-01T00:00:00",
+    "updated_at": "2026-04-30T06:14:00",
+    "article_count_24h": 210
+  },
+  {
+    "id": "a1b2c3d4-0003-4000-8000-000000000003",
+    "name": "Republika",
+    "url": "https://www.republika.co.id/rss",
+    "source_type": "rss",
+    "is_enabled": false,
+    "status": "error",
+    "last_fetched_at": null,
+    "created_at": "2025-11-15T00:00:00",
+    "updated_at": "2025-11-15T00:00:00",
+    "article_count_24h": 0
+  }
+]
