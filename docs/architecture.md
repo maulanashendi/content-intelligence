@@ -10,17 +10,20 @@ This document describes the high-level structure of Editor Intelligence: how mod
 
 **Single embedding model active at a time.** Switching the embedding model is a deliberate event that requires a schema migration and a full re-embed of all articles. Multi-model serving is not supported.
 
-**Read-only API.** The dashboard has no write actions in MVP. The API serves pre-computed data; user actions (claim, dismiss, etc.) are explicitly out of scope per PRD Section 6.
+**Read-dominant API with one narrow write surface.** Per `decisions.md` D19, the API exposes `POST/PATCH/DELETE` on `/api/v1/sources` so editors can manage RSS feeds at runtime. Every other table — articles, clusters, embeddings, scoring, GSC metrics, trend signals — is read-only. User actions on cluster/article rows (claim, dismiss, etc.) remain out of scope per PRD Section 6.
 
 ## Process topology
 
-Two long-running concerns, plus the database:
+Three long-running concerns, plus the database:
 
-| Process    | Lifecycle                  | Trigger                         |
-| ---------- | -------------------------- | ------------------------------- |
-| `api`      | Always running             | HTTP requests from the frontend |
-| `pipeline` | Batch run, exits when done | Cron at 06:00 WIB daily         |
-| `postgres` | Always running             | Hosts pgvector data             |
+| Process               | Lifecycle                  | Trigger                                                   |
+| --------------------- | -------------------------- | --------------------------------------------------------- |
+| `api`                 | Always running             | HTTP requests from the frontend                           |
+| `pipeline`            | Batch run, exits when done | Cron at 06:00 WIB daily                                   |
+| `ingest serve` (D20)  | Always running, singleton  | `pg_notify('rss_source_created')` + safety-net poll loop  |
+| `postgres`            | Always running             | Hosts pgvector data                                       |
+
+The `ingest serve` daemon picks up sources added through `POST /api/v1/sources` (D19) and runs a periodic `_run_once` poll as a fallback when notifications are missed. It must be deployed as a singleton — its blocked-source map and immediate queue are process-local.
 
 The frontend is served separately and is owned by another team.
 
@@ -118,7 +121,7 @@ Three endpoints serve the dashboard's happy path. Authentication is handled by a
 | `GET`  | `/api/v1/clusters/deferred`     | Desk head's deferred-topics view           |
 | `GET`  | `/api/v1/health`                | DB connectivity check                      |
 
-All endpoints are read-only. There is no write API in MVP — there are no user actions to persist.
+All cluster, article, and trend-signal endpoints are read-only. The `/api/v1/sources` endpoints are the only write surface (POST/PATCH/DELETE) — see `decisions.md` D19. POST triggers `pg_notify('rss_source_created', <id>)`; the running `serve` daemon (D20) consumes that channel and ingests the new feed within minutes, while the daily cron pipeline keeps running its full ingest+embed+cluster+label+score chain.
 
 ## Data store
 

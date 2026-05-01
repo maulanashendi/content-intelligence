@@ -47,7 +47,7 @@ These patterns must not appear in the codebase. Each was explicitly considered a
 - **No GraphQL.** REST endpoints only.
 - **No WebSockets.** The dashboard is poll-based.
 - **No event sourcing or CQRS.** Standard CRUD against Postgres.
-- **No write-side API.** The dashboard is read-only in MVP.
+- **No write-side API beyond `ContentSource` CRUD** (per `decisions.md` D19). The API exposes `POST/PATCH/DELETE` on `/api/v1/sources` so editors can manage RSS feeds at runtime. Every other table — `article`, `cluster*`, `cluster_run`, `cluster_insight`, `trend_signal`, `article_embedding`, `article_gsc_metric` — remains read-only via the API. Pipeline outputs are produced by the daily cron and the reactive `serve` daemon (D20).
 
 ## Code don'ts
 
@@ -95,12 +95,12 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 - **No HTTP client library.** Native `fetch` plus the wrapper in `@ei-fe/api/src/client.ts` only. Do not add axios, ky, wretch, or similar.
 - **No charting or visualization library.** No Recharts, Chart.js, D3, Sigma, Cytoscape, react-force-graph, or vis-network in MVP. Network visualization is a post-MVP discussion that requires a PRD update first.
 - **No auth library.** No NextAuth, Auth0 SDK, Clerk, or session helpers. Identity is upstream.
-- **No form library.** No react-hook-form, Formik, or Final Form. The MVP API is read-only.
+- **No form library.** No react-hook-form, Formik, or Final Form. The only write surface (source management, D19) is small enough that controlled inputs + native validation suffice.
 - **No internationalization library.** No i18next, react-intl, or LinguiJS. Strings are Bahasa Indonesia and hard-coded.
 - **No theme switcher.** One palette, light only. The `tweaks-panel` from `template-fe/` is designer tooling and is not ported.
 - **No Storybook or component-isolation environment.** Visual review happens in the dev server.
 - **No icon set besides Lucide.** Adding a second icon system is forbidden — extend `@ei-fe/ui/src/icons.ts` instead.
-- **No write-side endpoints.** `architecture.md` is authoritative — the API is read-only in MVP, and the FE has no UI elements that imply mutation (no claim, dismiss, bookmark, etc.).
+- **No write-side endpoints beyond source management.** Per D19 the FE has source CRUD on `/sources` and `/sources/rss`. No other mutating UI elements (no claim, dismiss, bookmark, etc.) — clusters, articles, and trend signals stay read-only.
 - **No cross-feature imports inside `@ei-fe/features`.** A view in `features/morning` may not import from `features/deferred`. Shared visuals lift to `@ei-fe/ui`; shared logic lifts to `@ei-fe/core`.
 - **No deep imports across packages.** `@ei-fe/<pkg>/src/...` is forbidden. Import the package entry point only.
 - **No new top-level dependencies without listing them in `frontend.md` "Stack" and providing rationale.**

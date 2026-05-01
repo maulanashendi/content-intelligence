@@ -203,7 +203,7 @@ The user initially considered the simpler "two nullable columns on article" appr
 
 **Rationale.** `docker compose up` works from the project root without `-f` flags or path tricks. Build context is intuitive (`context: .`). Standard Python and Node convention. CI tooling (GitHub Actions, etc.) defaults to root paths. Subfolder organization adds friction for every developer for marginal aesthetic gain.
 
-**Implication.** Multi-stage Dockerfile contains both `api` and `pipeline` targets. docker-compose.yml is the dev composition; production overrides go in `docker-compose.prod.yml` if needed.
+**Implication.** Multi-stage Dockerfile contains `api`, `ingest`, and `pipeline` targets (each with `*-dev` variants for bind-mount development). `docker-compose.yml` is the dev composition. `docker-compose.prod.yml` is the prod composition, included from `backend/docker-compose.prod.yml`. Prod loads env from `backend/.env.prod` (gitignored); only `backend/.env.prod.example` is committed. Prod refuses to start without `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD`, binds the API to `127.0.0.1:8000` (assumes a reverse proxy in front), does not expose Postgres to the host, and runs every service with `restart: always` and rotated `json-file` logs.
 
 ---
 
@@ -352,3 +352,38 @@ A code generator was considered but rejected for MVP. The token surface is small
 **Rationale.** `docker compose up` works from the project root without `-f` flags or path tricks. Build context is intuitive (`context: .`). Standard Python and Node convention. CI tooling (GitHub Actions, etc.) defaults to root paths. Subfolder organization adds friction for every developer for marginal aesthetic gain.
 
 **Implication.** Multi-stage Dockerfile contains both `api` and `pipeline` targets. docker-compose.yml is the dev composition; production overrides go in `docker-compose.prod.yml` if needed.
+
+
+---
+
+## D19. Source CRUD endpoints in the API
+
+**Context.** The frontend page `/sources/rss` lets editors add new RSS feeds at runtime. With a strictly read-only API (the original MVP rule), every new feed required a code change and a redeploy of `ingest seed`. That latency blocks the editorial workflow which can identify a new competitor feed mid-day.
+
+**Options considered.**
+- Keep the API read-only; restrict source management to `python -m ingest.cli seed` and remove the `/sources/rss` page
+- Expose source management as POST/PATCH/DELETE on `/api/v1/sources`
+- Build a separate "admin" service with its own auth boundary
+
+**Decision.** Expose POST/PATCH/DELETE on `/api/v1/sources`. The rest of the API (articles, clusters, trend signals, GSC metrics) remains read-only.
+
+**Rationale.** A separate admin service is overkill for one persona on one VPS. The CLI-only path forces a deploy on every editor request, which defeats the purpose of "internal dashboard". Constraining writes to `content_source` keeps the analytical surface (articles, clusters, embeddings) immutable from the API, which preserves the auditability of pipeline outputs.
+
+**Implication.** `docs/api_contract.md` and `docs/constraints.md` no longer say "strictly read-only" without qualification. The constraint becomes: writes are permitted only against `content_source`. Future write requests against any other table require a new decision entry. Auth is still upstream — the API trusts callers, so the upstream gateway must restrict who can hit the source endpoints.
+
+---
+
+## D20. Reactive ingest via `pg_notify` — alongside the daily cron, not replacing it
+
+**Context.** D9 says the pipeline is cron-driven once a day. But under D19, an editor can add a new feed at 11:00 and would otherwise wait until 06:00 the next morning before any article from that feed appears. The product target (decisions in 15 minutes) breaks down.
+
+**Options considered.**
+- Keep cron-only; tell editors to wait until the next morning
+- Replace cron with a long-running daemon that polls all sources continuously
+- Keep cron for the daily pipeline; add a small `serve` daemon that listens on a `pg_notify` channel for new sources and fetches them on demand
+
+**Decision.** Keep cron for the daily pipeline. Add a `serve` daemon (`python -m ingest.cli serve`) that listens on the `rss_source_created` channel and fetches a single source immediately on demand. The daemon also runs a periodic `_run_once` poll as a safety net so that missed notifications still get caught.
+
+**Rationale.** Replacing cron with a continuous poller would require re-thinking the embed/cluster/label/score chain that depends on a known cutoff. Reactive ingest only needs to handle the "new source" case; it does not need to re-cluster or re-score. The `pg_notify` channel keeps the API and runner decoupled — the API does not call the runner directly. Best-effort delivery (notify failures do not 500 the API; missed notifies are caught by the next poll tick) avoids the coupling problem that motivated D9.
+
+**Implication.** The daemon is now a second long-running process alongside the API. It must be supervised (systemd, docker-compose `restart: always`, or equivalent). The runner's in-memory blocked-source map and immediate queue are process-local — running multiple replicas would cause duplicate fetches, so deploy as a singleton. Future write endpoints that should also reactively trigger a pipeline step must declare their own `pg_notify` channel, never call the runner in-process.
