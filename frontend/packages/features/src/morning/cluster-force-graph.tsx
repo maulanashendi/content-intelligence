@@ -28,6 +28,8 @@ interface GraphNode extends d3.SimulationNodeDatum {
   colorLight: string
   size: number
   sourceName?: string
+  homeX?: number
+  homeY?: number
 }
 
 interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
@@ -67,6 +69,8 @@ function buildGraph(
       size: 26,
       x: cx,
       y: cy,
+      homeX: cx,
+      homeY: cy,
     })
 
     const articles = cluster.members.slice(0, 10)
@@ -179,9 +183,9 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
           .forceLink<GraphNode, GraphLink>(links)
           .id((d) => d.id)
           .distance((d) => (d.linkType === "hub" ? 75 : 30))
-          .strength((d) => d.strength),
+          .strength((d) => (d.linkType === "hub" ? 0.1 : d.strength)),
       )
-      .force("charge", d3.forceManyBody<GraphNode>().strength((d) => (d.kind === "cluster" ? -550 : -60)))
+      .force("charge", d3.forceManyBody<GraphNode>().strength((d) => (d.kind === "cluster" ? -200 : -40)))
       .force("collide", d3.forceCollide<GraphNode>().radius((d) => d.size + 3))
       .force("cluster", (alpha) => {
         // Gently pull articles toward their cluster hub
@@ -197,11 +201,20 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
           n.vy = (n.vy ?? 0) + (pos.y - (n.y ?? 0)) * 0.04 * alpha
         })
       })
+      .force("home", (alpha: number) => {
+        nodes.forEach((n) => {
+          if (n.kind !== "cluster" || n.homeX == null || n.homeY == null) return
+          n.vx = (n.vx ?? 0) + (n.homeX - (n.x ?? 0)) * 0.3 * alpha
+          n.vy = (n.vy ?? 0) + (n.homeY - (n.y ?? 0)) * 0.3 * alpha
+        })
+      })
       .force("boundary", () => {
         nodes.forEach((n) => {
           const m = n.size + 6
-          n.x = Math.max(m, Math.min(width - m, n.x ?? width / 2))
-          n.y = Math.max(m, Math.min(height - m, n.y ?? height / 2))
+          if ((n.x ?? 0) < m) { n.x = m; n.vx = Math.max(0, n.vx ?? 0) }
+          if ((n.x ?? 0) > width - m) { n.x = width - m; n.vx = Math.min(0, n.vx ?? 0) }
+          if ((n.y ?? 0) < m) { n.y = m; n.vy = Math.max(0, n.vy ?? 0) }
+          if ((n.y ?? 0) > height - m) { n.y = height - m; n.vy = Math.min(0, n.vy ?? 0) }
         })
       })
 
