@@ -430,43 +430,60 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
           Reset zoom
         </button>
       </div>
-      <div
-        ref={containerRef}
-        style={{ position: "relative", height: 500, background: "var(--bg-sunken)" }}
-      >
-        <svg ref={svgRef} width="100%" height="100%" />
-        <div
-          ref={tooltipRef}
-          style={{
-            position: "absolute",
-            pointerEvents: "none",
-            background: "var(--bg-elev)",
-            border: "0.5px solid var(--line-strong)",
-            borderRadius: "var(--radius)",
-            padding: "8px 12px",
-            fontSize: 12.5,
-            maxWidth: 240,
-            opacity: 0,
-            transition: "opacity 0.1s",
-            zIndex: 10,
-            color: "var(--fg)",
-            lineHeight: 1.4,
-            boxShadow: "var(--shadow-md)",
-          }}
-        />
+      {details.length === 0 ? (
         <div
           style={{
-            position: "absolute",
-            bottom: 10,
-            left: 14,
-            fontSize: 11,
+            height: 500,
+            background: "var(--bg-sunken)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             color: "var(--fg-faint)",
+            fontSize: 13,
             fontFamily: "var(--font-mono)",
           }}
         >
-          Klik kluster untuk highlight · Drag · Scroll to zoom
+          tidak ada
         </div>
-      </div>
+      ) : (
+        <div
+          ref={containerRef}
+          style={{ position: "relative", height: 500, background: "var(--bg-sunken)" }}
+        >
+          <svg ref={svgRef} width="100%" height="100%" />
+          <div
+            ref={tooltipRef}
+            style={{
+              position: "absolute",
+              pointerEvents: "none",
+              background: "var(--bg-elev)",
+              border: "0.5px solid var(--line-strong)",
+              borderRadius: "var(--radius)",
+              padding: "8px 12px",
+              fontSize: 12.5,
+              maxWidth: 240,
+              opacity: 0,
+              transition: "opacity 0.1s",
+              zIndex: 10,
+              color: "var(--fg)",
+              lineHeight: 1.4,
+              boxShadow: "var(--shadow-md)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 10,
+              left: 14,
+              fontSize: 11,
+              color: "var(--fg-faint)",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            Klik kluster untuk highlight · Drag · Scroll to zoom
+          </div>
+        </div>
+      )}
     </div>
   )
 }

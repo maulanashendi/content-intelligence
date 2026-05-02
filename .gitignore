@@ -17,6 +17,8 @@ venv/
 .env
 .env.local
 .env.*.local
+.env.prod
+backend/.env.prod
 
 # Testing & linting cache
 .pytest_cache/

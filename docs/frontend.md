@@ -255,6 +255,21 @@ A single convention applied across all routes, implemented via components in `@e
 | 404 cluster (detail route) | `<EmptyState>` with copy "Cluster tidak ditemukan atau bukan dari run terbaru" + link to `/morning` |
 | Empty result (morning has 0 clusters) | `<EmptyState>` with copy directing the user to the deferred view |
 
+## Date / time formatting
+
+**Display standard: WIB / Asia/Jakarta (GMT+7).** Every user-facing timestamp goes through one of the helpers in `frontend/packages/core/src/format.ts`:
+
+| Helper | Output | Use for |
+|---|---|---|
+| `formatDate(iso)` | `1 Mei 2026` | Date columns in tables (e.g., article published_at, created_at) |
+| `formatDateTime(iso)` | `01 Mei 2026, 23.45` | Audit timestamps, last_fetched_at, anything where minute precision matters |
+| `formatTime(iso)` | `23.45` | Compact stamps inside cards (e.g., trend signal captured_at) |
+| `formatRelative(iso)` | `2j lalu`, `baru saja` | "Time-since" indicators |
+
+All helpers set `timeZone: "Asia/Jakarta"` and locale `id-ID`. Components MUST NOT call `new Date(iso).toLocaleString(...)` inline — duplicate timezone configuration drifts and the WIB defaults get lost. The only legitimate inline use is for "now" indicators (`new Date()` representing the user's current wall-clock moment), and those still need `timeZone: "Asia/Jakarta"`.
+
+The wire format from the API is ISO-8601 UTC with the `Z` suffix (see `api_contract.md` §2 "Date / time"). The helpers also tolerate strings without an explicit timezone by treating them as UTC; this exists as a safety net but should not be relied upon — every API endpoint must use `api.types.UtcDateTime` to emit `Z`-suffixed strings.
+
 ## Styling & design system
 
 ### Single token source

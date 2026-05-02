@@ -50,3 +50,19 @@ export const ClusterDetailSchema = ClusterSummarySchema.extend({
   members: z.array(ArticleMemberSchema),
 })
 export type ClusterDetail = z.infer<typeof ClusterDetailSchema>
+
+export const ContentSourceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  url: z.string(),
+  source_type: z.enum(["rss", "internal"]),
+  is_enabled: z.boolean(),
+  status: z.enum(["active", "error", "blocked"]).nullable(),
+  last_fetched_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  article_count_24h: z.number().int(),
+})
+export type ContentSource = z.infer<typeof ContentSourceSchema>
+
+export const ContentSourceListSchema = z.array(ContentSourceSchema)

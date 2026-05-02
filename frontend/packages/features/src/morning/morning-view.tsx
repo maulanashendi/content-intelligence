@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom"
 import { useQueryClient, useQueries } from "@tanstack/react-query"
 import { useMorningClusters, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
 import type { ClusterDetail } from "@ei-fe/api"
-import { LoadingState, ErrorState, EmptyState } from "@ei-fe/ui"
+import { LoadingState, ErrorState } from "@ei-fe/ui"
 import { ClusterTable } from "./cluster-table.js"
 import { ClusterForceGraph } from "./cluster-force-graph.js"
 import { EditorialBriefing } from "./editorial-briefing.js"
@@ -61,18 +61,12 @@ export function MorningView() {
       />
     )
   }
-  if (!data || data.length === 0) {
-    return (
-      <EmptyState
-        title="Tidak ada topik pagi ini"
-        description="Semua topik mungkin sudah jenuh. Lihat daftar Ditunda."
-      />
-    )
-  }
+
+  const clusters = data ?? []
 
   return (
     <div style={{ opacity: isFetching ? 0.7 : 1, transition: "opacity 0.2s" }}>
-      <KpiRow clusters={data} />
+      <KpiRow clusters={clusters} />
 
       <div style={{ padding: "20px 28px 0" }}>
         <ClusterForceGraph
@@ -81,7 +75,6 @@ export function MorningView() {
         />
       </div>
 
-      {/* Two-column layout: briefing+table left, trend signals right */}
       <div
         style={{
           display: "grid",
@@ -92,8 +85,8 @@ export function MorningView() {
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <EditorialBriefing clusters={data} />
-          <ClusterTable clusters={data} onRowClick={(id) => navigate(`/clusters/${id}`)} />
+          <EditorialBriefing clusters={clusters} />
+          <ClusterTable clusters={clusters} onRowClick={(id) => navigate(`/clusters/${id}`)} />
         </div>
         <TrendSignalCard />
       </div>

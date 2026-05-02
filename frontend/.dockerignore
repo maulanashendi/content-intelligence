@@ -1,0 +1,8 @@
+node_modules
+packages/*/node_modules
+packages/*/dist
+.vite
+*.tsbuildinfo
+.DS_Store
+*.log
+article_clustering_force_graph.html

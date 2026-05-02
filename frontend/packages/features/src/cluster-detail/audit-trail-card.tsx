@@ -1,4 +1,5 @@
 import type { ClusterDetail } from "@ei-fe/api"
+import { formatDateTime } from "@ei-fe/core"
 
 interface AuditTrailCardProps {
   cluster: ClusterDetail
@@ -28,12 +29,7 @@ function buildTrail(cluster: ClusterDetail): AuditEvent[] {
   const sources = new Set(members.map((m) => m.source_name))
 
   function fmtTime(iso: string | null | undefined): string {
-    if (!iso) return "—"
-    return new Date(iso).toLocaleString("id-ID", {
-      day: "numeric", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-      timeZone: "Asia/Jakarta",
-    }) + " WIB"
+    return iso ? formatDateTime(iso) + " WIB" : "—"
   }
 
   const noveltyPct = cluster.novelty_score != null ? Math.round(cluster.novelty_score * 100) : null

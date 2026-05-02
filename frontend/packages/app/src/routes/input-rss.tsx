@@ -1,5 +1,7 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
+import { useCreateSource } from "@ei-fe/api"
+import { toUserMessage } from "@ei-fe/core"
 
 const PREVIEW_ARTICLES = [
   { title: "Pertamina Naikkan Harga BBM Non-Subsidi per 1 Mei 2025", published: "30 Apr 2025 · 08:14", source: "kompas.com" },
@@ -7,25 +9,36 @@ const PREVIEW_ARTICLES = [
   { title: "DPR Minta Pemerintah Jelaskan Alasan Kenaikan BBM", published: "30 Apr 2025 · 07:22", source: "kompas.com" },
 ]
 
-type Status = "idle" | "loading" | "ok" | "error"
+const URL_RE = /^https?:\/\/.+/i
 
 export function InputRssRoute() {
+  const navigate = useNavigate()
+  const createSource = useCreateSource()
   const [url, setUrl] = useState("")
   const [name, setName] = useState("")
-  const [interval, setInterval] = useState("6h")
-  const [previewStatus, setPreviewStatus] = useState<Status>("idle")
-  const [saveStatus, setSaveStatus] = useState<Status>("idle")
+  const [isEnabled, setIsEnabled] = useState(true)
+  const [urlError, setUrlError] = useState("")
+  const [previewShown, setPreviewShown] = useState(false)
+
+  function validateUrl(value: string): boolean {
+    if (!value) { setUrlError("URL wajib diisi."); return false }
+    if (!URL_RE.test(value)) { setUrlError("URL harus diawali http:// atau https://"); return false }
+    setUrlError("")
+    return true
+  }
 
   function handlePreview(e: React.FormEvent) {
     e.preventDefault()
-    if (!url) return
-    setPreviewStatus("loading")
-    setTimeout(() => setPreviewStatus("ok"), 1200)
+    if (!validateUrl(url)) return
+    setPreviewShown(true)
   }
 
-  function handleSave() {
-    setSaveStatus("loading")
-    setTimeout(() => setSaveStatus("ok"), 900)
+  async function handleSave() {
+    if (!validateUrl(url)) return
+    await createSource.mutateAsync(
+      { url, name: name.trim().slice(0, 200), is_enabled: isEnabled },
+      { onSuccess: () => navigate("/sources") },
+    )
   }
 
   return (
@@ -47,65 +60,63 @@ export function InputRssRoute() {
           </div>
           <form onSubmit={handlePreview} style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                RSS URL *
-              </label>
+              <label style={labelStyle}>RSS URL *</label>
               <input
                 type="url"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => { setUrl(e.target.value); if (urlError) validateUrl(e.target.value) }}
                 placeholder="https://rss.kompas.com/nasional"
                 required
                 style={inputStyle}
               />
+              {urlError && <span style={{ fontSize: 12, color: "var(--bad)" }}>{urlError}</span>}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Nama Sumber
-              </label>
+              <label style={labelStyle}>Nama Sumber</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Kompas Nasional"
+                maxLength={200}
                 style={inputStyle}
               />
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Interval Fetch
-              </label>
-              <select value={interval} onChange={(e) => setInterval(e.target.value)} style={inputStyle}>
-                <option value="1h">Setiap 1 jam</option>
-                <option value="3h">Setiap 3 jam</option>
-                <option value="6h">Setiap 6 jam</option>
-                <option value="12h">Setiap 12 jam</option>
-                <option value="24h">Setiap 24 jam</option>
-              </select>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                id="is-enabled"
+                type="checkbox"
+                checked={isEnabled}
+                onChange={(e) => setIsEnabled(e.target.checked)}
+                style={{ width: 15, height: 15, cursor: "pointer", accentColor: "var(--accent)" }}
+              />
+              <label htmlFor="is-enabled" style={{ fontSize: 13, cursor: "pointer" }}>Aktifkan sumber saat disimpan</label>
             </div>
 
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="submit" className="btn" disabled={previewStatus === "loading"}>
-                {previewStatus === "loading" ? "Mengambil…" : "Preview Feed"}
-              </button>
-              {previewStatus === "ok" && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button type="submit" className="btn">Preview Feed</button>
+              {previewShown && (
                 <button
                   type="button"
                   className="btn"
                   style={{ background: "var(--fg)", color: "var(--bg-elev)", borderColor: "var(--fg)" }}
                   onClick={handleSave}
-                  disabled={saveStatus === "loading"}
+                  disabled={createSource.isPending}
                 >
-                  {saveStatus === "ok" ? "✓ Tersimpan" : saveStatus === "loading" ? "Menyimpan…" : "Simpan Sumber"}
+                  {createSource.isPending ? "Menyimpan…" : "Simpan Sumber"}
                 </button>
               )}
             </div>
+
+            {createSource.isError && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{toUserMessage(createSource.error)}</span>
+            )}
           </form>
         </div>
 
-        {previewStatus === "ok" && (
+        {previewShown && (
           <div className="card">
             <div className="card-head">
               <span className="card-title">Preview Artikel</span>
@@ -131,15 +142,17 @@ export function InputRssRoute() {
             </table>
           </div>
         )}
-
-        {saveStatus === "ok" && (
-          <div style={{ marginTop: 16, padding: "12px 16px", borderRadius: "var(--radius)", background: "var(--ok-soft)", color: "oklch(0.42 0.13 155)", fontSize: 13, fontWeight: 500 }}>
-            ✓ RSS feed berhasil ditambahkan dan akan diingest pada run berikutnya.
-          </div>
-        )}
       </div>
     </>
   )
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 500,
+  color: "var(--fg-muted)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
 }
 
 const inputStyle: React.CSSProperties = {

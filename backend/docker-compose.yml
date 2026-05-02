@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: api
+      target: api-dev
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO
@@ -28,12 +28,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./packages:/app/packages
+
+  ingest-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ingest-dev
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./packages:/app/packages
 
   pipeline:
     build:
       context: .
       dockerfile: Dockerfile
-      target: pipeline
+      target: pipeline-dev
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO
@@ -41,6 +58,7 @@ services:
       TIMEZONE: Asia/Jakarta
     volumes:
       - hfcache:/models
+      - ./packages:/app/packages
     depends_on:
       postgres:
         condition: service_healthy

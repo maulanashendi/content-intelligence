@@ -1,4 +1,5 @@
 import type { Article } from "@ei-fe/api"
+import { formatDate } from "@ei-fe/core"
 
 interface ArticleTableProps {
   articles: Article[]
@@ -7,22 +8,12 @@ interface ArticleTableProps {
 function SourceTypeBadge({ type }: { type: "rss" | "internal" }) {
   return (
     <span
-      className={`badge badge-${type === "internal" ? "internal" : "default"}`}
+      className={`badge ${type === "internal" ? "badge-watching" : "badge-active"}`}
       style={{ fontSize: 10.5 }}
     >
-      {type === "internal" ? "Internal" : "RSS"}
+      {type === "internal" ? "internal" : "rss"}
     </span>
   )
-}
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("id-ID", {
-    timeZone: "Asia/Jakarta",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })
 }
 
 export function ArticleTable({ articles }: ArticleTableProps) {
@@ -69,10 +60,10 @@ export function ArticleTable({ articles }: ArticleTableProps) {
                 <SourceTypeBadge type={a.source_type} />
               </td>
               <td className="faint mono" style={{ fontSize: 12 }}>
-                {fmtDate(a.published_at)}
+                {formatDate(a.published_at)}
               </td>
               <td className="faint mono" style={{ fontSize: 12 }}>
-                {fmtDate(a.created_at)}
+                {formatDate(a.created_at)}
               </td>
             </tr>
           ))}

@@ -4,6 +4,50 @@ import clusterDetail from "../../../api/tests/mocks/fixtures/cluster-detail.json
 
 const BASE = "/api/v1"
 
+type MockSource = {
+  id: string; name: string; url: string; source_type: string; is_enabled: boolean
+  status: string | null; last_fetched_at: string | null; created_at: string; updated_at: string; article_count_24h: number
+}
+
+const mockSources: MockSource[] = [
+  {
+    id: "a1b2c3d4-0001-4000-8000-000000000001",
+    name: "Kompas RSS",
+    url: "https://rss.kompas.com/nasional",
+    source_type: "rss",
+    is_enabled: true,
+    status: "active",
+    last_fetched_at: new Date(Date.now() - 3_600_000).toISOString(),
+    created_at: "2025-11-01T00:00:00Z",
+    updated_at: new Date(Date.now() - 3_600_000).toISOString(),
+    article_count_24h: 142,
+  },
+  {
+    id: "a1b2c3d4-0002-4000-8000-000000000002",
+    name: "Tempo Internal",
+    url: "https://www.tempo.co/sitemap.xml",
+    source_type: "internal",
+    is_enabled: true,
+    status: "active",
+    last_fetched_at: new Date(Date.now() - 7_200_000).toISOString(),
+    created_at: "2025-11-01T00:00:00Z",
+    updated_at: new Date(Date.now() - 7_200_000).toISOString(),
+    article_count_24h: 210,
+  },
+  {
+    id: "a1b2c3d4-0003-4000-8000-000000000003",
+    name: "Republika",
+    url: "https://www.republika.co.id/rss",
+    source_type: "rss",
+    is_enabled: false,
+    status: "error",
+    last_fetched_at: null,
+    created_at: "2025-11-15T00:00:00Z",
+    updated_at: "2025-11-15T00:00:00Z",
+    article_count_24h: 0,
+  },
+]
+
 const SOURCES = ["Kompas", "Tempo", "Detik.com", "CNN Indonesia", "Republika", "Bisnis.com", "CNBC Indonesia", "Antara"]
 const ANGLES = ["Laporan", "Analisis", "Wawancara", "Investigasi", "Breaking", "Opini", "Data", "Eksklusif"]
 
@@ -32,7 +76,7 @@ function generateArticles(page: number, pageSize: number) {
     const source = SOURCES[idx % SOURCES.length]!
     const sourceType = idx % 5 === 0 ? "internal" : "rss"
     return {
-      id: `mock-article-${String(idx).padStart(4, "0")}`,
+      id: `${String(idx).padStart(8, "0")}-0001-4000-8000-${String(idx).padStart(12, "0")}`,
       title: `${ANGLES[idx % ANGLES.length]} — Berita ${idx + 1}`,
       url: `https://example.com/articles/${idx}`,
       first_paragraph: `Paragraf pertama artikel nomor ${idx + 1} dari ${source}.`,
@@ -46,6 +90,44 @@ function generateArticles(page: number, pageSize: number) {
 }
 
 export const handlers = [
+  http.get(`${BASE}/sources`, () => HttpResponse.json(mockSources)),
+  http.post(`${BASE}/sources`, async ({ request }) => {
+    const body = await request.json() as { url: string; name?: string; is_enabled?: boolean }
+    if (!body.url || !/^https?:\/\/.+/i.test(body.url)) {
+      return HttpResponse.json({ detail: "URL tidak valid." }, { status: 422 })
+    }
+    if (mockSources.some((s) => s.url === body.url)) {
+      return HttpResponse.json({ detail: "URL sudah terdaftar." }, { status: 409 })
+    }
+    const created = {
+      id: crypto.randomUUID(),
+      name: body.name ?? "",
+      url: body.url,
+      source_type: "rss" as const,
+      is_enabled: body.is_enabled ?? true,
+      status: null,
+      last_fetched_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      article_count_24h: 0,
+    }
+    mockSources.push(created)
+    return HttpResponse.json(created, { status: 201 })
+  }),
+  http.delete(`${BASE}/sources/:id`, ({ params }) => {
+    const idx = mockSources.findIndex((s) => s.id === params["id"])
+    if (idx === -1) return HttpResponse.json({ detail: "Source tidak ditemukan." }, { status: 404 })
+    mockSources.splice(idx, 1)
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.patch(`${BASE}/sources/:id`, async ({ params, request }) => {
+    const source = mockSources.find((s) => s.id === params["id"])
+    if (!source) return HttpResponse.json({ detail: "Source tidak ditemukan." }, { status: 404 })
+    const body = await request.json() as { is_enabled: boolean }
+    source.is_enabled = body.is_enabled
+    source.updated_at = new Date().toISOString()
+    return HttpResponse.json(source)
+  }),
   http.get(`${BASE}/clusters/morning`, () => HttpResponse.json(morningClusters)),
   http.get(`${BASE}/articles`, ({ request }) => {
     const url = new URL(request.url)
@@ -56,7 +138,7 @@ export const handlers = [
   http.get(`${BASE}/clusters/:id`, ({ params }) => {
     const { id } = params as { id: string }
     if (id === clusterDetail.id) return HttpResponse.json(clusterDetail)
-    const cluster = allClusters.find((c) => c.id === id)
+    const cluster = morningClusters.find((c) => c.id === id)
     if (!cluster) return HttpResponse.json({ detail: "Not found" }, { status: 404 })
     const count = Math.min(cluster.member_count ?? 5, 8)
     return HttpResponse.json({ ...cluster, members: generateMembers(cluster, count) })

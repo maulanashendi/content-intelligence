@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from api.deps import SessionDep
+from api.types import UtcDateTime
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 
@@ -34,7 +35,7 @@ class ArticleSummary(BaseModel):
     title: str
     url: str
     first_paragraph: str | None
-    published_at: datetime | None
+    published_at: UtcDateTime | None
     source_name: str
     relevance_score: float | None
 

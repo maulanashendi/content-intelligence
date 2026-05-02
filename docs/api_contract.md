@@ -4,7 +4,7 @@ Authoritative HTTP contract between the FastAPI backend (`backend/packages/api/`
 
 The contract is the boundary. The backend is free to refactor anything behind it; the frontend is free to evolve any UI behind it. Both sides must keep this document in sync with the implementation.
 
-The MVP API is **strictly read-only**. There are no `POST`, `PUT`, `PATCH`, or `DELETE` endpoints — by `constraints.md` and by deliberate decision in this contract. Sources are seeded by ops (SQL or seed scripts); the editorial users never write to the database via the application.
+The MVP API is **read-only with one exception**: `ContentSource` CRUD is permitted on `/api/v1/sources` per `decisions.md` D19. The editorial team needs to add and manage RSS feeds at runtime without a redeploy. Every other table — `article`, `cluster*`, `cluster_run`, `cluster_insight`, `trend_signal`, `article_embedding`, `article_gsc_metric` — is read-only via the API. Pipeline outputs are produced by the daily batch (cron) and the `serve` daemon (D20); the API never writes to them.
 
 ---
 
@@ -66,9 +66,10 @@ There is **no pagination in v1**. Every list endpoint returns the full result se
 
 ### Date / time
 
-- All timestamps are ISO-8601 UTC with the `Z` suffix: `2026-04-30T06:00:12Z`.
-- The backend stores naive UTC in PostgreSQL `TIMESTAMP` (no time zone column); the API serializes them as `Z`-suffixed strings.
-- The frontend renders in `Asia/Jakarta` (`fmtTime` helpers); the contract is UTC.
+- **Wire format: ISO-8601 UTC with the `Z` suffix.** Example: `2026-04-30T06:00:12Z`. Microseconds may be present (`2026-04-30T06:00:12.345678Z`). This is enforced by `api.types.UtcDateTime`, a Pydantic `Annotated` type that wraps every datetime field in API responses; tests assert the trailing `Z` (`test_list_articles_timestamps_carry_utc_z_suffix`, `test_source_timestamps_carry_utc_z_suffix`). Without the `Z`, JS `new Date()` interprets the string as the user's local time, which historically displayed timestamps 7 hours wrong for WIB users.
+- **Backend storage**: naive UTC in PostgreSQL `TIMESTAMP` (no time zone column). Conversion to `Z`-tagged on the way out.
+- **Frontend display: WIB / Asia/Jakarta (GMT+7).** All user-facing timestamps go through the helpers in `frontend/packages/core/src/format.ts` — `formatDate`, `formatDateTime`, `formatTime`, `formatRelative` — each of which sets `timeZone: "Asia/Jakarta"` and locale `id-ID`. Components must NOT call `new Date(iso).toLocaleString(...)` inline; use the helpers so the timezone is applied uniformly.
+- **Defensive parsing**: the helpers tolerate strings without an explicit timezone by treating them as UTC (appending `Z`). This bridges any legacy naive-string callers and avoids regressions if a future endpoint forgets `UtcDateTime`.
 
 ### Identifiers
 
@@ -412,9 +413,9 @@ Four new read-only endpoints, all backed by tables that already have data writer
 
 ### 5.0 `GET /api/v1/articles`
 
-**Status**: PROPOSED
+**Status**: LIVE
 **Used by**: `/article` route via `useArticles` (`@ei-fe/api`)
-**Backed by**: not yet implemented
+**Backed by**: `backend/packages/api/src/api/routes/articles.py`
 
 Paginated list of all ingested articles, newest first.
 
@@ -594,9 +595,9 @@ Sorted by `interest_score` descending (nulls last). All entries share the same `
 
 ### 5.3 `GET /api/v1/sources`
 
-**Status**: PROPOSED
-**Used by**: `/sources` route (currently dummy data in `frontend/packages/app/src/routes/sources.tsx`)
-**Backed by**: not yet implemented
+**Status**: LIVE
+**Used by**: `/sources` route via `useSources` (`@ei-fe/api`)
+**Backed by**: `backend/packages/api/src/api/routes/sources.py`
 
 Full list of every content source.
 
@@ -637,6 +638,85 @@ Sorted by `name` ascending. Empty array when no sources exist (fresh database).
 
 ---
 
+### 5.4 `POST /api/v1/sources`
+
+**Status**: LIVE (per `decisions.md` D19)
+**Used by**: `/sources/rss` route via `useCreateSource` (`@ei-fe/api`)
+**Backed by**: `backend/packages/api/src/api/routes/sources.py`
+
+Add a new RSS source. Always creates with `source_type = "rss"`; the `internal` type is reserved for the Tempo sitemap ingestor and cannot be created via API.
+
+**Request body**
+
+```json
+{
+  "url": "https://rss.kompas.com/nasional",
+  "name": "Kompas Nasional",
+  "is_enabled": true
+}
+```
+
+- `url` — required, validated as `AnyHttpUrl`. Unique constraint on the column.
+- `name` — optional, defaults to `""`. Trimmed and truncated to 200 chars server-side.
+- `is_enabled` — optional, defaults to `true`. When `true`, the API issues a `pg_notify('rss_source_created', <id>)` so the running `serve` daemon (D20) fetches the feed immediately. The notify is best-effort: a missing or failed listener does not 500 the POST — the next periodic poll picks the source up.
+- Any other field — `422`.
+
+**Response 201** — `ContentSource` (same shape as 5.3, with `article_count_24h: 0`).
+
+**Errors**
+
+| status | when                      | body                                              |
+| ------ | ------------------------- | ------------------------------------------------- |
+| 409    | duplicate `url`           | `{"detail": "URL sudah terdaftar."}`              |
+| 422    | invalid body              | FastAPI default                                   |
+| 500    | DB error                  | FastAPI default                                   |
+
+---
+
+### 5.5 `PATCH /api/v1/sources/{id}`
+
+**Status**: LIVE (per `decisions.md` D19)
+**Used by**: `/sources` route via `useUpdateSourceEnabled` (`@ei-fe/api`)
+
+Toggle a source on or off without deleting it. Only `is_enabled` is patchable in v1.
+
+**Request body**
+
+```json
+{ "is_enabled": false }
+```
+
+- Any other field — `422`.
+
+**Response 200** — `ContentSource` (full shape with refreshed `article_count_24h`).
+
+**Errors**
+
+| status | when                      | body                                              |
+| ------ | ------------------------- | ------------------------------------------------- |
+| 404    | unknown id                | `{"detail": "Source tidak ditemukan."}`           |
+| 422    | invalid body              | FastAPI default                                   |
+
+---
+
+### 5.6 `DELETE /api/v1/sources/{id}`
+
+**Status**: LIVE (per `decisions.md` D19)
+**Used by**: `/sources` route via `useDeleteSource` (`@ei-fe/api`)
+
+Hard delete a source. Refuses to delete a source that has any articles, to keep cluster/embedding/scoring outputs auditable. Toggle `is_enabled = false` instead if the source has produced articles.
+
+**Response 204** — empty body.
+
+**Errors**
+
+| status | when                                  | body                                                            |
+| ------ | ------------------------------------- | --------------------------------------------------------------- |
+| 404    | unknown id                            | `{"detail": "Source tidak ditemukan."}`                         |
+| 409    | source has at least one article       | `{"detail": "Sumber memiliki artikel dan tidak dapat dihapus."}` |
+
+---
+
 ## 6. Frontend cleanup required for this contract
 
 The current FE branch (`feat/frontend-spa`) ships routes and dummy data that do not match the v1 contract. Land these alongside the backend work — they cannot be deferred without leaving dead routes in the SPA.
@@ -645,9 +725,10 @@ The current FE branch (`feat/frontend-spa`) ships routes and dummy data that do 
 
 | File                                                              | Reason                                                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `frontend/packages/app/src/routes/input-rss.tsx`                  | No write API in v1. Sources are seeded by ops.                            |
 | `frontend/packages/app/src/routes/input-api.tsx`                  | No write API + `source_type = 'api'` does not exist in the schema.        |
 | `frontend/packages/app/src/routes/check-schema.tsx`               | Pure FE validator with no product purpose; not in PRD §4 happy path.      |
+
+`routes/input-rss.tsx` is retained — it backs the source-creation flow against `POST /api/v1/sources` (D19).
 
 Also remove their entries from `frontend/packages/app/src/app.tsx` (the `createBrowserRouter` array) and any `<Link>`s pointing to them — currently only from `/sources` (the "+ RSS Feed" and "+ API Source" buttons in `routes/sources.tsx`).
 

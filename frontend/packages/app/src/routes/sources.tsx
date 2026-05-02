@@ -1,34 +1,42 @@
 import { Link } from "react-router-dom"
-
-const SOURCES = [
-  { id: 1, name: "Kompas RSS", type: "rss", url: "https://rss.kompas.com/nasional", lastFetch: "30 Apr 2025 · 06:12", articles: 142, status: "ok" },
-  { id: 2, name: "CNN Indonesia", type: "rss", url: "https://rss.cnnindonesia.com/nasional", lastFetch: "30 Apr 2025 · 06:11", articles: 98, status: "ok" },
-  { id: 3, name: "Detik Finance", type: "rss", url: "https://feed.detik.com/detikrss/d/finance", lastFetch: "30 Apr 2025 · 06:13", articles: 77, status: "ok" },
-  { id: 4, name: "Bisnis Indonesia", type: "api", url: "https://api.bisnis.com/v2/articles", lastFetch: "30 Apr 2025 · 06:10", articles: 55, status: "ok" },
-  { id: 5, name: "Republika", type: "rss", url: "https://www.republika.co.id/rss", lastFetch: "30 Apr 2025 · 05:48", articles: 33, status: "warn" },
-  { id: 6, name: "Tempo Sitemap", type: "sitemap", url: "https://www.tempo.co/sitemap.xml", lastFetch: "30 Apr 2025 · 06:14", articles: 210, status: "ok" },
-  { id: 7, name: "Antara News API", type: "api", url: "https://api.antaranews.com/news/v2", lastFetch: "29 Apr 2025 · 22:00", articles: 0, status: "bad" },
-]
+import { useSources, useDeleteSource, useToggleSource } from "@ei-fe/api"
+import { formatDateTime } from "@ei-fe/core"
+import { LoadingState, ErrorState, EmptyState } from "@ei-fe/ui"
 
 const STATUS_DOT: Record<string, string> = {
-  ok: "dot-ok",
-  warn: "dot-warn",
-  bad: "dot-bad",
+  active: "dot-ok",
+  error: "dot-bad",
+  blocked: "dot-warn",
 }
 
 const TYPE_BADGE: Record<string, string> = {
   rss: "badge badge-active",
-  api: "badge badge-recommended",
-  sitemap: "badge badge-watching",
+  internal: "badge badge-watching",
 }
 
 const TYPE_LABEL: Record<string, string> = {
   rss: "rss",
-  api: "api",
-  sitemap: "sitemap",
+  internal: "internal",
 }
 
 export function SourcesRoute() {
+  const { data: sources, isLoading, isError, error, refetch } = useSources()
+  const deleteMutation = useDeleteSource()
+  const toggleMutation = useToggleSource()
+
+  if (isLoading) return <LoadingState variant="table" />
+  if (isError) return <ErrorState error={error} onRetry={() => refetch()} />
+
+  const list = sources ?? []
+  const totalArticles = list.reduce((sum, s) => sum + s.article_count_24h, 0)
+  const activeCount = list.filter((s) => s.status === "active").length
+  const problemCount = list.filter((s) => s.status !== "active" && s.status !== null).length
+
+  function handleDelete(id: string, name: string) {
+    if (!confirm(`Hapus sumber "${name}"? Tindakan ini tidak dapat dibatalkan.`)) return
+    deleteMutation.mutate(id)
+  }
+
   return (
     <>
       <div className="page-head">
@@ -45,58 +53,83 @@ export function SourcesRoute() {
         <div className="grid grid-4" style={{ marginBottom: 20 }}>
           <div className="kpi">
             <div className="kpi-label">Total Sumber</div>
-            <div className="kpi-value">{SOURCES.length}</div>
+            <div className="kpi-value">{list.length}</div>
           </div>
           <div className="kpi">
             <div className="kpi-label">Aktif</div>
-            <div className="kpi-value">{SOURCES.filter(s => s.status === "ok").length}</div>
+            <div className="kpi-value">{activeCount}</div>
           </div>
           <div className="kpi">
             <div className="kpi-label">Bermasalah</div>
-            <div className="kpi-value" style={{ color: "var(--bad)" }}>
-              {SOURCES.filter(s => s.status !== "ok").length}
-            </div>
+            <div className="kpi-value" style={{ color: "var(--bad)" }}>{problemCount}</div>
           </div>
           <div className="kpi">
-            <div className="kpi-label">Total Artikel</div>
-            <div className="kpi-value">{SOURCES.reduce((s, r) => s + r.articles, 0).toLocaleString("id-ID")}</div>
+            <div className="kpi-label">Artikel (24j)</div>
+            <div className="kpi-value">{totalArticles.toLocaleString("id-ID")}</div>
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-head">
-            <span className="card-title">Semua sumber</span>
-            <span className="card-meta">{SOURCES.length} terdaftar</span>
-          </div>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Nama</th>
-                <th>Tipe</th>
-                <th>URL</th>
-                <th>Terakhir fetch</th>
-                <th className="right">Artikel</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SOURCES.map((s) => (
-                <tr key={s.id} className="row-clickable">
-                  <td style={{ fontWeight: 500 }}>{s.name}</td>
-                  <td><span className={TYPE_BADGE[s.type]}>{TYPE_LABEL[s.type]}</span></td>
-                  <td className="mono faint" style={{ fontSize: 11.5, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</td>
-                  <td className="mono faint" style={{ fontSize: 11.5 }}>{s.lastFetch}</td>
-                  <td className="num right">{s.articles}</td>
-                  <td>
-                    <span className="dot-status" style={{ display: "inline-block", marginRight: 6 }}>
-                      <span className={`dot-status ${STATUS_DOT[s.status]}`} />
-                    </span>
-                  </td>
+        {list.length === 0 ? (
+          <EmptyState title="Belum ada sumber" description="Tambahkan RSS feed pertama Anda." />
+        ) : (
+          <div className="card">
+            <div className="card-head">
+              <span className="card-title">Semua sumber</span>
+              <span className="card-meta">{list.length} terdaftar</span>
+            </div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Nama</th>
+                  <th>Tipe</th>
+                  <th>URL</th>
+                  <th>Terakhir fetch</th>
+                  <th className="right">Artikel (24j)</th>
+                  <th>Aktif</th>
+                  <th>Status</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {list.map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 500 }}>{s.name || s.url}</td>
+                    <td><span className={TYPE_BADGE[s.source_type] ?? "badge"}>{TYPE_LABEL[s.source_type] ?? s.source_type}</span></td>
+                    <td className="mono faint" style={{ fontSize: 11.5, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</td>
+                    <td className="mono faint" style={{ fontSize: 11.5 }}>
+                      {formatDateTime(s.last_fetched_at)}
+                    </td>
+                    <td className="num right">{s.article_count_24h}</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={s.is_enabled}
+                        disabled={toggleMutation.isPending}
+                        onChange={() => toggleMutation.mutate({ id: s.id, is_enabled: !s.is_enabled })}
+                        style={{ cursor: "pointer", accentColor: "var(--accent)" }}
+                      />
+                    </td>
+                    <td>
+                      {s.status && (
+                        <span className={`dot-status ${STATUS_DOT[s.status] ?? "dot-warn"}`} />
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: "2px 8px", color: "var(--bad)" }}
+                        disabled={deleteMutation.isPending}
+                        onClick={() => handleDelete(s.id, s.name || s.url)}
+                      >
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   )
