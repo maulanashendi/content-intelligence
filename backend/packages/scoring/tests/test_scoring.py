@@ -114,7 +114,10 @@ async def test_load_cluster_facts_deduplicates_articles_but_keeps_all_interest_s
     session.add_all(
         [
             ArticleClusterMember(cluster_id=cluster.id, article_id=article.id),
-            *(TrendSignalArticle(trend_signal_id=signal.id, article_id=article.id) for signal in signals),
+            *(
+                TrendSignalArticle(trend_signal_id=signal.id, article_id=article.id)
+                for signal in signals
+            ),
         ]
     )
     await session.flush()
@@ -205,9 +208,18 @@ async def test_run_persists_cluster_insights_with_recommendations(
 
     session.add_all(
         [
-            *(ArticleClusterMember(cluster_id=trending_cluster.id, article_id=article.id) for article in trending_articles),
-            *(ArticleClusterMember(cluster_id=saturated_cluster.id, article_id=article.id) for article in saturated_articles),
-            *(TrendSignalArticle(trend_signal_id=trend_signal.id, article_id=article.id) for article in trending_articles),
+            *(
+                ArticleClusterMember(cluster_id=trending_cluster.id, article_id=article.id)
+                for article in trending_articles
+            ),
+            *(
+                ArticleClusterMember(cluster_id=saturated_cluster.id, article_id=article.id)
+                for article in saturated_articles
+            ),
+            *(
+                TrendSignalArticle(trend_signal_id=trend_signal.id, article_id=article.id)
+                for article in trending_articles
+            ),
             ArticleGscMetric(
                 id=uuid.uuid4(),
                 article_id=saturated_articles[1].id,
@@ -231,12 +243,16 @@ async def test_run_persists_cluster_insights_with_recommendations(
     assert scored_count >= 2
 
     insight_rows = (
-        await session.execute(
-            select(ClusterInsight).where(
-                ClusterInsight.cluster_id.in_([trending_cluster.id, saturated_cluster.id])
+        (
+            await session.execute(
+                select(ClusterInsight).where(
+                    ClusterInsight.cluster_id.in_([trending_cluster.id, saturated_cluster.id])
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     by_cluster = {row.cluster_id: row for row in insight_rows}
 
     assert by_cluster[trending_cluster.id].recommendation == InsightRecommendation.trending

@@ -107,9 +107,9 @@ async def create_source(body: SourceCreate, session: SessionDep) -> SourceRespon
     try:
         await session.commit()
         await session.refresh(source)
-    except IntegrityError:
+    except IntegrityError as exc:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="URL sudah terdaftar.")
+        raise HTTPException(status_code=409, detail="URL sudah terdaftar.") from exc
 
     # Snapshot the response now: a later pg_notify rollback would expire the
     # ORM state and force a sync lazy-load when serializing.
@@ -145,13 +145,17 @@ async def delete_source(source_id: uuid.UUID, session: SessionDep) -> None:
         select(func.count(Article.id)).where(Article.source_id == source_id)
     )
     if count_result.scalar_one() > 0:
-        raise HTTPException(status_code=409, detail="Sumber memiliki artikel dan tidak dapat dihapus.")
+        raise HTTPException(
+            status_code=409, detail="Sumber memiliki artikel dan tidak dapat dihapus."
+        )
     await session.delete(source)
     await session.commit()
 
 
 @router.patch("/{source_id}", response_model=SourceResponse)
-async def patch_source(source_id: uuid.UUID, body: SourcePatch, session: SessionDep) -> SourceResponse:
+async def patch_source(
+    source_id: uuid.UUID, body: SourcePatch, session: SessionDep
+) -> SourceResponse:
     source = await session.get(ContentSource, source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source tidak ditemukan.")

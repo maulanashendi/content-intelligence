@@ -1,15 +1,15 @@
 """Alembic environment for async SQLAlchemy 2.0."""
+
 import asyncio
 from logging.config import fileConfig
 
+# Import core models so autogenerate sees them
+from core.models import Base  # noqa: E402
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
-# Import core models so autogenerate sees them
-from core.models import Base  # noqa: E402
 
 config = context.config
 

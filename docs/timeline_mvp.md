@@ -68,13 +68,13 @@ Each module depends only on its respective `core` from P1. FE modules (F1, F2) u
 | `[ ]` B3 | `backend/clustering` | `reducer.py` (UMAP), `clusterer.py` (HDBSCAN), `pipeline.py`, `cli.py` | Run on fixture vectors produces ≥1 cluster with `is_current=true`; prior-run rows flipped to `false` |
 | `[ ]` B4 | `backend/labeling` | `llm.py` (singleton, 4-bit Gemma 2B), `prompts.py`, `pipeline.py`, `cli.py` | **Prerequisite:** 1-day quality spike on 5 sample clusters. Then: 5 fixture clusters get coherent BI labels of 5-7 words |
 | `[ ]` B5 | `backend/scoring` | `velocity.py`, `novelty.py`, `coverage.py`, `pipeline.py`, `cli.py` | Each fixture cluster produces 1 `cluster_insight` row with valid `recommendation` enum; GSC read only by `coverage.py` |
-| `[ ]` B6 | `backend/api` | `main.py`, `deps.py`, `routes/clusters.py`, `routes/health.py` | All 4 endpoints serve fixture data; `/openapi.json` accessible; **no GSC field appears in any response** |
+| `[ ]` B6 | `backend/api` | `main.py`, `deps.py`, `routes/clusters.py`, `routes/articles.py`, `routes/sources.py`, `routes/health.py` | All endpoints serve fixture data; `/openapi.json` accessible; **no GSC field appears in any response** |
 
 ### Frontend (F1-F2)
 
 | ID | Module | Key files | Done when |
 |----|--------|-----------|-----------|
-| `[ ]` F1 | `frontend/@ei-fe/api` | `client.ts` (fetch wrapper), `schemas.ts` (Zod), `queries.ts` (keys + hooks), MSW handlers + fixtures | 3 hooks (`useMorningClusters`, `useClusterDetail`, `useDeferredClusters`) return mocked data; Zod schemas validate fixtures |
+| `[ ]` F1 | `frontend/@ei-fe/api` | `client.ts` (fetch wrapper), `schemas.ts` (Zod), `queries.ts` (keys + hooks), MSW handlers + fixtures | Hooks (`useMorningClusters`, `useClusterDetail`, `useArticles`, `useSources`, `useCreateSource`, `useToggleSource`, `useDeleteSource`) return mocked data; Zod schemas validate fixtures |
 | `[ ]` F2 | `frontend/@ei-fe/ui` | Tailwind preset, vendored shadcn primitives (`Button`, `Table`, `Skeleton`, `Tooltip`, `Sheet`, `Dialog`), layout (`Sidebar`, `StatusBar`, `PageHead`), state components (`ErrorState`, `EmptyState`), Lucide icon registry | Each component renders standalone in test; visible via dev server with valid token values |
 
 **Dispatch:** orchestrator fans out 8 sub-agents, one per module. Each sub-agent reads `docs/architecture.md`, `docs/conventions.md`, `docs/constraints.md` before starting.
@@ -88,7 +88,7 @@ Each module depends only on its respective `core` from P1. FE modules (F1, F2) u
 | ID | Module | Depends on | Done when |
 |----|--------|------------|-----------|
 | `[ ]` C1 | `backend/pipeline` (orchestrator CLI) | A1, B1-B5 | `python -m pipeline.cli run-daily` against empty DB runs all 5 steps sequentially with structured logs; exits 0 |
-| `[ ]` C2 | `frontend/@ei-fe/features` | A2, F1, F2 | 3 feature views (`morning`, `cluster-detail`, `deferred`) each cover happy path + error + empty state under MSW; **no cross-feature imports** |
+| `[ ]` C2 | `frontend/@ei-fe/features` | A2, F1, F2 | Feature views (`morning`, `cluster-detail`, `article`) each cover happy path + error + empty state under MSW; **no cross-feature imports** |
 
 ---
 
@@ -98,7 +98,7 @@ Each module depends only on its respective `core` from P1. FE modules (F1, F2) u
 
 | ID | Module | Depends on | Done when |
 |----|--------|------------|-----------|
-| `[ ]` D1 | `frontend/@ei-fe/app` | C2 | Vite SPA boots all 3 routes locally with MSW; `bun run build` produces `dist/`; deep links survive hard refresh |
+| `[ ]` D1 | `frontend/@ei-fe/app` | C2 | Vite SPA boots all routes locally with MSW; `bun run build` produces `dist/`; deep links survive hard refresh |
 
 ---
 
@@ -110,7 +110,7 @@ Each module depends only on its respective `core` from P1. FE modules (F1, F2) u
 |----|------|------------|-----------|
 | `[ ]` I1 | Backend pipeline run on real data | C1, B6 | Live RSS ingest → clusters scored → `/api/v1/clusters/morning` returns ≥1 real cluster with valid label |
 | `[ ]` I2 | Generate FE OpenAPI types | I1, F1 | `bun run gen:api` writes `packages/api/src/generated.ts`; committed; type errors resolved |
-| `[ ]` I3 | Replace MSW with live backend | I2, D1 | `VITE_API_BASE_URL` set to dev BE; all 3 routes render live data in browser |
+| `[ ]` I3 | Replace MSW with live backend | I2, D1 | `VITE_API_BASE_URL` set to dev BE; all routes render live data in browser |
 | `[ ]` I4 | Schema drift validation | I3 | Zero Zod runtime errors on happy path; fixtures in `@ei-fe/api/tests/mocks/` updated to match real responses |
 
 ---
@@ -122,7 +122,7 @@ Each module depends only on its respective `core` from P1. FE modules (F1, F2) u
 | ID | Task | Done when |
 |----|------|-----------|
 | `[ ]` E1 | Backend daily pipeline E2E | Fresh DB, full pipeline completes <30 min; ≥1 trending cluster surfaced; no GSC field appears in any API response |
-| `[ ]` E2 | Frontend happy path | Manual or scripted: `/morning` → click cluster → `/clusters/:id` → navigate `/deferred`. All routes render correctly against live BE. |
+| `[ ]` E2 | Frontend happy path | Manual or scripted: `/morning` → click cluster → `/clusters/:id` → navigate `/article` → `/sources`. All routes render correctly against live BE. |
 | `[ ]` E3 | Edge cases | EmptyState (0 clusters), ErrorState (API down), Skeleton (slow load), 404 cluster id, malformed response (Zod catches) |
 | `[ ]` E4 | Cleanup per `decisions.md` D18 | `template-fe/` deleted; `docs/README.md` references only `frontend/` |
 

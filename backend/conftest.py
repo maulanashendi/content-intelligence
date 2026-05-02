@@ -8,6 +8,7 @@ unset), runs Alembic migrations against it, and re-binds `core.db` and
 `settings.database_url` for the rest of the test session. The api and
 ingest package conftests pick up the rebinding transparently.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,10 +16,9 @@ import os
 from urllib.parse import urlparse, urlunparse
 
 import pytest
+from core.config import settings
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-from core.config import settings
 
 
 def _resolve_test_database_url() -> str:
@@ -28,9 +28,7 @@ def _resolve_test_database_url() -> str:
     parsed = urlparse(settings.database_url)
     db = parsed.path.lstrip("/")
     if not db:
-        raise RuntimeError(
-            "DATABASE_URL has no database name; set TEST_DATABASE_URL explicitly."
-        )
+        raise RuntimeError("DATABASE_URL has no database name; set TEST_DATABASE_URL explicitly.")
     return urlunparse(parsed._replace(path=f"/{db}_test"))
 
 
@@ -44,9 +42,7 @@ TEST_DATABASE_URL = _resolve_test_database_url()
 
 async def _ensure_test_database_exists() -> None:
     test_db_name = urlparse(TEST_DATABASE_URL).path.lstrip("/")
-    admin_engine = create_async_engine(
-        _admin_database_url(), isolation_level="AUTOCOMMIT"
-    )
+    admin_engine = create_async_engine(_admin_database_url(), isolation_level="AUTOCOMMIT")
     try:
         async with admin_engine.connect() as conn:
             existing = await conn.execute(
@@ -60,8 +56,9 @@ async def _ensure_test_database_exists() -> None:
 
 
 def _run_migrations_on_test_db() -> None:
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     cfg = Config(os.path.join(repo_root, "alembic.ini"))
@@ -72,7 +69,7 @@ def _run_migrations_on_test_db() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _isolate_test_database() -> None:
-    if TEST_DATABASE_URL == settings.database_url:
+    if settings.database_url == TEST_DATABASE_URL:
         raise RuntimeError(
             "TEST_DATABASE_URL must differ from DATABASE_URL — running tests "
             "against the dev DB would destroy seeded data. Set TEST_DATABASE_URL "
@@ -86,6 +83,4 @@ def _isolate_test_database() -> None:
 
     settings.database_url = TEST_DATABASE_URL
     _core_db._engine = create_async_engine(TEST_DATABASE_URL, pool_pre_ping=True)
-    _core_db._session_factory = async_sessionmaker(
-        _core_db._engine, expire_on_commit=False
-    )
+    _core_db._session_factory = async_sessionmaker(_core_db._engine, expire_on_commit=False)

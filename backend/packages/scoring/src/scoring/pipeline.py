@@ -78,10 +78,14 @@ async def _load_cluster_facts(
         and _normalize_now(row.published_at) >= recent_internal_cutoff
     )
 
-    internal_article_ids = [row.article_id for row in article_rows if row.source_type == SourceType.internal]
+    internal_article_ids = [
+        row.article_id for row in article_rows if row.source_type == SourceType.internal
+    ]
     internal_underperformed = False
     if internal_article_ids:
-        internal_underperformed = await _has_underperformed_internal_articles(session, internal_article_ids)
+        internal_underperformed = await _has_underperformed_internal_articles(
+            session, internal_article_ids
+        )
 
     return ClusterArticleFacts(
         published_at_values=published_at_values,

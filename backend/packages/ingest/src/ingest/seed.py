@@ -50,9 +50,13 @@ async def seed_sources() -> int:
             result = await session.execute(stmt)
             if result.rowcount and result.rowcount > 0:
                 inserted += 1
-                logger.info("seeded source", extra={"source_name": feed["name"], "url": feed["url"]})
+                logger.info(
+                    "seeded source", extra={"source_name": feed["name"], "url": feed["url"]}
+                )
             else:
-                logger.info("source already exists", extra={"source_name": feed["name"], "url": feed["url"]})
+                logger.info(
+                    "source already exists", extra={"source_name": feed["name"], "url": feed["url"]}
+                )
 
         await session.commit()
 

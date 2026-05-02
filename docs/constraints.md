@@ -10,7 +10,6 @@ The following systems exist for the product but are owned by other teams. Do not
 
 - **Authentication and authorization.** Identity is established by an upstream gateway. The API trusts incoming requests.
 - **Deployment infrastructure beyond local Docker dev.** Production orchestration, scaling, secrets management, and CI/CD pipelines are owned by the deploy team.
-- **Frontend.** Lives in `template-fe/` and is owned by the frontend team. The only contract is the JSON shape of the API endpoints.
 - **Production monitoring, alerting, dashboards.** The application logs to stdout in JSON. Aggregation, retention, and alerting are operational concerns owned externally.
 - **Internal article performance metrics for end-user display.** A separate Tempo internal dashboard already shows clicks, impressions, and Google position. This app does not display them under any circumstance.
 
@@ -47,7 +46,10 @@ These patterns must not appear in the codebase. Each was explicitly considered a
 - **No GraphQL.** REST endpoints only.
 - **No WebSockets.** The dashboard is poll-based.
 - **No event sourcing or CQRS.** Standard CRUD against Postgres.
-- **No write-side API beyond `ContentSource` CRUD** (per `decisions.md` D19). The API exposes `POST/PATCH/DELETE` on `/api/v1/sources` so editors can manage RSS feeds at runtime. Every other table — `article`, `cluster*`, `cluster_run`, `cluster_insight`, `trend_signal`, `article_embedding`, `article_gsc_metric` — remains read-only via the API. Pipeline outputs are produced by the daily cron and the reactive `serve` daemon (D20).
+- **Write-side API is restricted to two surfaces** (any addition beyond these requires a new decision entry):
+  1. `ContentSource` CRUD on `/api/v1/sources` — editors manage RSS feeds at runtime (D19).
+  2. Pipeline trigger notifications on `/api/v1/pipeline/ingest-embed` and `/api/v1/pipeline/cluster-label-score` — send `pg_notify` to the `pipeline serve` daemon (D22). These endpoints write only to a DB lock row and send a notification; they do not write to any analytical table.
+  Every analytical table — `article`, `cluster*`, `cluster_run`, `cluster_insight`, `trend_signal`, `article_embedding`, `article_gsc_metric` — remains read-only via the API.
 
 ## Code don'ts
 
@@ -85,7 +87,7 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 ### Out of the frontend codebase
 - **Authentication.** Upstream gateway (D10). The FE never validates identity.
 - **Production hosting / serving config.** `bun run build` outputs static assets; the deploy team owns gateway, nginx, cache headers, and SPA fallback.
-- **Backend.** Lives in `backend/`. The contract is the JSON shape of the four API endpoints in `architecture.md`.
+- **Backend.** Lives in `backend/`. The contract is the JSON shape of the API endpoints documented in `api_contract.md`.
 - **Browser-side error tracking and analytics.** Not in MVP. Add only when there is a documented operational need.
 
 ### Architectural don'ts (frontend)
@@ -93,7 +95,7 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 - **No CSS-in-JS or alternative styling layer.** Tailwind v4 + shadcn (D14) is the only styling system. Do not add styled-components, Emotion, vanilla-extract, CSS Modules, or a parallel `globals.css` outside `@ei-fe/app/src/styles/`.
 - **No state management library for server data.** TanStack Query owns server cache. Local UI state uses `useState`. Do not add Redux, Zustand, Jotai, MobX, or a global Context for server-derived data.
 - **No HTTP client library.** Native `fetch` plus the wrapper in `@ei-fe/api/src/client.ts` only. Do not add axios, ky, wretch, or similar.
-- **No charting or visualization library.** No Recharts, Chart.js, D3, Sigma, Cytoscape, react-force-graph, or vis-network in MVP. Network visualization is a post-MVP discussion that requires a PRD update first.
+- **No general-purpose charting or network-graph library.** Do not add Recharts, Chart.js, Sigma, Cytoscape, react-force-graph, or vis-network. D3 is permitted only for the existing force-directed cluster visualization in `@ei-fe/features/morning/cluster-force-graph.tsx` (see `decisions.md` D21); do not introduce it in other contexts or ship new D3-heavy features without a decisions entry.
 - **No auth library.** No NextAuth, Auth0 SDK, Clerk, or session helpers. Identity is upstream.
 - **No form library.** No react-hook-form, Formik, or Final Form. The only write surface (source management, D19) is small enough that controlled inputs + native validation suffice.
 - **No internationalization library.** No i18next, react-intl, or LinguiJS. Strings are Bahasa Indonesia and hard-coded.
@@ -101,7 +103,7 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 - **No Storybook or component-isolation environment.** Visual review happens in the dev server.
 - **No icon set besides Lucide.** Adding a second icon system is forbidden — extend `@ei-fe/ui/src/icons.ts` instead.
 - **No write-side endpoints beyond source management.** Per D19 the FE has source CRUD on `/sources` and `/sources/rss`. No other mutating UI elements (no claim, dismiss, bookmark, etc.) — clusters, articles, and trend signals stay read-only.
-- **No cross-feature imports inside `@ei-fe/features`.** A view in `features/morning` may not import from `features/deferred`. Shared visuals lift to `@ei-fe/ui`; shared logic lifts to `@ei-fe/core`.
+- **No cross-feature imports inside `@ei-fe/features`.** A view in `features/morning` may not import from `features/article`. Shared visuals lift to `@ei-fe/ui`; shared logic lifts to `@ei-fe/core`.
 - **No deep imports across packages.** `@ei-fe/<pkg>/src/...` is forbidden. Import the package entry point only.
 - **No new top-level dependencies without listing them in `frontend.md` "Stack" and providing rationale.**
 
@@ -121,4 +123,4 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 - The `template-fe/` directory contains pages (`page-keywords.jsx`, `page-buckets.jsx`, `page-performance.jsx`, `page-desk.jsx`, `page-queue.jsx`, `tweaks-panel.jsx`) that are NOT ported. They correspond to features deferred per `prd.md` §6.
 - The FE has no polling timer. Refresh on window focus plus a manual refresh button is the entire freshness model. The pipeline runs once per day; an interval poll would do nothing useful.
 - `generated.ts` is committed to git. This is intentional (D16) so schema changes appear as reviewed diffs, not silent CI artifacts.
-- The two personas use the same dashboard with different routes. There is no role-based gating; auth is upstream. Maulana lands on `/morning`, the desk head bookmarks `/deferred`. Neither route blocks the other.
+- The two personas use the same dashboard. There is no role-based gating; auth is upstream. Both land on `/morning` as the primary entry point.

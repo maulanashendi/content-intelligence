@@ -99,5 +99,13 @@ for _step_name in _STEP_RUNNERS:
     _make_command(_step_name)
 
 
+@cli.command("serve")
+def serve() -> None:
+    _configure()
+    from pipeline.runner import run_loop
+
+    asyncio.run(run_loop())
+
+
 if __name__ == "__main__":
     cli()

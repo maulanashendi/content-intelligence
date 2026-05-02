@@ -152,3 +152,12 @@ Table cluster_insight {
   summary text
   calculated_at timestamp [default: `now()`]
 }
+
+// One row per running pipeline group. Inserted by the pipeline serve daemon
+// before starting a group; deleted on completion. API checks for existence
+// before sending pg_notify — presence means 409. Row persists on daemon crash
+// until an operator clears it (D22).
+Table pipeline_group_lock {
+  group_name varchar [pk]  // 'ingest_embed' | 'cluster_label_score'
+  locked_at timestamp [default: `now()`]
+}

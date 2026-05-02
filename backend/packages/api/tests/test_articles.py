@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 _NOW = datetime.now(UTC).replace(tzinfo=None)
 
 
-def _source(source_type: SourceType = SourceType.rss, *, name: str = "Test Source") -> ContentSource:
+def _source(
+    source_type: SourceType = SourceType.rss, *, name: str = "Test Source"
+) -> ContentSource:
     return ContentSource(
         id=uuid.uuid4(),
         name=name,
@@ -84,7 +86,9 @@ async def test_list_articles_total_pages_consistent(client: AsyncClient) -> None
 # ---------------------------------------------------------------------------
 
 
-async def test_list_articles_returns_correct_fields(session: AsyncSession, client: AsyncClient) -> None:
+async def test_list_articles_returns_correct_fields(
+    session: AsyncSession, client: AsyncClient
+) -> None:
     source = _source(name="Kompas RSS")
     article = Article(
         id=uuid.uuid4(),
@@ -141,7 +145,9 @@ async def test_list_articles_source_type_rss(session: AsyncSession, client: Asyn
     assert item["source_type"] == "rss"
 
 
-async def test_list_articles_source_type_internal(session: AsyncSession, client: AsyncClient) -> None:
+async def test_list_articles_source_type_internal(
+    session: AsyncSession, client: AsyncClient
+) -> None:
     source = _source(SourceType.internal, name="Tempo Internal")
     article = _article(source.id, title="Internal Article Unique")
     session.add_all([source, article])

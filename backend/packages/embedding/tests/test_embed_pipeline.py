@@ -60,10 +60,14 @@ async def test_run_embeds_unembedded_articles(db_session):
 
     assert count == 1
     rows = (
-        await db_session.execute(
-            select(ArticleEmbedding).where(ArticleEmbedding.article_id == article.id)
+        (
+            await db_session.execute(
+                select(ArticleEmbedding).where(ArticleEmbedding.article_id == article.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].model_name == "google/embeddinggemma-300m"
 

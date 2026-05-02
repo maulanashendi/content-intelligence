@@ -93,6 +93,8 @@ The Dockerfile is multi-stage. The `api` image excludes torch and transformers â
 
 | Rejected | Reason |
 |----------|--------|
+| Sigma.js / Cytoscape / react-force-graph / vis-network | Full network-graph frameworks with richer APIs than needed for a single force-directed visualization. D3 force simulation covers the use case with less bundle weight. |
+| Recharts / Chart.js | General-purpose charting libraries not needed for this product. |
 | Ollama for local LLM serving | Adds a separate sidecar service and HTTP overhead for a batch-only, single-consumer workload. |
 | `transformers` + `bitsandbytes` for LLM labeling | PyTorch CPU inference for Gemma 2B runs 5â€“30 s per inference even with bitsandbytes nf4, which has no AVX2 or Metal path. `llama-cpp-python` with GGUF is 3â€“5Ã— faster on the same hardware. |
 | Celery / RabbitMQ / Redis Streams | One daily batch job. A queue adds infrastructure with no scaling benefit at this load. |
@@ -105,7 +107,7 @@ The Dockerfile is multi-stage. The `api` image excludes torch and transformers â
 | Multiple parallel embedding models in production | Embeddings from different model spaces are mathematically incomparable. A/B test offline in notebooks. |
 | `c-TF-IDF` / top-keyword cluster labels | Quality gap vs LLM is large enough to break the dashboard's UX. LLM compute cost is acceptable. |
 | Flat package layout (no `src/`) | src layout forces tested code to be the installed code, catching packaging bugs early. |
-| GraphQL | REST is sufficient for three read-only endpoints. |
+| GraphQL | REST is sufficient for the current endpoint surface. |
 | WebSockets | Dashboard is poll-based; no real-time push need. |
 
 ## Resource footprint estimate

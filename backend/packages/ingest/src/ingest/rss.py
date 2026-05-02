@@ -19,10 +19,7 @@ logger = logging.getLogger(__name__)
 # `python-httpx/x.y` UA, returning 403 or a redirect to a block page.
 # Identify as a real-looking RSS reader so feeds answer normally.
 DEFAULT_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (compatible; EditorIntelligenceBot/1.0; "
-        "+https://tempo.co)"
-    ),
+    "User-Agent": ("Mozilla/5.0 (compatible; EditorIntelligenceBot/1.0; +https://tempo.co)"),
     "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8",
     "Accept-Language": "id, en;q=0.7",
 }

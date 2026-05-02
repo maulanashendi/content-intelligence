@@ -15,6 +15,7 @@ from ingest.runner import _fetch_one_source, _is_blocked, _mark_blocked, _run_on
 @pytest.fixture(autouse=True)
 def reset_blocked_state() -> None:
     import ingest.runner as _runner
+
     _runner._blocked_until.clear()
     yield
     _runner._blocked_until.clear()
@@ -80,8 +81,10 @@ async def test_run_once_skips_blocked_sources() -> None:
     source = MagicMock(id=sid, url="https://blocked.example.com/feed", name="Blocked")
     ctx = _make_session_ctx([source])
 
-    with patch("ingest.runner.get_session", ctx), \
-         patch("ingest.runner.fetch_and_store_source") as mock_fetch:
+    with (
+        patch("ingest.runner.get_session", ctx),
+        patch("ingest.runner.fetch_and_store_source") as mock_fetch,
+    ):
         await _run_once()
 
     mock_fetch.assert_not_called()
@@ -98,8 +101,10 @@ async def test_run_once_calls_fetch_for_active_sources() -> None:
         calls.append(source_id)
         return 3
 
-    with patch("ingest.runner.get_session", ctx), \
-         patch("ingest.runner.fetch_and_store_source", _capture):
+    with (
+        patch("ingest.runner.get_session", ctx),
+        patch("ingest.runner.fetch_and_store_source", _capture),
+    ):
         await _run_once()
 
     assert calls == [sid]
@@ -107,7 +112,6 @@ async def test_run_once_calls_fetch_for_active_sources() -> None:
 
 @pytest.mark.asyncio
 async def test_run_once_marks_source_blocked_on_blocked_error() -> None:
-    import ingest.runner as _runner
 
     sid = uuid.uuid4()
     source = MagicMock(id=sid, url="https://blocked.example.com/feed", name="WillBlock")
@@ -116,8 +120,10 @@ async def test_run_once_marks_source_blocked_on_blocked_error() -> None:
     async def _raise_blocked(*_args, **_kwargs):
         raise BlockedError("provider blocked us")
 
-    with patch("ingest.runner.get_session", ctx), \
-         patch("ingest.runner.fetch_and_store_source", _raise_blocked):
+    with (
+        patch("ingest.runner.get_session", ctx),
+        patch("ingest.runner.fetch_and_store_source", _raise_blocked),
+    ):
         await _run_once()
 
     assert _is_blocked(sid)
@@ -139,8 +145,10 @@ async def test_run_once_continues_on_generic_exception() -> None:
         calls.append(source_id)
         return 1
 
-    with patch("ingest.runner.get_session", ctx), \
-         patch("ingest.runner.fetch_and_store_source", _selective):
+    with (
+        patch("ingest.runner.get_session", ctx),
+        patch("ingest.runner.fetch_and_store_source", _selective),
+    ):
         await _run_once()
 
     assert calls == [sid2]
@@ -195,7 +203,6 @@ async def test_fetch_one_source_skips_currently_blocked_source(
 
 @pytest.mark.asyncio
 async def test_fetch_one_source_marks_blocked_on_429(rss_source: ContentSource) -> None:
-    import ingest.runner as _runner
 
     async def _raise_blocked(*_args, **_kwargs):
         raise BlockedError("429")
@@ -291,9 +298,12 @@ async def test_run_loop_exits_when_shutdown_event_set() -> None:
     async def _noop_listener() -> None:
         await _runner._shutdown.wait()
 
-    with patch("ingest.runner._run_once", _noop_run_once), \
-         patch("ingest.runner._listen_for_new_sources", _noop_listener), \
-         patch("ingest.runner._install_signal_handlers", lambda _e: None):
+    with (
+        patch("ingest.runner._run_once", _noop_run_once),
+        patch("ingest.runner._listen_for_new_sources", _noop_listener),
+        patch("ingest.runner._install_signal_handlers", lambda _e: None),
+    ):
+
         async def _stop_soon():
             await asyncio.sleep(0.05)
             _runner._shutdown.set()
@@ -333,7 +343,6 @@ async def test_listener_retries_on_connection_failure() -> None:
 
 
 def test_install_signal_handlers_no_loop_does_not_raise() -> None:
-    import ingest.runner as _runner
 
     event = asyncio.Event()
     try:
@@ -369,10 +378,13 @@ async def test_run_loop_handles_invalid_uuid_payload() -> None:
     async def _noop_listener() -> None:
         await _runner._shutdown.wait()
 
-    with patch("ingest.runner._run_once", _noop_run_once), \
-         patch("ingest.runner._listen_for_new_sources", _noop_listener), \
-         patch("ingest.runner._install_signal_handlers", lambda _e: None), \
-         patch("ingest.runner._fetch_one_source", _capture_fetch):
+    with (
+        patch("ingest.runner._run_once", _noop_run_once),
+        patch("ingest.runner._listen_for_new_sources", _noop_listener),
+        patch("ingest.runner._install_signal_handlers", lambda _e: None),
+        patch("ingest.runner._fetch_one_source", _capture_fetch),
+    ):
+
         async def _stop_soon():
             await asyncio.sleep(0.2)
             _runner._shutdown.set()

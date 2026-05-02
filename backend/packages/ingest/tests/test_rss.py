@@ -69,8 +69,10 @@ async def test_fetch_and_store_source_inserts_articles(
 
     async with get_session() as session:
         rows = (
-            await session.execute(select(Article).where(Article.source_id == rss_source.id))
-        ).scalars().all()
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
 
     assert len(rows) == 2
     assert {a.url for a in rows} == {
@@ -100,8 +102,10 @@ async def test_fetch_and_store_source_deduplicates_articles(
 
     async with get_session() as session:
         rows = (
-            await session.execute(select(Article).where(Article.source_id == rss_source.id))
-        ).scalars().all()
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
 
     assert len(rows) == 2
 
@@ -296,8 +300,10 @@ async def test_fetch_and_store_source_atomic_articles_and_status(
     async with get_session() as session:
         source = await session.get(ContentSource, rss_source.id)
         rows = (
-            await session.execute(select(Article).where(Article.source_id == rss_source.id))
-        ).scalars().all()
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
 
     assert source is not None
     assert source.status == SourceStatus.active
@@ -317,8 +323,10 @@ async def test_ingest_rss_idempotent_second_run_inserts_zero(
 
     async with get_session() as session:
         rows = (
-            await session.execute(select(Article).where(Article.source_id == rss_source.id))
-        ).scalars().all()
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
     assert len(rows) == 2
 
 
@@ -334,8 +342,7 @@ def test_make_http_client_user_agent_is_not_default_python_httpx() -> None:
     try:
         ua = client.headers.get("User-Agent", "")
         assert "python-httpx" not in ua.lower(), (
-            f"Default httpx UA is blocked by RunCloud/Cloudflare WAFs; "
-            f"got UA={ua!r}"
+            f"Default httpx UA is blocked by RunCloud/Cloudflare WAFs; got UA={ua!r}"
         )
         assert ua, "User-Agent must not be empty"
     finally:
