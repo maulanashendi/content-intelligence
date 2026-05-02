@@ -73,3 +73,9 @@ export const PipelineTriggerResultSchema = z.object({
   notified: z.boolean(),
 })
 export type PipelineTriggerResult = z.infer<typeof PipelineTriggerResultSchema>
+
+export const PipelineStatusSchema = z.object({
+  ingest_embed: z.string().nullable(),
+  cluster_label_score: z.string().nullable(),
+})
+export type PipelineStatus = z.infer<typeof PipelineStatusSchema>

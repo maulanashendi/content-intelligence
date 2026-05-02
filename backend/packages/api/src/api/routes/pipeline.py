@@ -3,9 +3,10 @@ import logging
 from core.models import PipelineGroupLock
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from api.deps import SessionDep
+from api.types import UtcDateTime
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,12 @@ class PipelineTriggerResult(BaseModel):
     group: str
     channel: str
     notified: bool
+
+
+class PipelineStatusResponse(BaseModel):
+    # locked_at timestamp when running, null when idle
+    ingest_embed: UtcDateTime | None
+    cluster_label_score: UtcDateTime | None
 
 
 async def _trigger(group: str, channel: str, session: SessionDep) -> PipelineTriggerResult:
@@ -40,6 +47,16 @@ async def _trigger(group: str, channel: str, session: SessionDep) -> PipelineTri
         logger.warning("pg_notify failed channel=%s", channel, exc_info=True)
 
     return PipelineTriggerResult(group=group, channel=channel, notified=notified)
+
+
+@router.get("/status", response_model=PipelineStatusResponse)
+async def pipeline_status(session: SessionDep) -> PipelineStatusResponse:
+    locks = (await session.execute(select(PipelineGroupLock))).scalars().all()
+    lock_map = {lock.group_name: lock.locked_at for lock in locks}
+    return PipelineStatusResponse(
+        ingest_embed=lock_map.get(_GROUP_INGEST_EMBED),
+        cluster_label_score=lock_map.get(_GROUP_CLUSTER_LABEL_SCORE),
+    )
 
 
 @router.post("/ingest-embed", status_code=202, response_model=PipelineTriggerResult)

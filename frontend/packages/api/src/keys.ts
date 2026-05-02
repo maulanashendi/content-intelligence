@@ -16,4 +16,5 @@ export const sourceKeys = {
 
 export const pipelineKeys = {
   all: ["pipeline"] as const,
+  status: () => [...pipelineKeys.all, "status"] as const,
 }
