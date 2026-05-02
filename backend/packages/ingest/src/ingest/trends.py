@@ -1,10 +1,11 @@
 import logging
+import math
 import re
 import uuid
+import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
-import feedparser
 import httpx
 from core.db import get_session
 from core.models import (
@@ -21,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 TRENDS_RSS_URL = "https://trends.google.com/trending/rss?geo=ID"
 
+_HT_NS = "https://trends.google.com/trending/rss"
+_LOG_NORM_DENOM = math.log1p(1_000_000.0)
+
 
 def _extract_traffic_number(text: str | None) -> float | None:
     if not text:
@@ -35,26 +39,41 @@ def _extract_traffic_number(text: str | None) -> float | None:
     elif "M" in text.upper():
         multiplier = 1_000_000.0
     try:
-        return float(raw) * multiplier
+        raw_traffic = float(raw) * multiplier
+        # Log-scale to 0-100 so scoring velocity.py, which clips at 100 before
+        # normalising to [0,1], receives a differentiated signal (1K≈50,
+        # 100K≈83, 1M=100) rather than every trend clamped to 100.
+        return round(min(math.log1p(raw_traffic) / _LOG_NORM_DENOM * 100.0, 100.0), 2)
     except ValueError:
         return None
 
 
-def _parse_trends_feed(feed: feedparser.FeedParserDict, now: datetime) -> list[dict]:
+def _parse_trends_feed(xml_text: str, now: datetime) -> list[dict]:
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        logger.warning("trends: failed to parse XML feed")
+        return []
+
+    channel = root.find("channel")
+    if channel is None:
+        return []
+
     trends = []
-    for entry in feed.entries:
-        keyword = entry.get("title", "").strip()
+    for item in channel.findall("item"):
+        keyword = (item.findtext("title") or "").strip()
         if not keyword:
             continue
 
-        interest_score = _extract_traffic_number(entry.get("ht:approx_traffic"))
+        approx_traffic = item.findtext(f"{{{_HT_NS}}}approx_traffic")
+        interest_score = _extract_traffic_number(approx_traffic)
 
         related_urls = []
-        for link_el in entry.get("ht:news_item", []):
-            news_url = link_el.get("ht:news_item_url", "").strip()
-            news_title = link_el.get("ht:news_item_title", "").strip()
-            if news_url and news_title:
-                related_urls.append({"title": news_title, "url": news_url})
+        for news_item in item.findall(f"{{{_HT_NS}}}news_item"):
+            title = (news_item.findtext(f"{{{_HT_NS}}}news_item_title") or "").strip()
+            url = (news_item.findtext(f"{{{_HT_NS}}}news_item_url") or "").strip()
+            if title and url:
+                related_urls.append({"title": title, "url": url})
 
         trends.append(
             {
@@ -70,8 +89,19 @@ def _parse_trends_feed(feed: feedparser.FeedParserDict, now: datetime) -> list[d
 
 async def _resolve_source(session: AsyncSession, article_url: str) -> uuid.UUID | None:
     host = urlparse(article_url).hostname or ""
+    parts = host.split(".")
+    # Strip subdomains (e.g. "finance.detik.com" → "detik.com") so article-page
+    # URLs match against RSS-feed ContentSource rows that share the base domain.
+    # For ccTLD+SLD combos like "co.id" the second-to-last label is ≤3 chars, so
+    # we keep three labels (e.g. "kontan.co.id") instead of two.
+    if len(parts) >= 3 and len(parts[-2]) <= 3:
+        base_domain = ".".join(parts[-3:])
+    elif len(parts) >= 2:
+        base_domain = ".".join(parts[-2:])
+    else:
+        base_domain = host
     result = await session.execute(
-        select(ContentSource).where(ContentSource.url.ilike(f"%{host}%"))
+        select(ContentSource).where(ContentSource.url.ilike(f"%{base_domain}%"))
     )
     source = result.scalar_one_or_none()
     return source.id if source else None
@@ -82,13 +112,12 @@ async def ingest_trends(client: httpx.AsyncClient) -> int:
     try:
         resp = await client.get(TRENDS_RSS_URL)
         resp.raise_for_status()
-        feed = feedparser.parse(resp.text)
     except Exception:
         logger.exception("failed to fetch Google Trends RSS")
         return 0
 
     now = datetime.now(UTC).replace(tzinfo=None)
-    parsed_trends = _parse_trends_feed(feed, now)
+    parsed_trends = _parse_trends_feed(resp.text, now)
     if not parsed_trends:
         logger.info("trends: no trending topics found")
         return 0
