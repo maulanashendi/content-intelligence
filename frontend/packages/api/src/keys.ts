@@ -13,3 +13,8 @@ export const sourceKeys = {
   all: ["sources"] as const,
   list: () => [...sourceKeys.all, "list"] as const,
 }
+
+export const pipelineKeys = {
+  all: ["pipeline"] as const,
+  status: () => [...pipelineKeys.all, "status"] as const,
+}

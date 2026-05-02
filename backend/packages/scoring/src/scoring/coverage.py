@@ -13,9 +13,7 @@ class CoverageInputs:
 
 def compute_coverage_score(inputs: CoverageInputs) -> float:
     total_articles = inputs.competitor_articles + inputs.internal_articles
-    competitor_share = (
-        inputs.competitor_articles / total_articles if total_articles > 0 else 0.0
-    )
+    competitor_share = inputs.competitor_articles / total_articles if total_articles > 0 else 0.0
 
     if inputs.recent_internal_articles > 0:
         internal_gap = 0.0 if not inputs.internal_underperformed else 0.35

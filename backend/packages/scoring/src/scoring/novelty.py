@@ -32,4 +32,8 @@ def _normalize_now(now: datetime | None) -> datetime:
 
 
 def _normalize_timestamp(timestamp: datetime) -> datetime:
-    return timestamp.astimezone(UTC).replace(tzinfo=None) if timestamp.tzinfo is not None else timestamp
+    return (
+        timestamp.astimezone(UTC).replace(tzinfo=None)
+        if timestamp.tzinfo is not None
+        else timestamp
+    )

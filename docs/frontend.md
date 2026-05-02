@@ -10,7 +10,7 @@ The frontend is a small read-only SPA serving the three views from `prd.md` Sect
 
 **Vite SPA, not Next.js.** The dashboard is internal, served behind an upstream gateway, has no SEO need, and renders no public content. SSR adds operational and build complexity for zero product value at MVP. Forward-compat with Next.js is preserved by writing browser-portable code (see §15) — migration cost is bounded to routes, providers, and entry.
 
-**Read-only and poll-on-focus.** No write API in MVP per `architecture.md` and `prd.md` §6. The FE does not implement claim, dismiss, or any user action that mutates server state. Refresh is manual or on-window-focus; there is no polling interval.
+**Read-dominant and poll-on-focus.** The only write surface is source management — `POST/PATCH/DELETE /api/v1/sources` per `decisions.md` D19. Clusters, articles, and trend signals are read-only from the FE. Refresh is manual or on-window-focus; there is no polling interval.
 
 **One design system, vendored, not imported.** shadcn/ui components are copied into `@ei-fe/ui` and owned by this codebase. Tailwind v4 is the single styling layer. Tokens are defined once in TypeScript and consumed both by Tailwind and runtime code.
 
@@ -34,7 +34,7 @@ Five packages under `frontend/packages/`, each an installable workspace member w
 | `@ei-fe/core` | Shared kernel: env validation, design tokens, domain types, formatters, error class | (none) |
 | `@ei-fe/api` | Fetch wrapper, generated OpenAPI types, runtime Zod schemas, TanStack Query keys and hooks | `@ei-fe/core` |
 | `@ei-fe/ui` | shadcn/ui primitives (vendored), layout components, state components, Lucide icon registry, Tailwind preset | `@ei-fe/core` |
-| `@ei-fe/features` | Feature-level views composed from `ui` primitives and `api` hooks: morning, cluster-detail, deferred | `@ei-fe/core`, `@ei-fe/api`, `@ei-fe/ui` |
+| `@ei-fe/features` | Feature-level views composed from `ui` primitives and `api` hooks: morning, cluster-detail, article | `@ei-fe/core`, `@ei-fe/api`, `@ei-fe/ui` |
 | `@ei-fe/app` | Vite SPA shell: entry, providers, router, routes, global stylesheet | all of the above |
 
 ### Dependency graph
@@ -51,7 +51,7 @@ ui ───────┘
 
 `features` is the composition layer: each feature folder pulls a query hook from `api`, renders presentational components from `ui`, and exposes a single view component to `app`. `app` is intentionally thin — its only job is wiring providers and routes. Logic that lives in `app` is a smell; lift it to `features` or `core`.
 
-Cross-feature imports are forbidden. If `features/morning` and `features/deferred` need to share a component, that component is lifted to `@ei-fe/ui`. If they need to share logic, it is lifted to `@ei-fe/core`. This mirrors the backend rule "batch module A → batch module B is forbidden" — same reason: prevent organic coupling between sibling concerns.
+Cross-feature imports are forbidden. If `features/morning` and `features/article` need to share a component, that component is lifted to `@ei-fe/ui`. If they need to share logic, it is lifted to `@ei-fe/core`. This mirrors the backend rule "batch module A → batch module B is forbidden" — same reason: prevent organic coupling between sibling concerns.
 
 ## Source layout
 
@@ -97,6 +97,7 @@ Listed concretely. New dependencies require a corresponding entry in `tech-stack
 | `@tanstack/react-query` 5 | Server cache, refetch-on-focus, retry | Replaces every reason for a global state lib in this app. |
 | `zod` 3 | Runtime response validation | Guards against BE schema drift at runtime even when TS types are stale. |
 | `lucide-react` | Icon set | Per-icon import, tree-shakeable, default for shadcn. |
+| `d3` 7 | Force-directed cluster graph (`@ei-fe/features/morning`) | Force simulation, zoom, drag for the morning cluster visualization. See `decisions.md` D21. Do not use for other purposes without a new decision entry. |
 | `tailwindcss` 4 | Styling | Token-driven utility CSS, paired with shadcn. |
 | `clsx` + `tailwind-merge` | className composition | Powers `cn()` helper; standard with shadcn. |
 | `class-variance-authority` | Variant API for primitives | Standard with shadcn. |
@@ -140,7 +141,7 @@ Only add a Radix primitive when its corresponding shadcn component is actually u
 | Vanilla CSS / CSS Modules / styled-components | Tailwind + shadcn is the modern React baseline and covers all needs without two parallel systems. |
 | Storybook | One desk, one engineer, ~12 components. Visual review via the dev server is sufficient. |
 | Redux / Zustand / Jotai / Context for server state | TanStack Query owns server cache. Local UI state uses `useState`. |
-| react-hook-form / Formik | No forms in MVP — read-only API. |
+| react-hook-form / Formik | The only write surface (source creation, D19) is a small controlled form; adding a form library would be over-engineering for two fields. |
 | Recharts / Chart.js / D3 | Not needed for the 3 MVP routes. Deferred until a viz feature is added to PRD. |
 | `axios` / `ky` / `wretch` | Native `fetch` plus a small wrapper covers our needs. One less dependency. |
 | Network visualization libraries (Sigma.js, Cytoscape, react-force-graph, etc.) | Out of MVP scope. Will be evaluated when network viz is added to `prd.md`. |
@@ -172,7 +173,7 @@ Two enforcement layers, both required:
 | `@ei-fe/ui` → `@ei-fe/api` | Forbidden — UI is presentational |
 | `@ei-fe/api` → `@ei-fe/ui` | Forbidden — API knows no DOM |
 | `@ei-fe/features` → `@ei-fe/api`, `@ei-fe/ui`, `@ei-fe/core` | Yes |
-| `@ei-fe/features/morning` → `@ei-fe/features/deferred` | Forbidden |
+| `@ei-fe/features/morning` → `@ei-fe/features/article` | Forbidden |
 | `@ei-fe/app` → all | Yes — orchestrator role |
 | Any package → an internal file of another package (`@ei-fe/api/src/queries`) | Forbidden — only the package entry point |
 
@@ -180,21 +181,24 @@ If two features need shared logic, lift it to `@ei-fe/core`. If they need shared
 
 ## Routing
 
-Three routes, plus a 404. URL is the source of truth for navigation state.
+URL is the source of truth for navigation state.
 
-| Path | Route file | Feature view | Hook | Endpoint |
-|------|------------|--------------|------|----------|
+| Path | Route file | Feature view | Hook(s) | Endpoint |
+|------|------------|--------------|---------|----------|
 | `/` | redirect → `/morning` | — | — | — |
-| `/morning` | `app/routes/morning.tsx` | `@ei-fe/features/morning` | `useMorningClusters` | `GET /api/v1/clusters/morning` |
+| `/morning` | `app/routes/morning.tsx` | `@ei-fe/features/morning` | `useMorningClusters`, `clusterDetailQueryOptions` | `GET /api/v1/clusters/morning`, `GET /api/v1/clusters/:id` |
 | `/clusters/:id` | `app/routes/cluster-detail.tsx` | `@ei-fe/features/cluster-detail` | `useClusterDetail` | `GET /api/v1/clusters/:id` |
-| `/deferred` | `app/routes/deferred.tsx` | `@ei-fe/features/deferred` | `useDeferredClusters` | `GET /api/v1/clusters/deferred` |
+| `/article` | `app/routes/article.tsx` | `@ei-fe/features/article` | `useArticles` | `GET /api/v1/articles` |
+| `/clustering` | `app/routes/clustering.tsx` | inline (dummy data) | — (proposed: `useLatestClusterRun`) | `GET /api/v1/cluster-runs/latest` (PROPOSED) |
+| `/sources` | `app/routes/sources.tsx` | inline | `useSources`, `useToggleSource`, `useDeleteSource` | `GET/PATCH/DELETE /api/v1/sources` |
+| `/sources/rss` | `app/routes/input-rss.tsx` | inline | `useCreateSource` | `POST /api/v1/sources` |
 | `*` | `app/routes/not-found.tsx` | — | — | — |
 
-Route files are intentionally thin: read URL params, call the hook, render the feature view, handle URL-derived state. All composition lives in `@ei-fe/features/*`. This keeps `@ei-fe/app` portable — if the SPA migrates to Next.js, only the route layer is rewritten.
+Route files are intentionally thin: read URL params, call the hook, render the feature view, handle URL-derived state. Routes with more complex UI (`/clustering`, `/sources`, `/sources/rss`) are self-contained inline — they do not have a dedicated feature package because they fall below the threshold warranting one. Composition-heavy views (`/morning`, `/clusters/:id`, `/article`) live in `@ei-fe/features/*`.
 
 There are no nested layouts, route loaders, or route-level data fetching. TanStack Query handles fetching at component mount.
 
-There are no query-param filters in MVP. The PRD specifies a fixed top-10 sorted by velocity; user-tunable filters are not on the happy path.
+The only query params in v1 are `page` and `page_size` on `/article`. Other routes have no filter params.
 
 ## Data layer
 
@@ -223,10 +227,17 @@ The two sources overlap deliberately: static types catch developer mistakes; run
 
 ```
 clusterKeys = {
-  all:      ['clusters'],
-  morning:  () => [...clusterKeys.all, 'morning'],
-  deferred: () => [...clusterKeys.all, 'deferred'],
-  detail:   (id) => [...clusterKeys.all, 'detail', id],
+  all:     ['clusters'],
+  morning: () => [...clusterKeys.all, 'morning'],
+  detail:  (id) => [...clusterKeys.all, 'detail', id],
+}
+articleKeys = {
+  all:  ['articles'],
+  list: (page, pageSize) => [...articleKeys.all, 'list', page, pageSize],
+}
+sourceKeys = {
+  all:  ['sources'],
+  list: () => [...sourceKeys.all, 'list'],
 }
 ```
 
@@ -253,7 +264,7 @@ A single convention applied across all routes, implemented via components in `@e
 | Refetching with prior data | Show prior data + small indicator in `StatusBar` |
 | 4xx/5xx error | `<ErrorState>` with retry action that invalidates the query |
 | 404 cluster (detail route) | `<EmptyState>` with copy "Cluster tidak ditemukan atau bukan dari run terbaru" + link to `/morning` |
-| Empty result (morning has 0 clusters) | `<EmptyState>` with copy directing the user to the deferred view |
+| Empty result (morning has 0 clusters) | `<EmptyState>` with copy indicating no clusters for today |
 
 ## Date / time formatting
 
@@ -414,7 +425,7 @@ These exist or will exist for the product but are NOT implemented in `frontend/`
 
 - **Authentication and identity.** Handled by the upstream gateway (`decisions.md` D10).
 - **Production deployment infrastructure.** Static assets are output; serving them is the deploy team's concern.
-- **Backend.** Lives in `backend/`. The contract is the JSON shape of the four API endpoints.
+- **Backend.** Lives in `backend/`. The contract is the JSON shape of the API endpoints documented in `api_contract.md`.
 - **Monitoring stack.** Browser-side errors and analytics are not collected in MVP. If they become a requirement, evaluate Sentry or equivalent at that point.
 - **Internal article performance metrics in any UI form.** `constraints.md` is authoritative — never display GSC clicks, impressions, CTR, or position.
 
@@ -422,8 +433,7 @@ These exist or will exist for the product but are NOT implemented in `frontend/`
 
 Deferred until added to `prd.md` or `decisions.md`:
 
-- Network / topic visualization (Sigma.js, Cytoscape, react-force-graph). Discussed in conversation but not in PRD; pending product decision.
-- Charts of any kind (no charting library is installed).
+- Charts of any kind beyond the D3 force graph (no general charting library is installed).
 - Manual claim or dismiss actions on clusters (PRD §6).
 - Cluster lineage / time-series views (PRD §6).
 - Push notifications, in-app notifications, toast streams.
@@ -445,8 +455,7 @@ Migration steps:
 3. Port the `Sidebar`, `StatusBar`, and page-head layout from `template-fe/components.jsx` into `@ei-fe/ui/src/layout/`.
 4. Reproduce the `page-dashboard.jsx` visual in `@ei-fe/features/morning/`.
 5. Reproduce the `page-bucket.jsx` visual in `@ei-fe/features/cluster-detail/`.
-6. Build `@ei-fe/features/deferred/` (no direct `template-fe` analog — use the Morning view as a starting point).
-7. Wire routes in `@ei-fe/app/`.
+6. Wire routes in `@ei-fe/app/`.
 8. Connect to live backend, validate end-to-end.
 9. **Delete `template-fe/`.** Update `docs/README.md` to remove references.
 

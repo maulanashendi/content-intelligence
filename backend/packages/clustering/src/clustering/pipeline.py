@@ -46,7 +46,9 @@ async def run() -> None:
 
 
 async def _load_recent_embeddings() -> tuple[np.ndarray, list[uuid.UUID]]:
-    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=settings.clustering_window_days)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+        days=settings.clustering_window_days
+    )
     async with get_session() as session:
         stmt = (
             select(ArticleEmbedding.article_id, ArticleEmbedding.embedding)

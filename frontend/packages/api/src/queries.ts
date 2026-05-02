@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
-import { clusterKeys, articleKeys, sourceKeys } from "./keys.js"
-import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema } from "./schemas.js"
+import { clusterKeys, articleKeys, sourceKeys, pipelineKeys } from "./keys.js"
+import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema } from "./schemas.js"
 
 export function useMorningClusters() {
   return useQuery({
@@ -52,6 +52,28 @@ export function useDeleteSource() {
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/sources/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: sourceKeys.list() }),
+  })
+}
+
+export function usePipelineStatus(refetchInterval: number | false = false) {
+  return useQuery({
+    queryKey: pipelineKeys.status(),
+    queryFn: () => apiGet("/pipeline/status", PipelineStatusSchema),
+    refetchInterval,
+    refetchOnWindowFocus: true,
+    staleTime: 5_000,
+  })
+}
+
+export function useTriggerIngestEmbed() {
+  return useMutation({
+    mutationFn: () => apiPost("/pipeline/ingest-embed", {}, PipelineTriggerResultSchema),
+  })
+}
+
+export function useTriggerClusterLabelScore() {
+  return useMutation({
+    mutationFn: () => apiPost("/pipeline/cluster-label-score", {}, PipelineTriggerResultSchema),
   })
 }
 

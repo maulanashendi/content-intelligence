@@ -66,3 +66,16 @@ export const ContentSourceSchema = z.object({
 export type ContentSource = z.infer<typeof ContentSourceSchema>
 
 export const ContentSourceListSchema = z.array(ContentSourceSchema)
+
+export const PipelineTriggerResultSchema = z.object({
+  group: z.string(),
+  channel: z.string(),
+  notified: z.boolean(),
+})
+export type PipelineTriggerResult = z.infer<typeof PipelineTriggerResultSchema>
+
+export const PipelineStatusSchema = z.object({
+  ingest_embed: z.string().nullable(),
+  cluster_label_score: z.string().nullable(),
+})
+export type PipelineStatus = z.infer<typeof PipelineStatusSchema>

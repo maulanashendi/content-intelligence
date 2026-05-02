@@ -146,7 +146,9 @@ async def ingest_trends(client: httpx.AsyncClient) -> int:
                         trend_signal_id=signal.id,
                         article_id=article.id,
                     )
-                    join_stmt = join_stmt.on_conflict_do_nothing(constraint="trend_signal_article_pkey")
+                    join_stmt = join_stmt.on_conflict_do_nothing(
+                        constraint="trend_signal_article_pkey"
+                    )
                     await session.execute(join_stmt)
 
                 total_signals += 1

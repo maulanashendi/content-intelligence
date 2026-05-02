@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from pythonjsonlogger import jsonlogger
 
-from api.routes import articles, clusters, health, sources
+from api.routes import articles, clusters, health, pipeline, sources
 
 
 def _configure_logging() -> None:
@@ -26,4 +26,5 @@ app = FastAPI(title="Editor Intelligence API", version="1.0.0", lifespan=_lifesp
 app.include_router(articles.router, prefix="/api/v1")
 app.include_router(clusters.router, prefix="/api/v1")
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(pipeline.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")

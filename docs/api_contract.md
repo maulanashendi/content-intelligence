@@ -30,7 +30,7 @@ Every endpoint in this document carries one of two status tags.
 ### Content type
 
 - Responses: `application/json`, UTF-8.
-- No request bodies in v1 (no write endpoints).
+- Request bodies (JSON) are required for `POST /api/v1/sources` and `PATCH /api/v1/sources/{id}`. All other endpoints have no request body.
 
 ### Authentication
 
@@ -323,14 +323,14 @@ The array is at most 10 elements, sorted by `trend_velocity` descending (nulls l
 - Only clusters whose insight `recommendation` is `trending` or `worth_writing`. Saturated clusters live on `/deferred`.
 - Clusters with **any internal article published in the last 30 days** are excluded. "Internal" = `content_source.source_type = 'internal'`.
   **The 30-day window is frozen in v1.** It is hard-coded in the backend SQL and not exposed as a query parameter. PRD §7 #1 listed this as undecided; the contract closes it. Changing the value requires a contract bump and a coordinated FE + BE deploy.
-- Empty array is a valid response — the FE renders an `EmptyState` directing the user to `/deferred`.
+- Empty array is a valid response — the FE renders an `EmptyState`.
 
 ---
 
 ### `GET /api/v1/clusters/deferred`
 
 **Status**: LIVE
-**Used by**: `/deferred` route via `useDeferredClusters`
+**Used by**: no FE route currently; endpoint live for direct API access
 **Backed by**: `backend/packages/api/src/api/routes/clusters.py:97-110`
 
 Saturated clusters — competitors have covered the topic heavily. The desk head reviews this each afternoon.
@@ -407,9 +407,9 @@ Full detail for a single cluster, including its member articles.
 
 ---
 
-## 5. Endpoints — PROPOSED
+## 5. Additional Endpoints
 
-Four new read-only endpoints, all backed by tables that already have data writers in the pipeline. None require a constraints amendment, schema migration, or new dependency. Ship order is independent — pick whichever the FE needs first.
+These endpoints are backed by tables that already have data writers in the pipeline. None required a constraints amendment, schema migration, or new dependency.
 
 ### 5.0 `GET /api/v1/articles`
 
@@ -717,42 +717,96 @@ Hard delete a source. Refuses to delete a source that has any articles, to keep 
 
 ---
 
-## 6. Frontend cleanup required for this contract
+### 5.7 `POST /api/v1/pipeline/ingest-embed`
 
-The current FE branch (`feat/frontend-spa`) ships routes and dummy data that do not match the v1 contract. Land these alongside the backend work — they cannot be deferred without leaving dead routes in the SPA.
+**Status**: LIVE
+**Used by**: `/sources` route via `useTriggerIngestEmbed` (`@ei-fe/api`)
+**Backed by**: `backend/packages/api/src/api/routes/pipeline.py`
 
-### 6.1 Routes to delete
+Manually trigger Group 1 of the pipeline — ingest all enabled sources then embed unembedded articles. Useful after a new source is added mid-day and you do not want to wait for the 06:00 cron.
 
-| File                                                              | Reason                                                                    |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `frontend/packages/app/src/routes/input-api.tsx`                  | No write API + `source_type = 'api'` does not exist in the schema.        |
-| `frontend/packages/app/src/routes/check-schema.tsx`               | Pure FE validator with no product purpose; not in PRD §4 happy path.      |
+**Path params** — (none)
+**Query params** — (none)
+**Request body** — (none)
 
-`routes/input-rss.tsx` is retained — it backs the source-creation flow against `POST /api/v1/sources` (D19).
+**Response 202** — `PipelineTriggerResult`
 
-Also remove their entries from `frontend/packages/app/src/app.tsx` (the `createBrowserRouter` array) and any `<Link>`s pointing to them — currently only from `/sources` (the "+ RSS Feed" and "+ API Source" buttons in `routes/sources.tsx`).
+| field      | type    | nullable | notes                                                                                   |
+| ---------- | ------- | -------- | --------------------------------------------------------------------------------------- |
+| `group`    | string  | no       | always `"ingest_embed"`                                                                 |
+| `channel`  | string  | no       | `pg_notify` channel that was targeted: `"pipeline_ingest_embed_requested"`              |
+| `notified` | boolean | no       | `true` if `pg_notify` was sent without error; `false` if the notify call itself failed (daemon may not receive trigger — caller should verify pipeline ran) |
 
-### 6.2 Dummy data to replace with hooks
+```json
+{
+  "group": "ingest_embed",
+  "channel": "pipeline_ingest_embed_requested",
+  "notified": true
+}
+```
 
-| Route                                                  | Hook to add in `@ei-fe/api` | Endpoint                       |
-| ------------------------------------------------------ | --------------------------- | ------------------------------ |
-| `routes/clustering.tsx`                                | `useLatestClusterRun`       | `GET /api/v1/cluster-runs/latest` |
-| `routes/sources.tsx`                                   | `useSources`                | `GET /api/v1/sources`          |
-| `features/morning/trend-signal-card.tsx`               | `useLatestTrendSignals`     | `GET /api/v1/trend-signals/latest` |
+**Errors**
 
-For each: add the Zod schema in `frontend/packages/api/src/schemas.ts`, add the query key in `keys.ts`, add the hook in `queries.ts`, regenerate `generated.ts`, and replace the inline constants in the route component with the hook + standard `LoadingState` / `ErrorState` / `EmptyState` handling (mirror what `morning-view.tsx` already does).
+| status | when                                        | body                                                                    |
+| ------ | ------------------------------------------- | ----------------------------------------------------------------------- |
+| 409    | Group `ingest_embed` is currently running   | `{"detail": "Pipeline group ingest_embed sedang berjalan."}` |
+| 500    | DB error during lock check                  | FastAPI default                                                         |
 
-### 6.3 Display-only fixes in `routes/sources.tsx`
+**Notes / constraints**
 
-The dummy data shows `type: "api"` and `type: "sitemap"` badges. These values are not in the v1 contract. After wiring `useSources`, the page renders only `"rss"` and `"internal"` badges; the `TYPE_BADGE` and `TYPE_LABEL` constants must be reduced to those two keys. Tempo's sitemap source appears with `source_type = "internal"` (not `"sitemap"`).
-
-### 6.4 Component to remove
-
-`features/cluster-detail/`'s `cluster-header.tsx`, `audit-trail-card.tsx`, etc. that display `cluster.summary` (the LLM narrative) — drop the rendering of any `summary` field, since it is not in the v1 contract. Confirm by `grep -rn "summary" frontend/packages/features/src/` and removing unused references.
+- The API checks a DB-level lock before sending `pg_notify`. If the lock row exists, it returns `409` immediately without sending the notification.
+- `notified: false` means the `pg_notify` call threw an exception after the lock check passed. The lock was **not** acquired (the daemon did not start), so the caller may retry. There is no automatic retry or safety-net poll — this is a manual trigger.
+- The endpoint does NOT wait for the pipeline to complete. `202` means "trigger accepted and sent", not "pipeline finished".
+- Running Group 1 while Group 2 (`cluster_label_score`) is active is permitted — they hold separate lock rows and do not share state at runtime.
+- The `pipeline serve` daemon (D22) must be running for the trigger to be received. If the daemon is down, `notified` will be `true` (the DB notify call succeeded) but the pipeline will not run. The caller cannot distinguish this case from the API side.
 
 ---
 
-## 7. Per-endpoint template
+### 5.8 `POST /api/v1/pipeline/cluster-label-score`
+
+**Status**: LIVE
+**Used by**: `/sources` route via `useTriggerClusterLabelScore` (`@ei-fe/api`)
+**Backed by**: `backend/packages/api/src/api/routes/pipeline.py`
+
+Manually trigger Group 2 of the pipeline — re-cluster existing embeddings, re-label clusters, and re-score insights. Useful after debugging a clustering or labeling issue without re-ingesting or re-embedding.
+
+**Path params** — (none)
+**Query params** — (none)
+**Request body** — (none)
+
+**Response 202** — `PipelineTriggerResult`
+
+| field      | type    | nullable | notes                                                                                   |
+| ---------- | ------- | -------- | --------------------------------------------------------------------------------------- |
+| `group`    | string  | no       | always `"cluster_label_score"`                                                          |
+| `channel`  | string  | no       | `pg_notify` channel that was targeted: `"pipeline_cluster_label_score_requested"`       |
+| `notified` | boolean | no       | `true` if `pg_notify` was sent without error; `false` if the notify call itself failed  |
+
+```json
+{
+  "group": "cluster_label_score",
+  "channel": "pipeline_cluster_label_score_requested",
+  "notified": true
+}
+```
+
+**Errors**
+
+| status | when                                              | body                                                                           |
+| ------ | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 409    | Group `cluster_label_score` is currently running  | `{"detail": "Pipeline group cluster_label_score sedang berjalan."}` |
+| 500    | DB error during lock check                        | FastAPI default                                                                |
+
+**Notes / constraints**
+
+- Same lock and best-effort notify semantics as 5.7.
+- This group assumes embeddings already exist. Running it against an empty `article_embedding` table produces zero clusters — no error, but no useful output. Caller's responsibility to ensure Group 1 has run at least once.
+- Group 2 is the heaviest group in RAM: UMAP + HDBSCAN (~1GB) and `llama-cpp` Gemma 2B Q4_K_M (~2GB) load sequentially in the same process. Expected wall-clock time on minimum spec VPS: 15–40 minutes depending on article count.
+- Running Group 2 while Group 1 (`ingest_embed`) is active is permitted — separate lock rows.
+
+---
+
+## 6. Per-endpoint template
 
 Every new endpoint added to this document MUST follow this shape. Reviewers should reject PRs that omit any required section.
 

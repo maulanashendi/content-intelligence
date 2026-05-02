@@ -341,18 +341,6 @@ A code generator was considered but rejected for MVP. The token surface is small
 
 **Implication.** Removal happens at a specific point in the migration plan (`frontend.md` §15, step 9). Until that step, `template-fe/` is read-only — no edits to it are made, even if a bug is discovered. Bugs discovered in the prototype are noted and addressed in the production port.
 
-**Context.** Docker-related files can live at repo root or in a `docker/` subfolder.
-
-**Options considered.**
-- `docker/Dockerfile` and `docker/docker-compose.yml` (subfolder)
-- `Dockerfile` and `docker-compose.yml` at repo root
-
-**Decision.** Root-level.
-
-**Rationale.** `docker compose up` works from the project root without `-f` flags or path tricks. Build context is intuitive (`context: .`). Standard Python and Node convention. CI tooling (GitHub Actions, etc.) defaults to root paths. Subfolder organization adds friction for every developer for marginal aesthetic gain.
-
-**Implication.** Multi-stage Dockerfile contains both `api` and `pipeline` targets. docker-compose.yml is the dev composition; production overrides go in `docker-compose.prod.yml` if needed.
-
 
 ---
 
@@ -387,3 +375,44 @@ A code generator was considered but rejected for MVP. The token surface is small
 **Rationale.** Replacing cron with a continuous poller would require re-thinking the embed/cluster/label/score chain that depends on a known cutoff. Reactive ingest only needs to handle the "new source" case; it does not need to re-cluster or re-score. The `pg_notify` channel keeps the API and runner decoupled — the API does not call the runner directly. Best-effort delivery (notify failures do not 500 the API; missed notifies are caught by the next poll tick) avoids the coupling problem that motivated D9.
 
 **Implication.** The daemon is now a second long-running process alongside the API. It must be supervised (systemd, docker-compose `restart: always`, or equivalent). The runner's in-memory blocked-source map and immediate queue are process-local — running multiple replicas would cause duplicate fetches, so deploy as a singleton. Future write endpoints that should also reactively trigger a pipeline step must declare their own `pg_notify` channel, never call the runner in-process.
+
+---
+
+## D21. D3 for cluster force-directed graph
+
+**Context.** The morning view needs a spatial overview of how clusters and their member articles relate to each other so editors can quickly assess groupings before drilling into detail. A plain table gives no spatial context.
+
+**Options considered.**
+- Full network-graph library (Sigma.js, Cytoscape.js, react-force-graph, vis-network)
+- D3 force simulation used directly in a single component
+- Plain SVG with hand-rolled force physics
+- No visualization — table only
+
+**Decision.** D3 force simulation (`d3-force`, `d3-zoom`, `d3-drag`) used directly in `@ei-fe/features/morning/cluster-force-graph.tsx`.
+
+**Rationale.** Full network-graph frameworks (Sigma, Cytoscape) ship richer APIs than needed for one visualization and impose their own rendering model that complicates integration with React refs. D3's force simulation module is the de-facto standard for custom force-directed graphs; it provides exactly the physics, zoom, and drag primitives required without a parallel DOM abstraction. Plain SVG would require re-implementing force physics from scratch. D3 is scoped to one component — the rest of the FE does not depend on it.
+
+**Implication.** `d3: ^7.9.0` is a dependency of `@ei-fe/features`. General-purpose charting libraries (Recharts, Chart.js) and full network-graph frameworks remain forbidden. Future visualization work that requires a different library must add a decision entry before introducing it.
+
+---
+
+## D22. Manual pipeline trigger endpoints
+
+**Context.** The daily cron at 06:00 WIB is the primary pipeline driver (D9). Two operational needs arose that cron cannot cover: (1) after adding a new source mid-day via D19/D20, the embedding and clustering steps still run only the next morning — articles from the new source are not clustered until then; (2) engineers debugging a clustering or labeling issue need to re-run a specific phase without waiting for the next cron window or running the full pipeline from the CLI.
+
+**Options considered.**
+- Add CLI-only re-run (no API change) — requires SSH access; not accessible to editors
+- Call pipeline functions in-process from the API — violates D1; api package would import ML modules, bloating the container
+- Separate HTTP admin service with its own auth boundary — overkill for one VPS, same reasoning that rejected a separate admin service in D19
+- `pg_notify` to a new long-running `pipeline serve` daemon — consistent with D20 pattern; API stays lean
+
+**Decision.** Two new endpoints, `POST /api/v1/pipeline/ingest-embed` and `POST /api/v1/pipeline/cluster-label-score`, that check a DB-level lock and send `pg_notify` to a new `python -m pipeline.cli serve` daemon. The daemon listens on both channels and runs the requested group sequentially. Single daemon handles both groups to keep supervision simple and prevent concurrent RAM spikes.
+
+**Rationale.** The `pg_notify` pattern is already established by D20 — the API fires a notification and does not call the runner directly. The daemon holds all ML imports; the `api` package remains lean. A single daemon for both groups means state is in one process: if Group A is running, a Group B request also returns 409 without needing cross-process coordination. The DB lock row (checked by the API before notifying) is the source of truth for concurrency — it survives a daemon restart mid-run, where an in-memory flag would not.
+
+**Implication.**
+- `python -m pipeline.cli serve` is a new long-running process alongside `api` and `ingest serve`. Must be deployed as a singleton and supervised with `restart: always`.
+- A new table or DB mechanism (e.g., `pipeline_group_lock`) tracks which group is currently running. The API reads this before sending `pg_notify`.
+- The write-side constraint from D19 is extended: the API may now also send pipeline trigger notifications. No data table other than `content_source` and the lock mechanism is written via the API.
+- `pg_notify` is best-effort: if the daemon is not running, the trigger is silently lost. There is no safety-net poll — this is intentional for a manual trigger (the caller sees `notified: true/false` in the response and can retry).
+- Future pipeline groups must declare their own channel and be added to both this decision and the API contract.

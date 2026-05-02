@@ -11,7 +11,7 @@ cd backend
 uv sync
 ```
 
-The `docs/` folder lives at the repository root. The `template-fe/` folder lives at the repository root and is owned by the frontend team; this codebase does not touch it.
+The `docs/` folder lives at the repository root. The `template-fe/` folder is the legacy prototype; it is read-only and will be deleted per `decisions.md` D18 once migration is complete.
 
 ## Source layout
 
@@ -73,6 +73,8 @@ backend/packages/api/src/api/
 └── routes/
     ├── __init__.py
     ├── clusters.py
+    ├── articles.py
+    ├── sources.py
     └── health.py
 ```
 
@@ -198,7 +200,7 @@ If you find yourself wanting to do any of the following, stop and consult `const
 - Add a new top-level module to the workspace
 - Add a new runtime dependency
 - Introduce a message queue, cache, or background worker pattern
-- Add a UI feature (frontend is owned by another team)
+- Add a write-side API endpoint beyond source management (see `constraints.md`)
 - Add an authentication or user management feature
 - Add monitoring or observability infrastructure
 - Add a write-side API endpoint

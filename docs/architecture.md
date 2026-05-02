@@ -14,18 +14,21 @@ This document describes the high-level structure of Editor Intelligence: how mod
 
 ## Process topology
 
-Three long-running concerns, plus the database:
+Four long-running concerns, plus the database:
 
-| Process               | Lifecycle                  | Trigger                                                   |
-| --------------------- | -------------------------- | --------------------------------------------------------- |
-| `api`                 | Always running             | HTTP requests from the frontend                           |
-| `pipeline`            | Batch run, exits when done | Cron at 06:00 WIB daily                                   |
-| `ingest serve` (D20)  | Always running, singleton  | `pg_notify('rss_source_created')` + safety-net poll loop  |
-| `postgres`            | Always running             | Hosts pgvector data                                       |
+| Process                  | Lifecycle                  | Trigger                                                                          |
+| ------------------------ | -------------------------- | -------------------------------------------------------------------------------- |
+| `api`                    | Always running             | HTTP requests from the frontend                                                  |
+| `pipeline`               | Batch run, exits when done | Cron at 06:00 WIB daily                                                          |
+| `ingest serve` (D20)     | Always running, singleton  | `pg_notify('rss_source_created')` + safety-net poll loop                         |
+| `pipeline serve` (D22)   | Always running, singleton  | `pg_notify('pipeline_ingest_embed_requested')` or `pg_notify('pipeline_cluster_label_score_requested')` — implemented in `backend/packages/pipeline/src/pipeline/runner.py` |
+| `postgres`               | Always running             | Hosts pgvector data                                                              |
 
 The `ingest serve` daemon picks up sources added through `POST /api/v1/sources` (D19) and runs a periodic `_run_once` poll as a fallback when notifications are missed. It must be deployed as a singleton — its blocked-source map and immediate queue are process-local.
 
-The frontend is served separately and is owned by another team.
+The `pipeline serve` daemon handles manual pipeline triggers from `POST /api/v1/pipeline/ingest-embed` and `POST /api/v1/pipeline/cluster-label-score` (D22). It listens on two `pg_notify` channels and runs the requested group sequentially. It must be deployed as a singleton — it holds the DB lock rows that the API checks for concurrency control. Unlike `ingest serve`, it has no safety-net poll; triggers are fire-and-forget from the API side.
+
+The frontend lives in `frontend/` and is built with Bun + Vite. It is served separately; production hosting is owned by the deploy team.
 
 ## Modules
 
@@ -112,14 +115,21 @@ python -m pipeline.cli score
 
 ## API surface
 
-Three endpoints serve the dashboard's happy path. Authentication is handled by an upstream gateway (out of scope for this codebase).
+These endpoints serve the dashboard. Authentication is handled by an upstream gateway (out of scope for this codebase).
 
-| Method | Path                            | Purpose                                    |
-| ------ | ------------------------------- | ------------------------------------------ |
-| `GET`  | `/api/v1/clusters/morning`      | Top 10 clusters for Maulana's morning view |
-| `GET`  | `/api/v1/clusters/{cluster_id}` | Cluster detail with member articles        |
-| `GET`  | `/api/v1/clusters/deferred`     | Desk head's deferred-topics view           |
-| `GET`  | `/api/v1/health`                | DB connectivity check                      |
+| Method   | Path                            | Purpose                                    |
+| -------- | ------------------------------- | ------------------------------------------ |
+| `GET`    | `/api/v1/clusters/morning`      | Top 10 clusters for Maulana's morning view |
+| `GET`    | `/api/v1/clusters/{cluster_id}` | Cluster detail with member articles        |
+| `GET`    | `/api/v1/clusters/deferred`     | Desk head's deferred-topics view           |
+| `GET`    | `/api/v1/articles`              | Paginated list of all ingested articles    |
+| `GET`    | `/api/v1/sources`               | List all content sources                   |
+| `POST`   | `/api/v1/sources`               | Add a new RSS source                       |
+| `PATCH`  | `/api/v1/sources/{id}`          | Toggle a source on or off                  |
+| `DELETE` | `/api/v1/sources/{id}`          | Hard delete a source with no articles      |
+| `GET`    | `/api/v1/health`                | DB connectivity check                      |
+| `POST`   | `/api/v1/pipeline/ingest-embed`        | Manual trigger: ingest + embed (D22)       |
+| `POST`   | `/api/v1/pipeline/cluster-label-score` | Manual trigger: cluster + label + score (D22) |
 
 All cluster, article, and trend-signal endpoints are read-only. The `/api/v1/sources` endpoints are the only write surface (POST/PATCH/DELETE) — see `decisions.md` D19. POST triggers `pg_notify('rss_source_created', <id>)`; the running `serve` daemon (D20) consumes that channel and ingests the new feed within minutes, while the daily cron pipeline keeps running its full ingest+embed+cluster+label+score chain.
 
@@ -140,5 +150,5 @@ These exist or will exist for the product but are NOT implemented here:
 
 - **Authentication and identity.** Handled by an upstream gateway by another team.
 - **Production deployment infrastructure.** The Dockerfile and docker-compose.yml in this repo are for local development. Production orchestration is owned by the deploy team.
-- **Frontend.** Lives in `template-fe/`. The only contract is the JSON shape of the four API endpoints.
+- **Production hosting / serving config.** `bun run build` outputs static assets; the deploy team owns gateway, nginx, cache headers, and SPA fallback.
 - **Monitoring stack.** The application emits structured JSON logs to stdout. Log aggregation, dashboards, and alerting are operational concerns owned externally.

@@ -23,7 +23,9 @@ def compute_trend_velocity(
     normalized_interest = [
         min(max(score, 0.0), 100.0) / 100.0 for score in interest_scores if score is not None
     ]
-    trend_signal = sum(normalized_interest) / len(normalized_interest) if normalized_interest else 0.0
+    trend_signal = (
+        sum(normalized_interest) / len(normalized_interest) if normalized_interest else 0.0
+    )
 
     return round((article_signal * 0.6) + (trend_signal * 0.4), 4)
 
@@ -35,7 +37,9 @@ def _normalize_now(now: datetime | None) -> datetime:
 
 
 def _recency_weight(published_at: datetime, now: datetime) -> float:
-    normalized = published_at.astimezone(UTC).replace(tzinfo=None) if published_at.tzinfo else published_at
+    normalized = (
+        published_at.astimezone(UTC).replace(tzinfo=None) if published_at.tzinfo else published_at
+    )
     age_days = max((now - normalized).total_seconds() / 86400, 0.0)
     if age_days >= RECENCY_WINDOW_DAYS:
         return 0.0

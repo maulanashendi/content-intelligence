@@ -10,12 +10,12 @@ needed for correctness; spy tests verify the call was issued.
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from sqlalchemy import text as real_text
 from unittest.mock import patch
 
 import pytest
 from core.models import Article, ContentSource, SourceStatus, SourceType
 from httpx import AsyncClient
+from sqlalchemy import text as real_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -77,9 +77,7 @@ async def test_list_sources_returns_seeded_source(
 
 
 @pytest.mark.asyncio
-async def test_list_sources_ordered_by_name(
-    client: AsyncClient, session: AsyncSession
-) -> None:
+async def test_list_sources_ordered_by_name(client: AsyncClient, session: AsyncSession) -> None:
     await _seed_source(session, url="https://z.example.com/feed", name="Zzz")
     await _seed_source(session, url="https://a.example.com/feed", name="Aaa")
     resp = await client.get("/api/v1/sources")
@@ -186,9 +184,7 @@ async def test_create_disabled_source_skips_pg_notify(client: AsyncClient) -> No
 
 
 @pytest.mark.asyncio
-async def test_delete_source_returns_204(
-    client: AsyncClient, session: AsyncSession
-) -> None:
+async def test_delete_source_returns_204(client: AsyncClient, session: AsyncSession) -> None:
     source = await _seed_source(session, url="https://delete-me.example.com/feed")
     resp = await client.delete(f"/api/v1/sources/{source.id}")
     assert resp.status_code == 204
@@ -216,12 +212,8 @@ async def test_delete_source_409_when_has_articles(
 
 
 @pytest.mark.asyncio
-async def test_patch_source_updates_is_enabled(
-    client: AsyncClient, session: AsyncSession
-) -> None:
-    source = await _seed_source(
-        session, url="https://patch-me.example.com/feed", is_enabled=True
-    )
+async def test_patch_source_updates_is_enabled(client: AsyncClient, session: AsyncSession) -> None:
+    source = await _seed_source(session, url="https://patch-me.example.com/feed", is_enabled=True)
     resp = await client.patch(f"/api/v1/sources/{source.id}", json={"is_enabled": False})
     assert resp.status_code == 200
     assert resp.json()["is_enabled"] is False
@@ -299,7 +291,9 @@ async def test_status_and_last_fetched_at_round_trip(
     assert row["last_fetched_at"] is not None
     assert row["last_fetched_at"].endswith("Z"), row["last_fetched_at"]
     parsed = datetime.fromisoformat(row["last_fetched_at"].replace("Z", "+00:00"))
-    assert parsed.astimezone(UTC).replace(tzinfo=None, microsecond=0) == fetched_at.replace(microsecond=0)
+    assert parsed.astimezone(UTC).replace(tzinfo=None, microsecond=0) == fetched_at.replace(
+        microsecond=0
+    )
 
 
 @pytest.mark.asyncio
@@ -315,9 +309,7 @@ async def test_source_timestamps_carry_utc_z_suffix(
 
 
 @pytest.mark.asyncio
-async def test_internal_source_type_listed(
-    client: AsyncClient, session: AsyncSession
-) -> None:
+async def test_internal_source_type_listed(client: AsyncClient, session: AsyncSession) -> None:
     source = ContentSource(
         name="Tempo Internal",
         url="https://internal.example.com/feed",
@@ -356,12 +348,8 @@ async def test_create_source_pg_notify_failure_returns_201(client: AsyncClient) 
 
 
 @pytest.mark.asyncio
-async def test_patch_count_matches_list_count(
-    client: AsyncClient, session: AsyncSession
-) -> None:
-    source = await _seed_source(
-        session, url="https://consist.example.com/feed", name="Consist"
-    )
+async def test_patch_count_matches_list_count(client: AsyncClient, session: AsyncSession) -> None:
+    source = await _seed_source(session, url="https://consist.example.com/feed", name="Consist")
     now = datetime.now(UTC).replace(tzinfo=None)
     for i in range(3):
         a = Article(
@@ -375,8 +363,6 @@ async def test_patch_count_matches_list_count(
 
     list_resp = await client.get("/api/v1/sources")
     list_row = next(r for r in list_resp.json() if r["name"] == "Consist")
-    patch_resp = await client.patch(
-        f"/api/v1/sources/{source.id}", json={"is_enabled": True}
-    )
+    patch_resp = await client.patch(f"/api/v1/sources/{source.id}", json={"is_enabled": True})
     assert patch_resp.status_code == 200
     assert patch_resp.json()["article_count_24h"] == list_row["article_count_24h"] == 3

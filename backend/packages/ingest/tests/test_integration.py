@@ -12,13 +12,14 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import asyncpg
+import httpx
 import pytest
 from core.config import settings
 from core.db import get_session
-from core.models import Article
+from core.models import Article, ContentSource, SourceStatus, SourceType
+from ingest.rss import DEFAULT_HEADERS
 from ingest.runner import _run_once
 from sqlalchemy import select, text
-
 
 # ---------------------------------------------------------------------------
 # _run_once — full cycle with real DB, mocked HTTP
@@ -44,10 +45,10 @@ async def test_run_once_inserts_articles_into_db(rss_source, rss_feed_xml: str) 
 
     async with get_session() as session:
         rows = (
-            await session.execute(
-                select(Article).where(Article.source_id == rss_source.id)
-            )
-        ).scalars().all()
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
 
     assert len(rows) == 2
     assert {a.url for a in rows} == {
@@ -57,11 +58,10 @@ async def test_run_once_inserts_articles_into_db(rss_source, rss_feed_xml: str) 
 
 
 @pytest.mark.asyncio
-async def test_run_once_skips_blocked_source_does_not_insert(
-    rss_source, rss_feed_xml: str
-) -> None:
-    import ingest.runner as _runner
+async def test_run_once_skips_blocked_source_does_not_insert(rss_source, rss_feed_xml: str) -> None:
     from datetime import UTC, datetime, timedelta
+
+    import ingest.runner as _runner
 
     _runner._blocked_until[rss_source.id] = datetime.now(UTC) + timedelta(hours=1)
 
@@ -77,10 +77,10 @@ async def test_run_once_skips_blocked_source_does_not_insert(
 
     async with get_session() as session:
         rows = (
-            await session.execute(
-                select(Article).where(Article.source_id == rss_source.id)
-            )
-        ).scalars().all()
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
 
     assert len(rows) == 0
     _runner._blocked_until.clear()
@@ -196,11 +196,14 @@ async def test_runner_invalid_uuid_payload_logs_and_continues(caplog) -> None:
     async def _noop_listener() -> None:
         await _runner._shutdown.wait()
 
-    with patch("ingest.runner._run_once", _seed_run_once), \
-         patch("ingest.runner._listen_for_new_sources", _noop_listener), \
-         patch("ingest.runner._install_signal_handlers", lambda _e: None), \
-         patch("ingest.runner._fetch_one_source", _capture_fetch), \
-         caplog.at_level(logging.WARNING, logger="ingest.runner"):
+    with (
+        patch("ingest.runner._run_once", _seed_run_once),
+        patch("ingest.runner._listen_for_new_sources", _noop_listener),
+        patch("ingest.runner._install_signal_handlers", lambda _e: None),
+        patch("ingest.runner._fetch_one_source", _capture_fetch),
+        caplog.at_level(logging.WARNING, logger="ingest.runner"),
+    ):
+
         async def _stop_soon():
             await asyncio.sleep(0.2)
             _runner._shutdown.set()
@@ -209,3 +212,176 @@ async def test_runner_invalid_uuid_payload_logs_and_continues(caplog) -> None:
 
     assert "invalid UUID" in caplog.text
     assert fetch_calls == []
+
+
+# ---------------------------------------------------------------------------
+# _run_once — real DB + real httpx.AsyncClient (MockTransport)
+#
+# DOD: articles actually land in `article` table and source status is updated.
+# These tests exercise fetch_and_store_source without any mocking of that
+# function so a regression in the full stack is caught immediately.
+# ---------------------------------------------------------------------------
+
+
+def _make_transport(rss_feed_xml: str, status: int = 200) -> httpx.MockTransport:
+    def _handler(request: httpx.Request) -> httpx.Response:
+        if status == 403:
+            return httpx.Response(403)
+        if status == 429:
+            return httpx.Response(429)
+        return httpx.Response(
+            status,
+            text=rss_feed_xml,
+            headers={"content-type": "application/rss+xml"},
+        )
+
+    return httpx.MockTransport(_handler)
+
+
+def _real_client_ctx(transport: httpx.MockTransport):
+    client = httpx.AsyncClient(
+        transport=transport,
+        headers=DEFAULT_HEADERS,
+        follow_redirects=True,
+    )
+
+    class _Ctx:
+        async def __aenter__(self):
+            return client
+
+        async def __aexit__(self, *_):
+            await client.aclose()
+
+    return _Ctx()
+
+
+@pytest.mark.asyncio
+async def test_run_once_articles_inserted_and_source_active(
+    rss_source: ContentSource, rss_feed_xml: str
+) -> None:
+    transport = _make_transport(rss_feed_xml, status=200)
+
+    with patch("ingest.runner.make_http_client", return_value=_real_client_ctx(transport)):
+        await _run_once()
+
+    async with get_session() as session:
+        source = await session.get(ContentSource, rss_source.id)
+        rows = (
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
+
+    assert len(rows) == 2
+    assert {a.url for a in rows} == {
+        "https://example.com/article-one",
+        "https://example.com/article-two",
+    }
+    assert source is not None
+    assert source.status == SourceStatus.active
+    assert source.last_fetched_at is not None
+
+
+@pytest.mark.asyncio
+async def test_run_once_second_call_inserts_zero_duplicates(
+    rss_source: ContentSource, rss_feed_xml: str
+) -> None:
+    for _ in range(2):
+        transport = _make_transport(rss_feed_xml, status=200)
+        with patch("ingest.runner.make_http_client", return_value=_real_client_ctx(transport)):
+            await _run_once()
+
+    async with get_session() as session:
+        rows = (
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
+
+    assert len(rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_run_once_sets_blocked_status_in_db_on_403(
+    rss_source: ContentSource, rss_feed_xml: str
+) -> None:
+    transport = _make_transport(rss_feed_xml, status=403)
+
+    with patch("ingest.runner.make_http_client", return_value=_real_client_ctx(transport)):
+        await _run_once()
+
+    async with get_session() as session:
+        source = await session.get(ContentSource, rss_source.id)
+
+    assert source is not None
+    assert source.status == SourceStatus.blocked
+
+
+@pytest.mark.asyncio
+async def test_run_once_sets_error_status_in_db_on_network_failure(
+    rss_source: ContentSource,
+) -> None:
+    def _failing_handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("unreachable")
+
+    transport = httpx.MockTransport(_failing_handler)
+
+    with patch("ingest.runner.make_http_client", return_value=_real_client_ctx(transport)):
+        await _run_once()
+
+    async with get_session() as session:
+        source = await session.get(ContentSource, rss_source.id)
+
+    assert source is not None
+    assert source.status == SourceStatus.error
+
+
+@pytest.mark.asyncio
+async def test_run_once_continues_after_one_source_fails_and_inserts_good_articles(
+    rss_feed_xml: str,
+) -> None:
+    good = ContentSource(
+        id=uuid.uuid4(),
+        name="Good",
+        url="https://good.example.com/feed",
+        source_type=SourceType.rss,
+        is_enabled=True,
+    )
+    bad = ContentSource(
+        id=uuid.uuid4(),
+        name="Bad",
+        url="https://bad.example.com/feed",
+        source_type=SourceType.rss,
+        is_enabled=True,
+    )
+    async with get_session() as session:
+        session.add_all([good, bad])
+        await session.commit()
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        if "bad" in str(request.url):
+            return httpx.Response(403)
+        return httpx.Response(
+            200,
+            text=rss_feed_xml,
+            headers={"content-type": "application/rss+xml"},
+        )
+
+    transport = httpx.MockTransport(_handler)
+    with patch("ingest.runner.make_http_client", return_value=_real_client_ctx(transport)):
+        await _run_once()
+
+    async with get_session() as session:
+        good_src = await session.get(ContentSource, good.id)
+        bad_src = await session.get(ContentSource, bad.id)
+        rows = (
+            (await session.execute(select(Article).where(Article.source_id == good.id)))
+            .scalars()
+            .all()
+        )
+
+    assert good_src is not None
+    assert good_src.status == SourceStatus.active
+    assert bad_src is not None
+    assert bad_src.status == SourceStatus.blocked
+    assert len(rows) == 2

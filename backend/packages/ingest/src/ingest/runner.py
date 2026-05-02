@@ -11,8 +11,9 @@ import asyncpg
 from core.config import settings
 from core.db import get_session
 from core.models import ContentSource, SourceStatus, SourceType
-from ingest.rss import BlockedError, _set_source_status, fetch_and_store_source, make_http_client
 from sqlalchemy import select
+
+from ingest.rss import BlockedError, _set_source_status, fetch_and_store_source, make_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +73,11 @@ async def _listen_for_new_sources() -> None:
             return
         except Exception:
             backoff = RECONNECT_BACKOFF_BASE + random.uniform(0, RECONNECT_BACKOFF_BASE)
-            logger.exception(
-                "listener connection lost, reconnecting in %.1fs", backoff
-            )
+            logger.exception("listener connection lost, reconnecting in %.1fs", backoff)
             try:
                 await asyncio.wait_for(shutdown.wait(), timeout=backoff)
                 return
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
         finally:
             if conn is not None:
@@ -129,8 +128,10 @@ async def _run_once() -> None:
             logger.info("source=%s ingested %d articles", source_name, count)
         except BlockedError:
             _mark_blocked(source_id, source_name)
+            await _set_source_status(source_id, SourceStatus.blocked)
         except Exception:
             logger.exception("source=%s fetch failed", source_name)
+            await _set_source_status(source_id, SourceStatus.error)
 
     async with make_http_client() as client:
         await asyncio.gather(*[_handle(*s) for s in active])
@@ -176,12 +177,8 @@ async def run_loop() -> None:
                     asyncio.create_task(_fetch_one_source(source_id))
                     continue
                 remaining = deadline - loop.time()
-                try:
-                    await asyncio.wait_for(
-                        shutdown.wait(), timeout=min(1.0, remaining)
-                    )
-                except asyncio.TimeoutError:
-                    pass
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(shutdown.wait(), timeout=min(1.0, remaining))
     finally:
         listener_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
