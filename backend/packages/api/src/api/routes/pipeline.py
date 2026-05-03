@@ -12,9 +12,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
-_GROUP_INGEST_EMBED = "ingest_embed"
 _GROUP_CLUSTER_LABEL_SCORE = "cluster_label_score"
-_CHANNEL_INGEST_EMBED = "pipeline_ingest_embed_requested"
 _CHANNEL_CLUSTER_LABEL_SCORE = "pipeline_cluster_label_score_requested"
 
 
@@ -25,8 +23,6 @@ class PipelineTriggerResult(BaseModel):
 
 
 class PipelineStatusResponse(BaseModel):
-    # locked_at timestamp when running, null when idle
-    ingest_embed: UtcDateTime | None
     cluster_label_score: UtcDateTime | None
 
 
@@ -49,21 +45,24 @@ async def _trigger(group: str, channel: str, session: SessionDep) -> PipelineTri
     return PipelineTriggerResult(group=group, channel=channel, notified=notified)
 
 
-@router.get("/status", response_model=PipelineStatusResponse)
+@router.get(
+    "/status",
+    response_model=PipelineStatusResponse,
+    summary="Pipeline group lock state",
+)
 async def pipeline_status(session: SessionDep) -> PipelineStatusResponse:
     locks = (await session.execute(select(PipelineGroupLock))).scalars().all()
     lock_map = {lock.group_name: lock.locked_at for lock in locks}
     return PipelineStatusResponse(
-        ingest_embed=lock_map.get(_GROUP_INGEST_EMBED),
         cluster_label_score=lock_map.get(_GROUP_CLUSTER_LABEL_SCORE),
     )
 
 
-@router.post("/ingest-embed", status_code=202, response_model=PipelineTriggerResult)
-async def trigger_ingest_embed(session: SessionDep) -> PipelineTriggerResult:
-    return await _trigger(_GROUP_INGEST_EMBED, _CHANNEL_INGEST_EMBED, session)
-
-
-@router.post("/cluster-label-score", status_code=202, response_model=PipelineTriggerResult)
+@router.post(
+    "/cluster-label-score",
+    status_code=202,
+    response_model=PipelineTriggerResult,
+    summary="Manually trigger cluster + label (score is currently disabled)",
+)
 async def trigger_cluster_label_score(session: SessionDep) -> PipelineTriggerResult:
     return await _trigger(_GROUP_CLUSTER_LABEL_SCORE, _CHANNEL_CLUSTER_LABEL_SCORE, session)

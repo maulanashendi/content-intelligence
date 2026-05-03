@@ -158,6 +158,8 @@ The user initially considered the simpler "two nullable columns on article" appr
 
 ## D9. Cron-driven pipeline, no queue system
 
+> **Status: Superseded by D24 (2026-05-03).** OS-level `cron` has been replaced by an in-process `asyncio` scheduler inside the merged `pipeline-daemon`. The "no queue system" stance still holds — see D24 for the current orchestration model. Kept for historical context.
+
 **Context.** The daily batch pipeline runs once at 06:00 WIB and processes the day's data sequentially.
 
 **Options considered.**
@@ -357,11 +359,14 @@ A code generator was considered but rejected for MVP. The token surface is small
 
 **Rationale.** A separate admin service is overkill for one persona on one VPS. The CLI-only path forces a deploy on every editor request, which defeats the purpose of "internal dashboard". Constraining writes to `content_source` keeps the analytical surface (articles, clusters, embeddings) immutable from the API, which preserves the auditability of pipeline outputs.
 
-**Implication.** `docs/api_contract.md` and `docs/constraints.md` no longer say "strictly read-only" without qualification. The constraint becomes: writes are permitted only against `content_source`. Future write requests against any other table require a new decision entry. Auth is still upstream — the API trusts callers, so the upstream gateway must restrict who can hit the source endpoints.
+**Implication.** `docs/constraints.md` no longer says "strictly read-only" without qualification. The constraint becomes: writes are permitted only against `content_source`. Future write requests against any other table require a new decision entry. Auth is still upstream — the API trusts callers, so the upstream gateway must restrict who can hit the source endpoints.
 
 ---
 
 ## D20. Reactive ingest via `pg_notify` — alongside the daily cron, not replacing it
+
+> **Status: Partially superseded by D24 (2026-05-03).** The reactive trigger on `rss_source_created` and the safety-net poll loop are still the model. The standalone `ingest serve` daemon has been merged into `pipeline-daemon`; both concerns now live in one supervised process. The `pg_notify` channel and behavior are unchanged.
+
 
 **Context.** D9 says the pipeline is cron-driven once a day. But under D19, an editor can add a new feed at 11:00 and would otherwise wait until 06:00 the next morning before any article from that feed appears. The product target (decisions in 15 minutes) breaks down.
 
@@ -398,6 +403,8 @@ A code generator was considered but rejected for MVP. The token surface is small
 
 ## D22. Manual pipeline trigger endpoints
 
+> **Status: Partially superseded by D24 (2026-05-03).** The `cluster-label-score` trigger endpoint and its `pg_notify` channel are retained. The `ingest-embed` trigger endpoint has been removed — ingest+embed is now fully reactive via the daemon's poll loop and the `rss_source_created` channel. The single `pipeline-daemon` (formerly `pipeline serve`) has absorbed `ingest serve` per D24.
+
 **Context.** The daily cron at 06:00 WIB is the primary pipeline driver (D9). Two operational needs arose that cron cannot cover: (1) after adding a new source mid-day via D19/D20, the embedding and clustering steps still run only the next morning — articles from the new source are not clustered until then; (2) engineers debugging a clustering or labeling issue need to re-run a specific phase without waiting for the next cron window or running the full pipeline from the CLI.
 
 **Options considered.**
@@ -416,3 +423,83 @@ A code generator was considered but rejected for MVP. The token surface is small
 - The write-side constraint from D19 is extended: the API may now also send pipeline trigger notifications. No data table other than `content_source` and the lock mechanism is written via the API.
 - `pg_notify` is best-effort: if the daemon is not running, the trigger is silently lost. There is no safety-net poll — this is intentional for a manual trigger (the caller sees `notified: true/false` in the response and can retry).
 - Future pipeline groups must declare their own channel and be added to both this decision and the API contract.
+
+---
+
+## D23. Hardening track via four targeted SOPs (post-MVP)
+
+**Context.** MVP is shipped. Post-MVP work is hardening (production-grade error handling, observability, idempotency, container hygiene). Until now, Docker rules lived in one sentence in `tech-stack.md` and one sentence in this file (D11), logging conventions lived only in `core/logging.py`, runtime supervision was undocumented, and "harden feature X" had no rubric. AI agents and humans had no reproducible standard.
+
+**Options considered.**
+- A single monolithic `hardening.md` covering Docker, logging, ops, and the checklist together.
+- Inline expansions of `architecture.md`, `tech-stack.md`, and `conventions.md` to absorb the new content.
+- A separate ops/ subfolder with its own README.
+- Four targeted SOPs at the same level as `review-sop.md`, listed in the required reading order.
+
+**Decision.** Four targeted SOPs in `docs/`, mirroring the structure of `review-sop.md`:
+
+- `docs/docker-sop.md` — image build, layer cache, runtime hardening, compose conventions.
+- `docs/logging-sop.md` — JSON logging contract, levels, structured fields, request-ID propagation.
+- `docs/operations-sop.md` — running the stack in Docker, daemon supervision, recovery procedures.
+- `docs/hardening-sop.md` — checklist for "harden feature X" tasks (boundaries, idempotency, observability, failure modes, resource bounds, Docker, tests).
+
+All four are added to the required reading list in `docs/README.md`. Two new hard rules are added to `CLAUDE.md`: local dev runs in Docker; all logs go through `core.logging.configure_logging()`.
+
+**Rationale.** Each SOP governs a distinct concern with its own audience and review trigger. A monolithic hardening doc would either be unreadable (one of every four sections matters per change) or under-specified (compressing four standards into one). Inline expansion would bloat `architecture.md` and `tech-stack.md` past their purpose; those docs answer "what is the system" and "what libraries did we choose", not "how do you operate it". A subfolder hides the docs from the canonical reading list, which defeats the goal of making hardening rules first-class citizens that AI agents must read.
+
+The `review-sop.md` precedent already proved that a focused, opinionated, AI-and-human-targeted SOP changes contributor behavior more than scattered conventions. Replicating that shape four times preserves the proven pattern.
+
+The two new hard rules in `CLAUDE.md` are deliberately scoped: Docker-only dev (parity) and logging-via-core (consistency). They do not mandate the full SOP content — they ensure the SOPs are surfaced on every session and the most common drift is prevented at the rule level.
+
+**Implication.**
+- Existing one-line mentions of Docker and logging in `architecture.md` and `tech-stack.md` are replaced with cross-refs; the SOPs are the single source of truth.
+- Open hardening tasks (as of 2026-05) — each is the source of truth in its respective SOP, not duplicated here:
+  - API logging drift — see `docs/logging-sop.md` §"Known drift to fix".
+  - Frontend `Dockerfile` `prod` target — see `docs/docker-sop.md` §"Frontend Dockerfile (known issue)".
+  - Backend runtime stages running as root — see `docs/docker-sop.md` §"Required runtime hardening".
+  - Missing healthchecks on `api`, `pipeline-daemon` — see `docs/docker-sop.md` §"Healthchecks". (D24 removed `ingest-worker`.)
+- New hardening PRs follow `docs/hardening-sop.md`: title `harden(<module>): ...`, body includes the seven-row checklist table.
+- Future SOPs (security, performance) are added at the same `docs/` level if and only if they meet the same bar: distinct concern, distinct audience, distinct review trigger. Adding a fifth or sixth SOP without that justification is itself a scope expansion to question.
+
+---
+
+## D24. Replace OS cron with a daemon-internal scheduler; merge ingest serve into pipeline-daemon; disable scoring; tighten cluster window
+
+**Context.** D9 chose OS-level `cron` to fire `python -m pipeline.cli run-daily` once at 06:00 WIB. Two pressures broke that model:
+
+1. The daily cron was the only thing driving ingest+embed at scale, but D20 had already added a reactive `ingest serve` daemon that polled continuously and fetched new sources on demand. The cron's ingest pass became redundant work that ran 23 hours late.
+2. Editors needed to re-cluster mid-day after correcting source data or adding a feed. D22 added two manual API endpoints (`/pipeline/ingest-embed`, `/pipeline/cluster-label-score`), but the ingest-embed trigger duplicated what the reactive daemon was already doing.
+
+Operational complaints crystallized the issue: cron at 06:00 was "too slow, doesn't answer the actual question, and is limited to once a day". The 30-day cluster window was producing topics that no longer matched the editorial cycle. Scoring outputs (velocity, novelty, coverage) were not yet trusted enough to surface to editors.
+
+**Options considered.**
+- Keep OS cron + reactive ingest serve as-is and just tighten the cluster window. Lowest churn but does not fix the freshness or the duplicated ingest paths.
+- Pure-reactive cluster trigger (cluster fires whenever new embeddings arrive). Removes scheduling but causes unstable cluster IDs visible to editors mid-read; cluster+label is ~5 min and would fire dozens of times per day.
+- Stale-threshold poller (daemon checks `cluster_run.created_at` and fires when older than N hours). Self-healing if the daemon restarts, slightly more code.
+- In-process `asyncio` scheduler inside `pipeline-daemon`, fixed daily tick at 06:00 WIB, with the existing manual trigger endpoint preserved for on-demand re-cluster.
+
+**Decision.**
+1. Drop OS-level `cron`. The daily 06:00 WIB cluster+label run is fired by an `asyncio` scheduler task inside `pipeline-daemon`. The same `pg_notify` channel (`pipeline_cluster_label_score_requested`) is shared by the scheduler and the manual API trigger; the runner sees one execution path.
+2. Merge `ingest serve` into `pipeline-daemon`. The polled ingest loop (D20's `_run_once` + `_listen_for_new_sources`) moves into the same Python process that owns the cluster scheduler. After each ingest cycle the daemon invokes `embedding.pipeline.run` directly, not via `pg_notify` — the embed step is no longer addressable from outside.
+3. Remove `POST /api/v1/pipeline/ingest-embed`. Ingest+embed is fully reactive and has no manual trigger. Drop the `pipeline_ingest_embed_requested` and `pipeline_embed_requested` channels.
+4. Keep `POST /api/v1/pipeline/cluster-label-score`. Endpoint name is preserved for FE compatibility; inside the daemon, the `score` step is skipped (see #5).
+5. Disable the `scoring` step. The daemon's run path no longer calls `scoring.pipeline.run`. The package, ORM models, `cluster_insight` table, and CLI entry remain untouched; existing rows are kept for reference. Re-enabling requires a future decision entry.
+6. Tighten `clustering_window_days` from 30 to 7. Topics now reflect the current week.
+
+**Rationale.** The architecture had already drifted to a daemon-driven model in practice — D20 + D22 + the embed-after-ingest commit (`ecb3d32`) covered ~80% of the work. Cron was the leftover ceremony. Pulling the schedule into the daemon removes one operational surface (host cron / systemd timer), keeps timezone handling inside Python (`settings.timezone`), and lets the same `pg_notify` channel serve both scheduled and manual runs.
+
+A pure-reactive cluster trigger was rejected because cluster+label takes ~5 minutes and would fire on every ingest tick, producing unstable cluster IDs that editors actively reference during the morning. A stale-threshold poller is functionally equivalent to the chosen scheduler at the chosen cadence (daily) but adds a config dimension (the threshold) that has no current use case. Plain `asyncio` scheduling is the smallest viable mechanism; APScheduler / Prefect / Dagster were rejected per the existing constraint against standalone schedulers.
+
+Merging `ingest serve` into `pipeline-daemon` increases the daemon's image size (it already imported all ML modules under D22, so the marginal cost is httpx/feedparser deps) but reduces supervised processes from three to two. Single-replica was already mandatory; consolidation does not change that. Docker layer cache means rebuilds remain cheap when source-only changes happen.
+
+Disabling scoring acknowledges that velocity/novelty/coverage outputs were not landing usefully in the dashboard. Keeping the package and table around (rather than dropping them) preserves the option to re-enable after model tuning without a migration.
+
+**Implication.**
+- `python -m pipeline.cli serve` is the single long-running batch process. `python -m ingest.cli serve` is removed from the deployed surface; the CLI command may stay as-is for ad-hoc operator use, but no compose service runs it.
+- The `pipeline-daemon` compose service is the canonical name in both `docker-compose.yml` and `docker-compose.prod.yml`. The `ingest-worker` service is removed.
+- `runner.py` in `backend/packages/pipeline/` absorbs the ingest poll loop, the `rss_source_created` listener, and the scheduler task.
+- `core.config.settings.clustering_window_days` defaults to `7`. Existing `.env` files that set it explicitly to `30` should be updated.
+- The OpenAPI surface drops `POST /api/v1/pipeline/ingest-embed`; FE codegen must be re-run. `GET /api/v1/pipeline/status` no longer exposes the `ingest_embed` field.
+- Re-enabling `scoring` requires a new decision entry naming the criteria that justified the toggle.
+- Schedule cadence (`06:00`) and timezone (`Asia/Jakarta`) are read from `settings`. Changing the schedule does not require redeployment of new code, only an env reload.
+- D9 is marked superseded; D20 and D22 carry partial-supersession notes pointing here.

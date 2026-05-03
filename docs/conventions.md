@@ -141,30 +141,28 @@ alembic upgrade head
 
 Never edit `schema.dbml` directly to add new fields during development. `schema.dbml` documents the schema; `models.py` is the source of truth that Alembic reads.
 
-## uv command cheat sheet
+## Backend commands
 
-```bash
-# Install workspace dependencies
-uv sync
+Local dev runs in Docker — see `docs/operations-sop.md` §Quickstart and §Daily commands. Host `uv run` is allowed only for unit tests and IDE integration. Do not duplicate the command list here.
 
-# Add a runtime dependency to a specific module
-uv add --package ingest httpx
+## API endpoints
 
-# Add a dev-only dependency to the workspace
-uv add --dev pytest-mock
+The API contract is FastAPI's `/openapi.json` (live at `/docs`). There is no separate Markdown contract. Every endpoint change updates code in the same commit:
 
-# Run a CLI defined in a module
-uv run python -m ingest.cli run-rss
+1. Pydantic request/response models (in `packages/api/src/api/schemas/` or per-route file).
+2. `response_model=` and explicit `status_code=` on the route decorator.
+3. One-line `summary=` describing the endpoint's purpose.
+4. A short prose comment above the route only when the *why* is non-obvious from the schema (e.g., "returns last 30 days, frozen in v1").
 
-# Run tests for one module
-uv run pytest packages/ingest/tests/
+Cross-cutting rules:
 
-# Run the API locally
-uv run uvicorn api.main:app --reload --app-dir packages/api/src
+- **Error envelope.** Errors return `{ "detail": "<message>", "request_id": "<uuid>" }` with the appropriate 4xx/5xx status. Do not invent per-endpoint error shapes.
+- **Date / time on the wire.** Timestamps are ISO-8601 UTC with the `Z` suffix. Use `api.types.UtcDateTime` so Pydantic emits `Z`, not `+00:00`.
+- **Pagination.** List endpoints accept `?page=` and `?page_size=` query params. Default page size is endpoint-specific; declare it in the Pydantic model.
+- **Versioning.** All routes live under `/api/v1`. Breaking changes require a new prefix (`/api/v2`) and a decision entry; do not silently change response shapes.
+- **Read-only by default.** Writes are restricted to the surfaces named in `docs/constraints.md` §Architectural don'ts (`/sources` CRUD, `/pipeline/*` triggers). Adding a new write endpoint requires a decision entry.
 
-# Run the full daily pipeline
-uv run python -m pipeline.cli run-daily
-```
+The frontend regenerates `@ei-fe/api/src/generated.ts` from `/openapi.json` (D16, `frontend.md` §Codegen). A schema change with no FE codegen update is incomplete.
 
 ## Datetimes
 

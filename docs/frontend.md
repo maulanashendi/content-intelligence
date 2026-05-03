@@ -133,19 +133,7 @@ Only add a Radix primitive when its corresponding shadcn component is actually u
 
 ### Rejected
 
-| Rejected | Reason |
-|----------|--------|
-| Next.js | No SSR/SEO/auth need at MVP. Migration path documented in §15 if requirements change. |
-| pnpm / npm | Bun's workspace and package manager are sufficient and faster. One tool, less to maintain. |
-| Vitest / Jest | `bun test` covers the same surface for this app. Fall back only if React Testing Library compatibility breaks. |
-| Vanilla CSS / CSS Modules / styled-components | Tailwind + shadcn is the modern React baseline and covers all needs without two parallel systems. |
-| Storybook | One desk, one engineer, ~12 components. Visual review via the dev server is sufficient. |
-| Redux / Zustand / Jotai / Context for server state | TanStack Query owns server cache. Local UI state uses `useState`. |
-| react-hook-form / Formik | The only write surface (source creation, D19) is a small controlled form; adding a form library would be over-engineering for two fields. |
-| Recharts / Chart.js / D3 | Not needed for the 3 MVP routes. Deferred until a viz feature is added to PRD. |
-| `axios` / `ky` / `wretch` | Native `fetch` plus a small wrapper covers our needs. One less dependency. |
-| Network visualization libraries (Sigma.js, Cytoscape, react-force-graph, etc.) | Out of MVP scope. Will be evaluated when network viz is added to `prd.md`. |
-| `i18next` / `react-intl` | Single language (Bahasa Indonesia). Strings hard-coded until otherwise. |
+What was considered and rejected lives in `constraints.md` §"Architectural don'ts (frontend)" (the "do not introduce" list) and `decisions.md` D12–D18 (the rationale). Do not duplicate here.
 
 ## Naming
 
@@ -279,7 +267,7 @@ A single convention applied across all routes, implemented via components in `@e
 
 All helpers set `timeZone: "Asia/Jakarta"` and locale `id-ID`. Components MUST NOT call `new Date(iso).toLocaleString(...)` inline — duplicate timezone configuration drifts and the WIB defaults get lost. The only legitimate inline use is for "now" indicators (`new Date()` representing the user's current wall-clock moment), and those still need `timeZone: "Asia/Jakarta"`.
 
-The wire format from the API is ISO-8601 UTC with the `Z` suffix (see `api_contract.md` §2 "Date / time"). The helpers also tolerate strings without an explicit timezone by treating them as UTC; this exists as a safety net but should not be relied upon — every API endpoint must use `api.types.UtcDateTime` to emit `Z`-suffixed strings.
+The wire format from the API is ISO-8601 UTC with the `Z` suffix — see `conventions.md` §API endpoints. The helpers tolerate strings without an explicit timezone by treating them as UTC; this is a safety net, not a contract.
 
 ## Styling & design system
 
@@ -425,48 +413,17 @@ These exist or will exist for the product but are NOT implemented in `frontend/`
 
 - **Authentication and identity.** Handled by the upstream gateway (`decisions.md` D10).
 - **Production deployment infrastructure.** Static assets are output; serving them is the deploy team's concern.
-- **Backend.** Lives in `backend/`. The contract is the JSON shape of the API endpoints documented in `api_contract.md`.
+- **Backend.** Lives in `backend/`. The contract is FastAPI's `/openapi.json` — see `conventions.md` §API endpoints.
 - **Monitoring stack.** Browser-side errors and analytics are not collected in MVP. If they become a requirement, evaluate Sentry or equivalent at that point.
 - **Internal article performance metrics in any UI form.** `constraints.md` is authoritative — never display GSC clicks, impressions, CTR, or position.
 
 ## Out of MVP scope
 
-Deferred until added to `prd.md` or `decisions.md`:
-
-- Charts of any kind beyond the D3 force graph (no general charting library is installed).
-- Manual claim or dismiss actions on clusters (PRD §6).
-- Cluster lineage / time-series views (PRD §6).
-- Push notifications, in-app notifications, toast streams.
-- Internationalization. Strings are Bahasa Indonesia, hard-coded.
-- Theme switching. One palette, light mode, lock.
-- User preferences, saved filters, dashboards. No persistence layer beyond TanStack Query cache.
-- Storybook or any component-isolation environment.
-
-If a feature request implies any of the above, surface the conflict with `constraints.md` and `prd.md` §6 before implementing.
+The deferred-feature list lives in `prd.md` §6 and `constraints.md` (frontend section). Do not duplicate here. If a request implies a deferred feature, surface the conflict before implementing.
 
 ## Migration from `template-fe/`
 
-`template-fe/` is the original prototype: HTML + UMD React + Babel-standalone. It is the visual reference for the production FE but not the source of any production code.
-
-Migration steps:
-
-1. Bootstrap `frontend/` workspace (this document is the spec).
-2. Port `template-fe/styles.css` tokens (colors, spacing, typography) into `@ei-fe/core/src/tokens.ts` and `@ei-fe/app/src/styles/globals.css`. Discard the rest of `styles.css`.
-3. Port the `Sidebar`, `StatusBar`, and page-head layout from `template-fe/components.jsx` into `@ei-fe/ui/src/layout/`.
-4. Reproduce the `page-dashboard.jsx` visual in `@ei-fe/features/morning/`.
-5. Reproduce the `page-bucket.jsx` visual in `@ei-fe/features/cluster-detail/`.
-6. Wire routes in `@ei-fe/app/`.
-8. Connect to live backend, validate end-to-end.
-9. **Delete `template-fe/`.** Update `docs/README.md` to remove references.
-
-The following prototype pages are NOT ported because they correspond to features deferred per `prd.md` §6:
-
-- `page-keywords.jsx`
-- `page-buckets.jsx`
-- `page-performance.jsx`
-- `page-desk.jsx`
-- `page-queue.jsx`
-- `tweaks-panel.jsx`
+`template-fe/` is the visual reference prototype. It is read-only and will be deleted per `decisions.md` D18 once `@ei-fe/app` reproduces the three MVP views. The prototype pages that map to deferred PRD §6 features are not ported.
 
 ## Forward-compat with Next.js
 
