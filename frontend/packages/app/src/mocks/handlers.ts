@@ -144,4 +144,25 @@ export const handlers = [
     return HttpResponse.json({ ...cluster, members: generateMembers(cluster, count) })
   }),
   http.get(`${BASE}/health`, () => HttpResponse.json({ status: "ok", db: true })),
+  http.get(`${BASE}/trend-signals/latest`, ({ request }) => {
+    const url = new URL(request.url)
+    const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "10", 10), 50)
+    const now = new Date().toISOString()
+    const keywords = [
+      "Kenaikan Harga BBM", "Sidang MK Pilkada", "Korupsi Dana Desa",
+      "PPRT Pengesahan", "Prabowo Xi Jinping", "BPJS Iuran Baru",
+      "Karhutla Kalbar", "Startup PHK", "Rupiah Melemah", "CPNS 2025",
+    ]
+    const signals = keywords.slice(0, limit).map((keyword, i) => ({
+      id: crypto.randomUUID(),
+      keyword,
+      interest_score: Math.round(94 - i * 6.2),
+      captured_at: now,
+      article_count: Math.max(5, 25 - i * 2),
+    }))
+    return HttpResponse.json(signals)
+  }),
+  http.get(`${BASE}/pipeline/status`, () =>
+    HttpResponse.json({ ingest_embed: null, cluster_label_score: null }),
+  ),
 ]

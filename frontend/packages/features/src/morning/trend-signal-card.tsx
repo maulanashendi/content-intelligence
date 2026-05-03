@@ -1,22 +1,11 @@
+import { useTrendSignals } from "@ei-fe/api"
+import type { TrendSignal } from "@ei-fe/api"
 import { formatTime } from "@ei-fe/core"
-
-/* Dummy data matching TrendSignal schema: keyword, interest_score, region, captured_at */
-const TREND_SIGNALS = [
-  { keyword: "Kenaikan Harga BBM", interest_score: 94, captured_at: "2025-04-30T06:00:00Z", article_count: 23 },
-  { keyword: "Sidang MK Pilkada", interest_score: 87, captured_at: "2025-04-30T06:00:00Z", article_count: 18 },
-  { keyword: "Korupsi Dana Desa", interest_score: 81, captured_at: "2025-04-30T06:00:00Z", article_count: 31 },
-  { keyword: "PPRT Pengesahan", interest_score: 76, captured_at: "2025-04-30T06:00:00Z", article_count: 12 },
-  { keyword: "Prabowo Xi Jinping", interest_score: 68, captured_at: "2025-04-30T06:00:00Z", article_count: 9 },
-  { keyword: "BPJS Iuran Baru", interest_score: 61, captured_at: "2025-04-30T06:00:00Z", article_count: 15 },
-  { keyword: "Karhutla Kalbar", interest_score: 55, captured_at: "2025-04-30T06:00:00Z", article_count: 7 },
-  { keyword: "Startup PHK", interest_score: 48, captured_at: "2025-04-30T06:00:00Z", article_count: 20 },
-  { keyword: "Rupiah Melemah", interest_score: 41, captured_at: "2025-04-30T06:00:00Z", article_count: 11 },
-  { keyword: "CPNS 2025", interest_score: 34, captured_at: "2025-04-30T06:00:00Z", article_count: 8 },
-]
 
 type Flag = "rising" | "new" | "fading" | null
 
-function getFlag(score: number, rank: number): Flag {
+function getFlag(score: number | null, rank: number): Flag {
+  if (score === null) return null
   if (rank <= 2 && score >= 80) return "rising"
   if (rank <= 4 && score >= 60) return "new"
   if (score < 40) return "fading"
@@ -39,38 +28,59 @@ function formatCaptured(iso: string): string {
   return formatTime(iso) + " wib"
 }
 
-export function TrendSignalCard() {
-  const captured = TREND_SIGNALS[0] ? formatCaptured(TREND_SIGNALS[0].captured_at) : "—"
+function TrendRow({ signal, rank }: { signal: TrendSignal; rank: number }) {
+  const flag = getFlag(signal.interest_score, rank)
+  return (
+    <div className="kw-row">
+      <span className="kw-rank">{String(rank).padStart(2, "0")}</span>
+      <div>
+        <div className="kw-name">{signal.keyword}</div>
+        <div className="kw-meta">
+          interest {signal.interest_score ?? "—"} · {signal.article_count} art
+        </div>
+      </div>
+      <div>
+        {flag ? (
+          <span className={FLAG_CLASS[flag]}>{FLAG_LABEL[flag]}</span>
+        ) : (
+          <span />
+        )}
+      </div>
+      <span className="kw-score">{signal.interest_score ?? "—"}</span>
+    </div>
+  )
+}
+
+export function TrendSignalCard({ sticky = false }: { sticky?: boolean }) {
+  const { data, isLoading, isError } = useTrendSignals(10)
+
+  const captured = data?.[0] ? formatCaptured(data[0].captured_at) : "—"
 
   return (
-    <div className="card" style={{ height: "fit-content" }}>
+    <div className="card" style={{ height: "fit-content", ...(sticky && { position: "sticky", top: 20 }) }}>
       <div className="card-head">
         <span className="card-title">Trend signals</span>
         <span className="card-meta">{captured} · Google Trends ID</span>
       </div>
       <div>
-        {TREND_SIGNALS.map((s, i) => {
-          const flag = getFlag(s.interest_score, i + 1)
-          return (
-            <div key={s.keyword} className="kw-row">
-              <span className="kw-rank">{String(i + 1).padStart(2, "0")}</span>
-              <div>
-                <div className="kw-name">{s.keyword}</div>
-                <div className="kw-meta">
-                  interest {s.interest_score} · {s.article_count} art
-                </div>
-              </div>
-              <div>
-                {flag ? (
-                  <span className={FLAG_CLASS[flag]}>{FLAG_LABEL[flag]}</span>
-                ) : (
-                  <span />
-                )}
-              </div>
-              <span className="kw-score">{s.interest_score}</span>
-            </div>
-          )
-        })}
+        {isLoading && (
+          <div style={{ padding: "16px 20px", color: "var(--text-muted, #888)", fontSize: 13 }}>
+            Memuat trend…
+          </div>
+        )}
+        {isError && (
+          <div style={{ padding: "16px 20px", color: "var(--text-muted, #888)", fontSize: 13 }}>
+            Gagal memuat trend signals.
+          </div>
+        )}
+        {!isLoading && !isError && data?.length === 0 && (
+          <div style={{ padding: "16px 20px", color: "var(--text-muted, #888)", fontSize: 13 }}>
+            Belum ada data trend.
+          </div>
+        )}
+        {data?.map((s, i) => (
+          <TrendRow key={s.id} signal={s} rank={i + 1} />
+        ))}
       </div>
     </div>
   )

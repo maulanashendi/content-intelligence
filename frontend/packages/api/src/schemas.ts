@@ -79,3 +79,14 @@ export const PipelineStatusSchema = z.object({
   cluster_label_score: z.string().nullable(),
 })
 export type PipelineStatus = z.infer<typeof PipelineStatusSchema>
+
+export const TrendSignalSchema = z.object({
+  id: z.string().uuid(),
+  keyword: z.string(),
+  interest_score: z.number().nullable(),
+  captured_at: z.string(),
+  article_count: z.number().int(),
+})
+export type TrendSignal = z.infer<typeof TrendSignalSchema>
+
+export const TrendSignalListSchema = z.array(TrendSignalSchema)

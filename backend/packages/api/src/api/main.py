@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from pythonjsonlogger import jsonlogger
 
-from api.routes import articles, clusters, health, pipeline, sources
+from api.routes import articles, clusters, health, pipeline, sources, trend_signals
 
 
 def _configure_logging() -> None:
@@ -28,3 +28,4 @@ app.include_router(clusters.router, prefix="/api/v1")
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(pipeline.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")
+app.include_router(trend_signals.router, prefix="/api/v1")

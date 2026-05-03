@@ -18,3 +18,8 @@ export const pipelineKeys = {
   all: ["pipeline"] as const,
   status: () => [...pipelineKeys.all, "status"] as const,
 }
+
+export const trendSignalKeys = {
+  all: ["trend-signals"] as const,
+  latest: (limit?: number) => [...trendSignalKeys.all, "latest", limit] as const,
+}

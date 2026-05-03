@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
+import { TrendSignalCard } from "@ei-fe/features"
 
 /* ── Dummy data matching exact schema ─────────────────────────────── */
 
@@ -54,18 +55,6 @@ const CLUSTERS: ClusterRow[] = [
   { id: "ac-0012", label: "Kasus Korupsi e-KTP Kelanjutan", member_count: 38, is_current: false, created_at: "2025-04-29T06:01:08Z", insight: { trend_velocity: 17.4, novelty_score: 0.12, coverage_score: 0.89, recommendation: "saturated", summary: null, calculated_at: "2025-04-29T06:02:18Z" } },
 ]
 
-const TREND_SIGNALS = [
-  { keyword: "Kenaikan Harga BBM", interest_score: 94, article_count: 23, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "Sidang MK Pilkada", interest_score: 87, article_count: 18, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "Korupsi Dana Desa", interest_score: 81, article_count: 31, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "PPRT Pengesahan", interest_score: 76, article_count: 12, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "Prabowo Xi Jinping", interest_score: 68, article_count: 9, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "BPJS Iuran Baru", interest_score: 61, article_count: 15, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "Karhutla Kalbar", interest_score: 55, article_count: 7, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "Startup PHK", interest_score: 48, article_count: 20, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "Rupiah Melemah", interest_score: 41, article_count: 11, captured_at: "2025-04-30T06:00:00Z" },
-  { keyword: "CPNS 2025", interest_score: 34, article_count: 8, captured_at: "2025-04-30T06:00:00Z" },
-]
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
 
@@ -98,24 +87,6 @@ const REC_LABEL: Record<Rec, string> = {
   trending: "recommended",
   worth_writing: "worth writing",
   saturated: "saturated",
-}
-
-type Flag = "rising" | "new" | "fading" | null
-function getFlag(score: number, rank: number): Flag {
-  if (rank <= 2 && score >= 80) return "rising"
-  if (rank <= 4 && score >= 60) return "new"
-  if (score < 40) return "fading"
-  return null
-}
-const FLAG_CLASS: Record<NonNullable<Flag>, string> = {
-  rising: "badge badge-ok",
-  new: "badge badge-recommended",
-  fading: "badge badge-saturated",
-}
-const FLAG_LABEL: Record<NonNullable<Flag>, string> = {
-  rising: "↑ rising",
-  new: "new",
-  fading: "↓ fading",
 }
 
 /* ── Components ───────────────────────────────────────────────────── */
@@ -331,40 +302,6 @@ function ClusterInsightPanel({ id }: { id: string }) {
   )
 }
 
-function TrendSignalPanel() {
-  return (
-    <div className="card" style={{ position: "sticky", top: 20 }}>
-      <div className="card-head">
-        <span className="card-title">Trend Signals</span>
-        <span className="card-meta">Google Trends · ID</span>
-      </div>
-      <div>
-        {TREND_SIGNALS.map((s, i) => {
-          const flag = getFlag(s.interest_score, i + 1)
-          return (
-            <div key={s.keyword} className="kw-row">
-              <span className="kw-rank">{String(i + 1).padStart(2, "0")}</span>
-              <div>
-                <div className="kw-name">{s.keyword}</div>
-                <div className="kw-meta">interest {s.interest_score} · {s.article_count} art</div>
-              </div>
-              <div>
-                {flag ? <span className={FLAG_CLASS[flag]}>{FLAG_LABEL[flag]}</span> : <span />}
-              </div>
-              <span className="kw-score">{s.interest_score}</span>
-            </div>
-          )
-        })}
-      </div>
-      <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line)" }}>
-        <span className="faint mono" style={{ fontSize: 10.5 }}>
-          captured {fmtTime(TREND_SIGNALS[0]!.captured_at)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
 /* ── Page ─────────────────────────────────────────────────────────── */
 
 export function ClusteringRoute() {
@@ -403,7 +340,7 @@ export function ClusteringRoute() {
         </div>
 
         {/* Right: trend signals */}
-        <TrendSignalPanel />
+        <TrendSignalCard sticky />
       </div>
     </>
   )
