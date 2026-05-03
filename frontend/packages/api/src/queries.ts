@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
-import { clusterKeys, articleKeys, sourceKeys, pipelineKeys } from "./keys.js"
-import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema } from "./schemas.js"
+import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys } from "./keys.js"
+import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema } from "./schemas.js"
 
 export function useMorningClusters() {
   return useQuery({
@@ -74,6 +74,13 @@ export function useTriggerIngestEmbed() {
 export function useTriggerClusterLabelScore() {
   return useMutation({
     mutationFn: () => apiPost("/pipeline/cluster-label-score", {}, PipelineTriggerResultSchema),
+  })
+}
+
+export function useTrendSignals(limit: number = 10) {
+  return useQuery({
+    queryKey: trendSignalKeys.latest(limit),
+    queryFn: () => apiGet(`/trend-signals/latest?limit=${limit}`, TrendSignalListSchema),
   })
 }
 

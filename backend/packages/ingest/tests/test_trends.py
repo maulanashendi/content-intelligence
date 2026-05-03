@@ -1,13 +1,12 @@
 import math
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 import pytest
 import pytest_asyncio
 from core.db import get_session
 from core.models import ContentSource, SourceStatus, SourceType
 from ingest.trends import _extract_traffic_number, _parse_trends_feed, _resolve_source
-from sqlalchemy.ext.asyncio import AsyncSession
 
 NOW = datetime(2026, 5, 2, 6, 0, 0)
 
