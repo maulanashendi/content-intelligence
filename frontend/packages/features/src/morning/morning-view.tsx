@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom"
+import { useMemo } from "react"
 import { useQueryClient, useQueries } from "@tanstack/react-query"
 import { useMorningClusters, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
 import type { ClusterDetail } from "@ei-fe/api"
@@ -48,9 +49,14 @@ export function MorningView() {
     queries: (data ?? []).map((c) => clusterDetailQueryOptions(c.id)),
   })
 
-  const loadedDetails = detailQueries
-    .map((q) => (q as { data: ClusterDetail | undefined }).data)
-    .filter((d): d is ClusterDetail => d != null)
+  const loadedDetails = useMemo(
+    () =>
+      detailQueries
+        .map((q) => (q as { data: ClusterDetail | undefined }).data)
+        .filter((d): d is ClusterDetail => d != null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detailQueries.map((q) => (q as { data: ClusterDetail | undefined }).data?.id).join(",")],
+  )
 
   if (isLoading) return <LoadingState variant="table" />
   if (isError) {

@@ -23,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-_INGEST_TABLES = ("article", "content_source")
+_INGEST_TABLES = ("trend_signal_article", "trend_signal", "article", "content_source")
 
 
 @pytest.fixture(autouse=True)

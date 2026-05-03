@@ -36,7 +36,7 @@ export function FirstReportCard({ members, clusterLabel }: FirstReportCardProps)
             {daysSince !== null && daysSince > 0 && ` · ${daysSince}h lalu`}
           </span>
           {first.relevance_score != null && (
-            <span className="faint mono" style={{ fontSize: 11, marginLeft: "auto" }}>
+            <span className="faint mono" style={{ fontSize: 11 }}>
               rel {Math.round(first.relevance_score * 100)}%
             </span>
           )}
