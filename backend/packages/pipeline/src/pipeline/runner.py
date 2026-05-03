@@ -19,10 +19,12 @@ RECONNECT_BACKOFF_BASE = 10
 
 _GROUP_INGEST_EMBED = "ingest_embed"
 _GROUP_CLUSTER_LABEL_SCORE = "cluster_label_score"
+_GROUP_EMBED_ONLY = "embed_only"
 
 _CHANNEL_TO_GROUP = {
     "pipeline_ingest_embed_requested": _GROUP_INGEST_EMBED,
     "pipeline_cluster_label_score_requested": _GROUP_CLUSTER_LABEL_SCORE,
+    "pipeline_embed_requested": _GROUP_EMBED_ONLY,
 }
 
 
@@ -50,9 +52,16 @@ async def _run_cluster_label_score() -> None:
     await score_run()
 
 
+async def _run_embed_only() -> None:
+    from embedding.pipeline import run as embed_run
+
+    await embed_run()
+
+
 _GROUP_RUNNERS: dict[str, Callable[[], Coroutine[Any, Any, None]]] = {
     _GROUP_INGEST_EMBED: _run_ingest_embed,
     _GROUP_CLUSTER_LABEL_SCORE: _run_cluster_label_score,
+    _GROUP_EMBED_ONLY: _run_embed_only,
 }
 
 
@@ -148,6 +157,7 @@ async def run_loop() -> None:
     queues: dict[str, asyncio.Queue[None]] = {
         _GROUP_INGEST_EMBED: asyncio.Queue(maxsize=1),
         _GROUP_CLUSTER_LABEL_SCORE: asyncio.Queue(maxsize=1),
+        _GROUP_EMBED_ONLY: asyncio.Queue(maxsize=1),
     }
 
     logger.info("pipeline serve daemon started")
