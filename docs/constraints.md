@@ -10,7 +10,7 @@ The following systems exist for the product but are owned by other teams. Do not
 
 - **Authentication and authorization.** Identity is established by an upstream gateway. The API trusts incoming requests.
 - **Deployment infrastructure beyond local Docker dev.** Production orchestration, scaling, secrets management, and CI/CD pipelines are owned by the deploy team.
-- **Production monitoring, alerting, dashboards.** The application logs to stdout in JSON. Aggregation, retention, and alerting are operational concerns owned externally.
+- **Production monitoring, alerting, dashboards.** The application logs to stdout in JSON per `docs/logging-sop.md`. Aggregation, retention, and alerting are operational concerns owned externally.
 - **Internal article performance metrics for end-user display.** A separate Tempo internal dashboard already shows clicks, impressions, and Google position. This app does not display them under any circumstance.
 
 ## Deferred features (PRD Section 6 — authoritative)
@@ -34,13 +34,15 @@ The following features were explicitly deferred during PRD review. They must not
 
 If a user request implies any of these, surface the conflict with `prd.md` Section 6 before implementing.
 
+**Hardening work uses `docs/hardening-sop.md`.** Hardening tasks (timeouts, retries, idempotency, observability, resource bounds, container hardening, smoke tests) must not introduce features deferred above. If a hardening task uncovers a missing capability, file a separate decisions entry — do not bundle it into the hardening PR.
+
 ## Architectural don'ts
 
 These patterns must not appear in the codebase. Each was explicitly considered and rejected; see `decisions.md` for full reasoning.
 
 - **No microservices split.** The codebase is a modular monorepo. Modules are Python packages, not separate services.
-- **No message queue (Celery, RQ, RabbitMQ, Redis Streams).** The pipeline is cron-driven.
-- **No standalone job scheduler library (APScheduler, Prefect, Dagster).** Use OS-level `cron` or `systemd timer`.
+- **No message queue (Celery, RQ, RabbitMQ, Redis Streams).** Pipeline orchestration is a singleton daemon driven by `pg_notify` plus an in-process `asyncio` scheduler.
+- **No standalone job scheduler library (APScheduler, Prefect, Dagster).** Scheduling lives inside the pipeline daemon as plain `asyncio` tasks. There is no host `cron` and no `systemd timer`.
 - **No Redis cache or other in-memory cache layer.** Postgres handles read load.
 - **No separate vector database (Qdrant, Milvus, Weaviate, Pinecone).** pgvector is sufficient.
 - **No GraphQL.** REST endpoints only.
@@ -48,7 +50,7 @@ These patterns must not appear in the codebase. Each was explicitly considered a
 - **No event sourcing or CQRS.** Standard CRUD against Postgres.
 - **Write-side API is restricted to two surfaces** (any addition beyond these requires a new decision entry):
   1. `ContentSource` CRUD on `/api/v1/sources` — editors manage RSS feeds at runtime (D19).
-  2. Pipeline trigger notifications on `/api/v1/pipeline/ingest-embed` and `/api/v1/pipeline/cluster-label-score` — send `pg_notify` to the `pipeline serve` daemon (D22). These endpoints write only to a DB lock row and send a notification; they do not write to any analytical table.
+  2. Manual cluster trigger on `/api/v1/pipeline/cluster-label-score` — sends `pg_notify` to the pipeline daemon. Writes only to the `pipeline_group_lock` row and emits a notification; no analytical table is touched. Ingest and embed are fully reactive and have no manual API trigger; the previous `/api/v1/pipeline/ingest-embed` endpoint has been removed.
   Every analytical table — `article`, `cluster*`, `cluster_run`, `cluster_insight`, `trend_signal`, `article_embedding`, `article_gsc_metric` — remains read-only via the API.
 
 ## Code don'ts
@@ -78,7 +80,8 @@ These invariants are enforced by `schema.dbml` and must be preserved:
 - `article.url` is `unique` and ingest uses `ON CONFLICT (url) DO NOTHING`. The same article appearing in both a competitor RSS and Trends RSS is silently de-duplicated. This is intentional.
 - `cluster_insight.summary` exists but is not currently surfaced to the API. Reserved for future LLM-generated summaries; safe to ignore for now.
 - The two personas (Maulana and the desk head) use the **same** application. There is no role-based feature partitioning. They use different views of the same data.
-- The pipeline runs once per day. There is no streaming, no near-real-time updates, no hourly refresh. This is intentional — see `decisions.md` (D9).
+- Cluster + label runs once per day at 06:00 WIB on the daemon's internal scheduler, plus on demand via `POST /api/v1/pipeline/cluster-label-score`. Ingest and embed run reactively whenever a new RSS source is added or the daemon's poll loop tick fires. There is no streaming and no hourly cluster refresh; clustering is the expensive step and is intentionally bounded to one daily run plus operator-driven re-runs.
+- The `scoring` step is currently disabled in the daemon. The package, tables, ORM models, and CLI entry remain in place; new daemon runs do not write `cluster_insight` rows. Existing rows are kept for reference. Re-enabling scoring requires a decision entry.
 
 ## Frontend constraints
 
@@ -87,7 +90,7 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 ### Out of the frontend codebase
 - **Authentication.** Upstream gateway (D10). The FE never validates identity.
 - **Production hosting / serving config.** `bun run build` outputs static assets; the deploy team owns gateway, nginx, cache headers, and SPA fallback.
-- **Backend.** Lives in `backend/`. The contract is the JSON shape of the API endpoints documented in `api_contract.md`.
+- **Backend.** Lives in `backend/`. The contract is FastAPI's `/openapi.json` — see `conventions.md` §API endpoints.
 - **Browser-side error tracking and analytics.** Not in MVP. Add only when there is a documented operational need.
 
 ### Architectural don'ts (frontend)

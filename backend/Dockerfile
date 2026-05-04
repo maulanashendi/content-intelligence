@@ -12,23 +12,33 @@ ENV UV_LINK_MODE=copy \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# ============ Shared dependency layer ============
+# ============ External deps only (cache-stable — invalidated by uv.lock, not source) ============
 FROM base AS deps
-COPY pyproject.toml ./
-COPY uv.lock* ./
-COPY packages/ ./packages/
+COPY pyproject.toml uv.lock ./
+COPY packages/core/pyproject.toml        packages/core/pyproject.toml
+COPY packages/api/pyproject.toml         packages/api/pyproject.toml
+COPY packages/ingest/pyproject.toml      packages/ingest/pyproject.toml
+COPY packages/embedding/pyproject.toml   packages/embedding/pyproject.toml
+COPY packages/clustering/pyproject.toml  packages/clustering/pyproject.toml
+COPY packages/labeling/pyproject.toml    packages/labeling/pyproject.toml
+COPY packages/scoring/pyproject.toml     packages/scoring/pyproject.toml
+COPY packages/pipeline/pyproject.toml    packages/pipeline/pyproject.toml
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-install-workspace --no-dev --frozen
 
-# ============ API target — lean, no torch ============
+# ============ API build — add source, install workspace packages ============
 FROM deps AS api-build
-RUN uv sync --package api --no-dev
+COPY packages/core/src    packages/core/src
+COPY packages/api/src     packages/api/src
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --package api --no-dev --frozen
 
 FROM python:3.11-slim AS api
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=api-build /app/.venv /app/.venv
-COPY --from=api-build /app/packages/core /app/packages/core
-COPY --from=api-build /app/packages/api /app/packages/api
+COPY --from=api-build /app/.venv         /app/.venv
+COPY --from=api-build /app/packages      /app/packages
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 EXPOSE 8000
@@ -50,17 +60,19 @@ CMD ["uvicorn", "api.main:app", \
      "--reload-dir", "/app/packages/core/src", \
      "--reload-dir", "/app/packages/api/src"]
 
-# ============ Ingest worker — no ML stack ============
+# ============ Ingest build — add source, install workspace packages ============
 FROM deps AS ingest-build
-RUN uv sync --package ingest --no-dev
+COPY packages/core/src    packages/core/src
+COPY packages/ingest/src  packages/ingest/src
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --package ingest --no-dev --frozen
 
 FROM python:3.11-slim AS ingest
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=ingest-build /app/.venv /app/.venv
-COPY --from=ingest-build /app/packages/core /app/packages/core
-COPY --from=ingest-build /app/packages/ingest /app/packages/ingest
+COPY --from=ingest-build /app/.venv     /app/.venv
+COPY --from=ingest-build /app/packages  /app/packages
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 CMD ["python", "-m", "ingest.cli", "serve"]
@@ -75,15 +87,22 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 CMD ["python", "-m", "ingest.cli", "serve"]
 
-# ============ Pipeline target — full ML stack ============
+# ============ Pipeline build — full ML stack ============
 FROM deps AS pipeline-build
-RUN uv sync --package pipeline --no-dev
+COPY packages/core/src        packages/core/src
+COPY packages/embedding/src   packages/embedding/src
+COPY packages/clustering/src  packages/clustering/src
+COPY packages/labeling/src    packages/labeling/src
+COPY packages/scoring/src     packages/scoring/src
+COPY packages/pipeline/src    packages/pipeline/src
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --package pipeline --no-dev --frozen
 
 FROM python:3.11-slim AS pipeline
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=pipeline-build /app/.venv /app/.venv
+COPY --from=pipeline-build /app/.venv    /app/.venv
 COPY --from=pipeline-build /app/packages /app/packages
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

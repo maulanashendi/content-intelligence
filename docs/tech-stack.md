@@ -67,9 +67,9 @@ Switching the embedding model requires a schema migration (vector dimension) and
 | Library | Used for | Rationale |
 |---------|----------|-----------|
 | `click` 8.1+ | CLI | Decorator-based, simple to expose pipeline steps as commands |
-| `python-json-logger` 2.0+ | Structured logging | JSON logs to stdout for downstream aggregation |
+| `python-json-logger` 2.0+ | Structured logging | JSON logs to stdout for downstream aggregation. Configuration and contract: `docs/logging-sop.md` |
 
-Scheduling is done by `cron` or `systemd timer` on the host, not by an in-app scheduler. APScheduler / Celery / Prefect are explicitly avoided. See `decisions.md` (D9).
+Scheduling lives inside the `pipeline-daemon` as plain `asyncio` tasks (D24). There is no host `cron`, no `systemd` timer, and no standalone scheduler library (APScheduler / Celery / Prefect remain explicitly avoided). The daily cluster + label tick is configured via `TIMEZONE`, `CLUSTER_SCHEDULE_HOUR`, `CLUSTER_SCHEDULE_MINUTE` env vars; default is 06:00 WIB.
 
 ## Testing & quality
 
@@ -85,9 +85,9 @@ Scheduling is done by `cron` or `systemd timer` on the host, not by an in-app sc
 | Tool | Used for |
 |------|----------|
 | Docker | Container runtime |
-| docker-compose | Local development orchestration |
+| docker-compose v2 | Local development orchestration; production composition |
 
-The Dockerfile is multi-stage. The `api` image excludes torch and transformers — it is deliberately lean (~200MB). The `pipeline` image includes the full ML stack (~5GB). See `architecture.md` for the rationale behind that split.
+The Dockerfile is multi-stage with two runtime concerns (`api`, `pipeline`), each with build/runtime/dev variants (D24 collapsed the previous `ingest` runtime into `pipeline`). The `api` image excludes torch and transformers — deliberately lean (≤250 MB). The `pipeline` image includes the full ML stack plus ingest deps (≤6 GB). See `architecture.md` for the split rationale and `docs/docker-sop.md` for layer-cache rules, image budgets, healthchecks, and runtime hardening (`USER app`, BuildKit, `.dockerignore`). Operational use of the compose stack — start/stop, exec, alembic, recovery — lives in `docs/operations-sop.md`.
 
 ## What was rejected and why
 
@@ -97,8 +97,9 @@ The Dockerfile is multi-stage. The `api` image excludes torch and transformers �
 | Recharts / Chart.js | General-purpose charting libraries not needed for this product. |
 | Ollama for local LLM serving | Adds a separate sidecar service and HTTP overhead for a batch-only, single-consumer workload. |
 | `transformers` + `bitsandbytes` for LLM labeling | PyTorch CPU inference for Gemma 2B runs 5–30 s per inference even with bitsandbytes nf4, which has no AVX2 or Metal path. `llama-cpp-python` with GGUF is 3–5× faster on the same hardware. |
-| Celery / RabbitMQ / Redis Streams | One daily batch job. A queue adds infrastructure with no scaling benefit at this load. |
-| APScheduler / Prefect / Dagster | OS-level cron is sufficient for a single daily job. |
+| Celery / RabbitMQ / Redis Streams | Pipeline orchestration is a singleton daemon driven by `pg_notify` plus an in-process `asyncio` scheduler (D24). A queue adds infrastructure with no scaling benefit at this load. |
+| APScheduler / Prefect / Dagster | Plain `asyncio` scheduling inside the pipeline daemon is sufficient; an external scheduler library adds operational surface without value. |
+| Host `cron` / `systemd timer` | Replaced by the daemon-internal scheduler in D24. Keeps timezone handling and supervision in one place. |
 | Kubernetes / microservices split | Single VPS, single team, single user persona. Premature distribution. |
 | Redis cache layer | Read load is negligible (one user, one morning open). Postgres is sufficient. |
 | Qdrant / Milvus / Weaviate / Pinecone | pgvector handles thousands of vectors trivially. A separate vector DB doubles operational surface for no benefit at this scale. |
@@ -110,15 +111,6 @@ The Dockerfile is multi-stage. The `api` image excludes torch and transformers �
 | GraphQL | REST is sufficient for the current endpoint surface. |
 | WebSockets | Dashboard is poll-based; no real-time push need. |
 
-## Resource footprint estimate
+## Resource footprint
 
-For a VPS hosting both `api` and `pipeline` plus Postgres in development:
-
-| Item | Approximate footprint |
-|------|----------------------|
-| Postgres working set | ~2GB |
-| Embedding model loaded | ~300MB |
-| LLM (Gemma 2B Q4_K_M GGUF) loaded | ~2GB |
-| UMAP + HDBSCAN peak (during clustering) | ~1GB |
-| Python processes overhead | ~500MB each |
-| **Suggested minimum** | **8GB RAM, 4 vCPU, 50GB disk** |
+Per-model footprints are listed in §"Active models". Process-level RAM budgets and the VPS minimum are in `docs/operations-sop.md` §Resource budgets.

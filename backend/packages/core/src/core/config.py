@@ -15,7 +15,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_dir: Path = Path("logs")
 
-    clustering_window_days: int = 30
+    clustering_window_days: int = 7
+
+    cluster_schedule_hour: int = 6
+    cluster_schedule_minute: int = 0
     hdbscan_min_cluster_size: int = 5
     umap_random_state: int = 42
     umap_target_dimensions: int = 30

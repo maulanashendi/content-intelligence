@@ -1,3 +1,8 @@
+# ====================
+# harusnya masuk ke pipeline runner, analisis nanti
+# ====================
+
+
 import asyncio
 import contextlib
 import logging
@@ -11,7 +16,7 @@ import asyncpg
 from core.config import settings
 from core.db import get_session
 from core.models import ContentSource, SourceStatus, SourceType
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from ingest.rss import BlockedError, _set_source_status, fetch_and_store_source, make_http_client
 
@@ -137,6 +142,15 @@ async def _run_once() -> None:
         await asyncio.gather(*[_handle(*s) for s in active])
 
 
+async def _notify_embed() -> None:
+    async with get_session() as session:
+        try:
+            await session.execute(text("SELECT pg_notify('pipeline_embed_requested', '')"))
+            await session.commit()
+        except Exception:
+            logger.warning("pg_notify pipeline_embed_requested failed", exc_info=True)
+
+
 def _install_signal_handlers(shutdown: asyncio.Event) -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -162,6 +176,7 @@ async def run_loop() -> None:
         while not shutdown.is_set():
             try:
                 await _run_once()
+                await _notify_embed()
             except Exception:
                 logger.exception("unexpected error in ingest loop")
 

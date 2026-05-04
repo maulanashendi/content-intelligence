@@ -4,7 +4,7 @@ Internal dashboard surfacing topics worth writing for Tempo's editorial team. Ba
 
 ## Read first
 
-`docs/README.md` lists the required reading order (8 files). Read them before any work. Do not invent context — `docs/constraints.md` lists every deferred feature.
+`docs/README.md` is the entry point. It names the four core docs to read before writing code (`prd.md`, `architecture.md`, `constraints.md`, `schema.dbml`) and routes every other doc by task. Do not invent context — `docs/constraints.md` lists every deferred feature.
 
 ## Layout
 
@@ -27,21 +27,33 @@ All backend commands run from `backend/`.
 | `labeling`   | LLM cluster labels                 | transformers + Gemma 2B 4-bit              |
 | `scoring`    | velocity, novelty, coverage        | sklearn, numpy                             |
 | `api`        | FastAPI read-only                  | NO torch, NO ML imports                    |
-| `pipeline`   | Daily orchestrator CLI             | imports all batch modules                  |
+| `pipeline`   | Long-running daemon (D24)          | reactive ingest+embed, scheduled cluster+label; imports all batch modules |
 
 Rule: `api` never imports ML modules. Batch modules never import each other — share via `core`. Cross-module imports must be declared in `pyproject.toml`.
 
-## Daily pipeline (06:00 WIB)
+## Pipeline runtime (D24)
 
-`ingest → embed → cluster → label → score`. Each step exposes `python -m <module>.cli run`. Full run: `python -m pipeline.cli run-daily`. Triggered by host cron.
+One supervised daemon, `python -m pipeline.cli serve`, owns every long-running concern. There is no host cron and no separate `ingest serve`.
 
-## Reactive ingest daemon (D20)
+- **Reactive ingest + embed (continuous).** The daemon polls all enabled RSS sources every 10 minutes (`POLL_INTERVAL=600`), runs the embed cycle inline after each ingest, and listens on `pg_notify('rss_source_created')` to fetch a single new source on demand.
+- **Scheduled cluster + label (06:00 WIB daily).** An in-process `asyncio` scheduler emits `pg_notify('pipeline_cluster_label_score_requested')`; the same channel is used by the manual API trigger. Schedule is config-driven (`TIMEZONE`, `CLUSTER_SCHEDULE_HOUR`, `CLUSTER_SCHEDULE_MINUTE`).
+- **Scoring is disabled in the daemon path.** The package and `cluster_insight` table are kept; new daemon runs do not write rows. Re-enabling requires a new `decisions.md` entry.
+- **Singleton.** In-memory immediate-fetch queue and the `pipeline_group_lock` row both assume a single replica.
 
-`python -m ingest.cli serve` is a long-running process that LISTENs on `pg_notify('rss_source_created')` and fetches a single new source on demand. Runs alongside cron, not in place of it. Single replica only — the in-memory blocked-source map and immediate queue are process-local.
+Each batch step is also exposed as `python -m pipeline.cli <step>` for ad-hoc debugging (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`); these are operator tools, not the production execution surface.
+
+## Hardening track (post-MVP)
+
+MVP is shipped. Post-MVP work is hardening, governed by four SOPs. Read the relevant one before changing code in that area:
+
+- `docs/docker-sop.md` — Dockerfile, compose, image build and runtime rules
+- `docs/logging-sop.md` — JSON logging contract, levels, request-ID propagation
+- `docs/operations-sop.md` — running the stack in Docker, daemon supervision, recovery
+- `docs/hardening-sop.md` — checklist for "harden feature X" tasks
 
 ## API endpoints
 
-Reads dominate; the only write surface is `ContentSource` CRUD (D19). Live: `/api/v1/clusters/morning`, `/api/v1/clusters/{id}`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/sources` (GET/POST/PATCH/DELETE), `/api/v1/health`. Auth handled upstream.
+Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/{id}`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream.
 
 ## Schema
 
@@ -49,7 +61,7 @@ Source of truth: `backend/packages/core/src/core/models.py` (SQLAlchemy ORM). Do
 
 ## Hard rules (full list in `docs/constraints.md`)
 
-- No microservices, message queue, Redis cache, separate vector DB, HNSW index, GraphQL, WebSockets, auth code. Writes are restricted to `content_source` CRUD (D19); every other table is read-only via the API.
+- No microservices, message queue, Redis cache, separate vector DB, HNSW index, GraphQL, WebSockets, auth code. No standalone scheduler library (APScheduler, Prefect, Dagster) and no host `cron` — scheduling lives inside `pipeline-daemon` as plain `asyncio` tasks (D24). Writes are restricted to `content_source` CRUD (D19) and the manual cluster trigger (D24); every other table is read-only via the API.
 - `vector(768)` is fixed; changing embedding model = migration + full re-embed.
 - One embedding per article (`article_embedding.article_id` unique).
 - GSC metrics are scoring inputs only — never returned via API.
@@ -59,6 +71,10 @@ Source of truth: `backend/packages/core/src/core/models.py` (SQLAlchemy ORM). Do
 - No comments explaining WHAT; only non-obvious WHY.
 - No new top-level deps without updating `docs/tech-stack.md`.
 - PRD §6 deferred features stay deferred.
+- Local dev runs in Docker (`docker compose` from `backend/`), not host `uv run`. Host `uv run` is allowed only for unit tests and IDE integration. See `docs/operations-sop.md`.
+- All logs are JSON to stdout via `core.logging.configure_logging()`. No `print()`. New entry points call `configure_logging()` once. See `docs/logging-sop.md`.
+- API contract is FastAPI's `/openapi.json` (live at `/docs`), generated from Pydantic models + `response_model=` + route summaries. Endpoint changes update the Pydantic schema, `response_model=`, status code, and one-line summary in the same commit. There is no separate Markdown contract. Cross-cutting API rules: `docs/conventions.md` §API endpoints.
+- Hardening work follows `docs/hardening-sop.md`. PR title `harden(<module>): ...` and the checklist table are required.
 
 ## Quickstart
 
@@ -66,13 +82,14 @@ Source of truth: `backend/packages/core/src/core/models.py` (SQLAlchemy ORM). Do
 cd backend
 cp .env.example .env
 docker compose up -d postgres
-uv sync
-alembic upgrade head
+docker compose run --rm api alembic upgrade head
+docker compose up -d
+docker compose logs -f api
 ```
 
-- Module CLI: `uv run python -m <module>.cli run`
-- API local: `uv run uvicorn api.main:app --reload --app-dir packages/api/src`
-- Full pipeline: `uv run python -m pipeline.cli run-daily`
+- One-shot pipeline step: `docker compose --profile manual run --rm pipeline <step>` (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`)
+- Tests: `docker compose run --rm api pytest packages/<module>/tests/`
+- Full operational reference: `docs/operations-sop.md`
 
 ## Out of scope (other teams)
 

@@ -1,64 +1,38 @@
 # Editor Intelligence — Documentation
 
-This directory is the handover package for any contributor — human or AI agent — joining work on Editor Intelligence. Read the files below in order before writing code. Skipping ahead leads to wrong assumptions and rework.
+Internal dashboard for Tempo's editorial team. Ingests competitor RSS + Tempo sitemap + Google Trends → clusters by topic → surfaces topics worth writing.
 
-## What this project is
+## Read these four before writing code
 
-An internal dashboard for Tempo's editorial team. Each morning it ingests articles from competitor RSS feeds, Tempo's internal sitemap, and Google Trends; clusters them by topic; and surfaces topics worth writing that the team has not yet covered.
+Everything else in `docs/` is reference material — open it on demand via the router below.
 
-The product target is one user persona (Maulana, content editor for the economy desk) making 2-3 daily topic decisions in under 15 minutes, replacing a 1-hour manual scan.
+1. `prd.md` — product context, personas, what is explicitly out of scope
+2. `architecture.md` — modules, data flow, dependency graph
+3. `constraints.md` — what NOT to build (backend + frontend)
+4. `schema.dbml` — database tables and relationships
 
-## Repository layout
+## Task → file router
 
-```
-editor-intelligence/
-├── docs/           # this folder — product spec, architecture, decisions
-├── backend/        # all backend code (Python uv workspace, Dockerfile, alembic, ...)
-├── frontend/       # production frontend (Bun workspace, Vite SPA — see frontend.md)
-└── template-fe/    # legacy visual prototype, will be deleted after migration (decisions.md D18)
-```
+| What you're doing | Open |
+|---|---|
+| Adding or changing an HTTP endpoint | `conventions.md` §API endpoints — the contract is FastAPI's `/openapi.json` |
+| Touching the frontend | `frontend.md` |
+| Adding a top-level dependency | `tech-stack.md` (update it in the same PR) |
+| Docker, compose, or image change | `docker-sop.md` |
+| Logging — fields, levels, request IDs | `logging-sop.md` |
+| Running, debugging, or recovering the stack | `operations-sop.md` |
+| Changing the pipeline schedule, scoring toggle, or cluster window | `decisions.md` D24 + `operations-sop.md` §Pipeline scheduler |
+| Hardening an existing feature | `hardening-sop.md` |
+| Reviewing a PR | `review-sop.md` |
+| "Why was X chosen?" | `decisions.md` |
+| "Is X allowed?" | `constraints.md` |
 
-Backend commands run from `backend/`; frontend commands run from `frontend/`. See `conventions.md` and `frontend.md` for details.
+## Sources of truth
 
-## Required reading order
-
-Read these files top to bottom. Each file assumes you have read everything above it.
-
-| # | File | What you will know after reading |
-|---|------|----------------------------------|
-| 1 | `README.md` (this file) | The map of this documentation |
-| 2 | `prd.md` | Product context, personas, happy path, what is explicitly out of scope |
-| 3 | `architecture.md` | System structure, modules, data flow, dependency graph |
-| 4 | `schema.dbml` | Database tables, columns, relationships |
-| 5 | `api_contract.md` | HTTP contract — live and proposed endpoints, error envelope, open conflicts |
-| 6 | `tech-stack.md` | Concrete libraries and versions, what was rejected and why |
-| 7 | `conventions.md` | Code layout rules, import boundaries, dev workflow |
-| 8 | `constraints.md` | What NOT to build, deferred features, schema invariants (backend + frontend) |
-| 9 | `frontend.md` | Frontend architecture: packages, dependencies, routing, data layer, conventions |
-| 10 | `decisions.md` | Rationale behind every non-obvious choice (backend: D1–D11, frontend: D12–D18) |
-
-Estimated reading time end-to-end: 85-115 minutes.
-
-## Mental model you should hold after reading
-
-After completing the reading list above, you should be able to answer:
-
-- Which user makes which decision, when, and what data backs it.
-- Which module owns which piece of logic, and how it depends on other modules.
-- Which database table answers which product question.
-- Which library was chosen over which alternative, and why.
-- Which features were deliberately deferred and must not be re-introduced without explicit user approval.
-- Which architectural patterns are forbidden (microservices, message queues, etc.).
-
-If any of these is unclear, re-read the relevant file before contributing.
+- **Hard constraints**: `constraints.md`. If another doc contradicts it, fix the other doc.
+- **Database schema**: `backend/packages/core/src/core/models.py` (SQLAlchemy ORM). `schema.dbml` is a documented mirror.
+- **Deferred features**: PRD §6. Don't reintroduce without explicit user approval.
 
 ## When in doubt
 
-If a question is not answered in these nine files, ask the user before assuming. Do not invent features, alternative architectures, or scope expansions on your own. The PRD's `Section 6 — What we will NOT build in MVP` is the authoritative deferral list.
-
-## Quick reference
-
-- Product spec: `prd.md`
-- Database schema source of truth: `schema.dbml`
-- For "is X allowed?" questions, check `constraints.md` first
-- For "why was Y chosen?" questions, check `decisions.md`
+Ask the user before assuming. Do not invent features, alternative architectures, or scope expansions.
