@@ -158,6 +158,7 @@ class TrendSignal(Base):
     keyword: Mapped[str] = mapped_column(String, nullable=False)
     interest_score: Mapped[float | None] = mapped_column(Float)
     region: Mapped[str] = mapped_column(String, server_default="ID", nullable=False)
+    category: Mapped[str] = mapped_column(String, server_default="all", nullable=False)
     captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False

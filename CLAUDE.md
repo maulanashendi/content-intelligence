@@ -68,6 +68,7 @@ Source of truth: `backend/packages/core/src/core/models.py` (SQLAlchemy ORM). Do
 - Trend keywords live in `trend_signal`, never in `article` columns.
 - `source_type` enum: only `rss` and `internal` (no `trends`).
 - src layout per package; no flat layouts.
+- Frontend layering: see `docs/architecture.md` §Frontend (shape) and `docs/frontend.md` (rules). Cross-feature imports forbidden; a component used by ≥2 features promotes to `@ei-fe/ui`. New components never use legacy global CSS classes (`.card`, `.kw-row`) — Tailwind + a `@ei-fe/ui` primitive only.
 - No comments explaining WHAT; only non-obvious WHY.
 - No new top-level deps without updating `docs/tech-stack.md`.
 - PRD §6 deferred features stay deferred.

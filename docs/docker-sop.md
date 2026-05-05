@@ -54,6 +54,8 @@ The previous `ingest` / `ingest-dev` stages have been removed (D24). The `pipeli
 
 Check with `docker images | grep editor-intelligence`. If a runtime image exceeds budget, find and remove the leaked dependency before merging — do not raise the budget.
 
+**No CUDA wheels in the image.** `torch` is pinned to PyTorch's CPU index for Linux/Windows builds in `backend/pyproject.toml`; `nvidia-*`, `cuda-*`, and `triton` must not appear in `uv.lock` or in any built image. They add ~1.5 GB of unusable libraries (no deploy target has an NVIDIA GPU; Colima cannot pass one through) and the extraction spike during `uv sync` is heavy enough to OOM a small Docker VM. After any `uv lock`, run `grep -E '^name = "(nvidia|cuda|triton)' backend/uv.lock` — it must return zero matches. See `docs/constraints.md` §Architectural don'ts.
+
 ## Required runtime hardening
 
 These are required for both dev and prod targets unless explicitly justified.

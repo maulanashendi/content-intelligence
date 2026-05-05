@@ -103,7 +103,7 @@ async def _resolve_source(session: AsyncSession, article_url: str) -> uuid.UUID 
     result = await session.execute(
         select(ContentSource).where(ContentSource.url.ilike(f"%{base_domain}%"))
     )
-    source = result.scalar_one_or_none()
+    source = result.scalars().first()
     return source.id if source else None
 
 

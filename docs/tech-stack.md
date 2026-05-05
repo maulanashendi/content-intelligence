@@ -40,7 +40,7 @@ This document lists every concrete library and runtime choice in the project, wi
 |---------|----------|-----------|
 | `sentence-transformers` 3.2+ | Embedding inference | Simplest wrapper over HF for `embeddinggemma-300m` |
 | `llama-cpp-python` 0.3+ | LLM inference for cluster labeling | C++ backend (llama.cpp) with SIMD, AVX2, Metal — 3–5× faster than PyTorch CPU for same model/quantization depth |
-| `torch` 2.4+ | Tensor backend for `sentence-transformers` | Required by sentence-transformers; not used by labeling |
+| `torch` 2.4+ (CPU build on Linux/Windows) | Tensor backend for `sentence-transformers` | Required by sentence-transformers; not used by labeling. Pinned to PyTorch's CPU index in `backend/pyproject.toml` so `nvidia-*` / `cuda-*` / `triton` wheels are never pulled into the image (no deploy target has an NVIDIA GPU). macOS host installs use the standard PyPI wheel (Metal-capable). |
 | `umap-learn` 0.5+ | Dimensionality reduction | Best practice before HDBSCAN on high-dim embeddings |
 | `hdbscan` 0.8.38+ | Clustering | Algorithm specified by PRD |
 | `scikit-learn` 1.5+ | Utility: TF-IDF, vector ops, helpers | Standard ML toolkit for non-DL tasks |

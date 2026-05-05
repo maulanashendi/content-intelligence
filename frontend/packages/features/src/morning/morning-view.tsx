@@ -4,7 +4,7 @@ import { useQueryClient, useQueries } from "@tanstack/react-query"
 import { useMorningClusters, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
 import type { ClusterDetail } from "@ei-fe/api"
 import { LoadingState, ErrorState } from "@ei-fe/ui"
-import { ClusterTable } from "./cluster-table.js"
+import { ArticleClustersCard } from "./article-clusters-card.js"
 import { ClusterForceGraph } from "./cluster-force-graph.js"
 import { EditorialBriefing } from "./editorial-briefing.js"
 import { TrendSignalCard } from "./trend-signal-card.js"
@@ -92,7 +92,7 @@ export function MorningView() {
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <EditorialBriefing clusters={clusters} />
-          <ClusterTable clusters={clusters} onRowClick={(id) => navigate(`/clusters/${id}`)} />
+          <ArticleClustersCard onSelect={(id) => navigate(`/clusters/${id}`)} />
         </div>
         <TrendSignalCard />
       </div>

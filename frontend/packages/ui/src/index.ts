@@ -15,4 +15,7 @@ export { LoadingState } from "./states/loading-state.js"
 export { ErrorState } from "./states/error-state.js"
 export { EmptyState } from "./states/empty-state.js"
 
+export { VelocityBar } from "./primitives/velocity-bar.js"
+export { ClusterTable } from "./cluster-table.js"
+
 export * from "./icons.js"

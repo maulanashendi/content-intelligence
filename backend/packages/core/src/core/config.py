@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     embedding_model_name: str = "google/embeddinggemma-300m"
     embedding_model_version: str = ""
     hf_home: str = "/models"
+    hf_token: str = ""
 
     log_level: str = "INFO"
     log_dir: Path = Path("logs")
