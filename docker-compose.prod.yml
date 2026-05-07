@@ -1,2 +1,118 @@
-include:
-  - path: backend/docker-compose.prod.yml
+name: editor-intelligence
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  api:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+      target: api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  pipeline-daemon:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+      target: pipeline
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      HF_HOME: /models
+      TIMEZONE: ${TIMEZONE:-Asia/Jakarta}
+      CLUSTER_SCHEDULE_HOUR: ${CLUSTER_SCHEDULE_HOUR:-6}
+      CLUSTER_SCHEDULE_MINUTE: ${CLUSTER_SCHEDULE_MINUTE:-0}
+      CLUSTERING_WINDOW_DAYS: ${CLUSTERING_WINDOW_DAYS:-7}
+      INGEST_TIMEOUT_SECONDS: ${INGEST_TIMEOUT_SECONDS:-30}
+    volumes:
+      - hfcache:/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    command: ["serve"]
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  pipeline:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+      target: pipeline
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      HF_HOME: /models
+      TIMEZONE: ${TIMEZONE:-Asia/Jakarta}
+    volumes:
+      - hfcache:/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - manual
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+      target: prod
+    environment:
+      VITE_BACKEND_URL: http://api:8000
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - api
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  pgdata:
+  hfcache:
