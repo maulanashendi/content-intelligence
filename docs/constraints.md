@@ -47,6 +47,7 @@ These patterns must not appear in the codebase. Each was explicitly considered a
 - **No separate vector database (Qdrant, Milvus, Weaviate, Pinecone).** pgvector is sufficient.
 - **No GraphQL.** REST endpoints only.
 - **No WebSockets.** The dashboard is poll-based.
+- **No `nvidia-*`, `cuda-*`, or `triton` wheels in any image.** No deploy target has an NVIDIA GPU; Colima on macOS cannot pass one through, and the production VPS is CPU-only. `torch` is pinned to PyTorch's CPU index for `linux`/`win32` in `backend/pyproject.toml`. macOS host installs still use the standard PyPI wheel (Metal-capable). If a fresh `uv lock` ever reintroduces a `nvidia-*` / `cuda-*` / `triton` package, the pin is broken — fix the pin, do not accept the lock.
 - **No event sourcing or CQRS.** Standard CRUD against Postgres.
 - **Write-side API is restricted to two surfaces** (any addition beyond these requires a new decision entry):
   1. `ContentSource` CRUD on `/api/v1/sources` — editors manage RSS feeds at runtime (D19).

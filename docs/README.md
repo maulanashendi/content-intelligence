@@ -17,6 +17,7 @@ Everything else in `docs/` is reference material — open it on demand via the r
 |---|---|
 | Adding or changing an HTTP endpoint | `conventions.md` §API endpoints — the contract is FastAPI's `/openapi.json` |
 | Touching the frontend | `frontend.md` |
+| Frontend component placement (where does X go? when to promote?) | `architecture.md` §Frontend (shape) + `frontend.md` §Promotion rule + §Styling system priority |
 | Adding a top-level dependency | `tech-stack.md` (update it in the same PR) |
 | Docker, compose, or image change | `docker-sop.md` |
 | Logging — fields, levels, request IDs | `logging-sop.md` |

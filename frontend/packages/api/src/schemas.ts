@@ -25,10 +25,14 @@ export const ClusterSummarySchema = z.object({
   id: z.string().uuid(),
   label: z.string().nullable(),
   member_count: z.number().int().nullable(),
+  is_current: z.boolean(),
+  created_at: z.string().datetime(),
   trend_velocity: z.number().nullable(),
   novelty_score: z.number().nullable(),
   coverage_score: z.number().nullable(),
   recommendation: z.enum(["trending", "worth_writing", "saturated"]).nullable(),
+  summary: z.string().nullable(),
+  insight_calculated_at: z.string().datetime().nullable(),
 })
 export type ClusterSummary = z.infer<typeof ClusterSummarySchema>
 
@@ -90,3 +94,15 @@ export const TrendSignalSchema = z.object({
 export type TrendSignal = z.infer<typeof TrendSignalSchema>
 
 export const TrendSignalListSchema = z.array(TrendSignalSchema)
+
+export const ClusterRunSchema = z.object({
+  id: z.string().uuid(),
+  algorithm: z.string().nullable(),
+  algorithm_version: z.string().nullable(),
+  params: z.record(z.unknown()).nullable(),
+  started_at: z.string().datetime(),
+  finished_at: z.string().datetime().nullable(),
+  notes: z.string().nullable(),
+  cluster_count: z.number().int(),
+})
+export type ClusterRun = z.infer<typeof ClusterRunSchema>

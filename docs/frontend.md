@@ -167,6 +167,31 @@ Two enforcement layers, both required:
 
 If two features need shared logic, lift it to `@ei-fe/core`. If they need shared visuals, lift to `@ei-fe/ui`. Splitting `@ei-fe/core` itself is a discussion-worthy event — open an issue before adding generic utility files.
 
+### Promotion rule
+
+A component starts life inside the feature folder that needs it (`packages/features/src/<route>/`). The trigger to promote it out of that folder is the **second consumer** — not the first.
+
+```
+new component
+      │
+      ▼
+features/<route>/        ← stays here while only one feature uses it
+      │
+      │  (a second feature needs it?)
+      ▼
+@ei-fe/ui                if generic / presentational
+@ei-fe/core              if pure logic / formatter
+```
+
+| Component nature                                  | Destination on promotion       |
+| ------------------------------------------------- | ------------------------------ |
+| Generic, presentational, no domain knowledge      | `@ei-fe/ui/src/primitives/`    |
+| Layout chrome (sidebar, page head, status bar)    | `@ei-fe/ui/src/layout/`        |
+| Loading / error / empty state visuals             | `@ei-fe/ui/src/states/`        |
+| Pure logic, formatter, domain calculation         | `@ei-fe/core/src/`             |
+
+Single-use components stay where they were born. Premature promotion creates abstractions that may not survive the second use case. When the second consumer arrives, promotion is a refactor commit, separate from the feature work that triggered it — do not bundle "I needed `X` in feature B" with "promote `X` from feature A to `ui`".
+
 ## Routing
 
 URL is the source of truth for navigation state.
@@ -311,6 +336,29 @@ bunx shadcn add table
 ```
 
 After vendoring, modify components freely. They are part of this codebase, not an external dependency.
+
+### Styling system priority
+
+Three styling systems exist in the codebase. Pick the highest-priority one that can express the value:
+
+1. **Tailwind utilities + `cn()`** — default. Use for everything that can be expressed as static classes (layout, spacing, colors from tokens, typography, hover/focus states).
+2. **Inline `style={{}}`** — allowed only when the value is computed from runtime data (a tag color from props, a d3-driven transform, a position derived from state). Not for static tweaks like `padding: "16px 20px"` or `fontSize: 11` — those go in Tailwind classes.
+3. **Global CSS classes (`.card`, `.kw-row`, `.audit-list`)** — legacy from `template-fe/`. Allowed in existing components until they migrate. Forbidden in new components — reach for Tailwind utilities and a primitive in `@ei-fe/ui` instead.
+
+```
+runtime-computed?    ──► inline style={{}} (allowed)
+                          │
+                          ▼ no
+expressible as class? ──► Tailwind + cn()  (default)
+                          │
+                          ▼ no
+existing component?   ──► global CSS class (legacy only)
+                          │
+                          ▼ no
+                         build a primitive in @ei-fe/ui
+```
+
+If a `<Card>`-like primitive is needed and does not yet exist in `@ei-fe/ui`, build it (or file it) as part of the work that needs it. Do not reach for `<div className="card">` in new code — that is the legacy path.
 
 ### Icons
 

@@ -1,12 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
-import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys } from "./keys.js"
-import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema } from "./schemas.js"
+import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys, clusterRunKeys } from "./keys.js"
+import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema } from "./schemas.js"
 
 export function useMorningClusters() {
   return useQuery({
     queryKey: clusterKeys.morning(),
     queryFn: () => apiGet("/clusters/morning", ClusterListSchema),
+  })
+}
+
+export function useCurrentClusters(order: "asc" | "desc" = "desc") {
+  return useQuery({
+    queryKey: clusterKeys.current(order),
+    queryFn: () => apiGet(`/clusters/current?order=${order}`, ClusterListSchema),
   })
 }
 
@@ -81,6 +88,13 @@ export function useTrendSignals(limit: number = 10) {
   return useQuery({
     queryKey: trendSignalKeys.latest(limit),
     queryFn: () => apiGet(`/trend-signals/latest?limit=${limit}`, TrendSignalListSchema),
+  })
+}
+
+export function useLatestClusterRun() {
+  return useQuery({
+    queryKey: clusterRunKeys.latest(),
+    queryFn: () => apiGet("/clusters/runs/latest", ClusterRunSchema),
   })
 }
 

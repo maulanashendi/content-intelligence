@@ -177,6 +177,41 @@ All cluster, article, and trend-signal endpoints are read-only. Two write surfac
 
 The previous `POST /api/v1/pipeline/ingest-embed` is removed. Ingest + embed is fully reactive and needs no operator trigger.
 
+## Frontend
+
+The dashboard SPA lives in `frontend/` (Bun + Vite + React + Tailwind v4) and consumes the API surface above. It never talks to the database, the daemon, or any model directly.
+
+**Modular monorepo, mirroring the backend.** A single workspace under `frontend/packages/` with five packages, each an installable workspace member with explicit cross-package dependencies declared in `package.json`.
+
+| Layer   | Package           | Responsibility                                                            |
+| ------- | ----------------- | ------------------------------------------------------------------------- |
+| Shell   | `@ei-fe/app`      | Vite SPA entry, providers, router, route shells                           |
+| Compose | `@ei-fe/features` | Per-route views composed from `ui` primitives and `api` hooks             |
+| Atoms   | `@ei-fe/ui`       | shadcn primitives, layout, state components, icons, Tailwind preset       |
+| Data    | `@ei-fe/api`      | fetch wrapper, generated OpenAPI types, Zod schemas, TanStack Query hooks |
+| Kernel  | `@ei-fe/core`     | env validation, design tokens, domain types, formatters, error class      |
+
+### Dependency graph
+
+```
+app
+ │
+ ▼
+features ──► ui ──┐
+ │                ├──► core
+ └──► api ────────┘
+```
+
+Three rules govern composition:
+
+- `ui` never imports `api`; `api` never imports `ui`. UI primitives are presentational; the data layer knows no DOM.
+- Features never import other features. Shared visuals lift to `@ei-fe/ui`; shared logic lifts to `@ei-fe/core`.
+- A component used by ≥2 features is promoted out of its feature folder. Single-use components stay where they were born — premature promotion creates abstractions that may not survive the second use case.
+
+Routes are thin: read URL params, call the query hook, render the feature view. Logic in routes is a smell — lift it to `features` or `core`.
+
+This section sets the shape. Operational rules — package responsibilities in detail, naming, codegen workflow, styling priority, testing — live in `docs/frontend.md`.
+
 ## Data store
 
 A single PostgreSQL 16 instance with the pgvector 0.7+ extension.

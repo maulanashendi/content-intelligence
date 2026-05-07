@@ -24,6 +24,7 @@ const FLAG_LABEL: Record<NonNullable<Flag>, string> = {
   fading: "↓ fading",
 }
 
+
 function formatCaptured(iso: string): string {
   return formatTime(iso) + " wib"
 }

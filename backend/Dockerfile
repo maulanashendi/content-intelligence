@@ -90,6 +90,7 @@ CMD ["python", "-m", "ingest.cli", "serve"]
 # ============ Pipeline build — full ML stack ============
 FROM deps AS pipeline-build
 COPY packages/core/src        packages/core/src
+COPY packages/ingest/src      packages/ingest/src
 COPY packages/embedding/src   packages/embedding/src
 COPY packages/clustering/src  packages/clustering/src
 COPY packages/labeling/src    packages/labeling/src

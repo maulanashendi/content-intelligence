@@ -1,6 +1,7 @@
 export const clusterKeys = {
   all: ["clusters"] as const,
   morning: () => [...clusterKeys.all, "morning"] as const,
+  current: (order: "asc" | "desc") => [...clusterKeys.all, "current", order] as const,
   detail: (id: string) => [...clusterKeys.all, "detail", id] as const,
 }
 
@@ -22,4 +23,9 @@ export const pipelineKeys = {
 export const trendSignalKeys = {
   all: ["trend-signals"] as const,
   latest: (limit?: number) => [...trendSignalKeys.all, "latest", limit] as const,
+}
+
+export const clusterRunKeys = {
+  all: ["cluster-runs"] as const,
+  latest: () => [...clusterRunKeys.all, "latest"] as const,
 }

@@ -13,5 +13,6 @@ def get_embedder() -> SentenceTransformer:
         _model = SentenceTransformer(
             settings.embedding_model_name,
             trust_remote_code=True,  # required by google/embeddinggemma-300m custom pooling code
+            token=settings.hf_token or None,
         )
     return _model
