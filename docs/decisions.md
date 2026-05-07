@@ -503,3 +503,82 @@ Disabling scoring acknowledges that velocity/novelty/coverage outputs were not l
 - Re-enabling `scoring` requires a new decision entry naming the criteria that justified the toggle.
 - Schedule cadence (`06:00`) and timezone (`Asia/Jakarta`) are read from `settings`. Changing the schedule does not require redeployment of new code, only an env reload.
 - D9 is marked superseded; D20 and D22 carry partial-supersession notes pointing here.
+
+---
+
+## D25. Full-text article scraping: trafilatura fast path + Playwright deferred fallback
+
+**Context.** The ingest pipeline currently populates `article.first_paragraph` from RSS `<summary>` only — typically a 200–400 character excerpt stripped of HTML. Embeddings produced from this truncated text cluster weakly: semantically related articles diverge because their excerpts share no vocabulary even when their full bodies are near-identical. The root fix is to store the full article body and embed that instead.
+
+**Options considered.**
+- Keep the current excerpt-only approach
+- Playwright for all URLs (always headless browser)
+- `trafilatura` + `httpx` for all URLs (no browser)
+- `trafilatura` + `httpx` as the primary path, Playwright only for articles that fail the fast path, executed as a deferred background worker
+
+**Decision.** Two-phase scraping, executed in the `pipeline-daemon`:
+
+1. **Fast path (inline, after each ingest cycle).** For every newly ingested article, attempt `httpx` fetch + `trafilatura` extraction with a 10-second timeout. On success, write to `article.content` and set `article.scrape_status = fast_ok`. On failure (network error, timeout, empty extraction), set `article.scrape_status = fast_failed` — the article enters the deferred queue implicitly.
+
+2. **Playwright worker (deferred asyncio task in daemon).** A background `asyncio` task polls for `scrape_status = fast_failed` articles at a fixed cadence. For each batch it: launches a Playwright Chromium browser, renders the page, passes the rendered HTML through `trafilatura`, writes `content`, then closes the browser. Max 2 attempts per article. After 2 failures, `scrape_status = playwright_failed` and the article is not retried.
+
+Both paths use `trafilatura` for extraction — output quality is consistent regardless of which path succeeds.
+
+**Schema changes required.**
+- `article.content` — `Text`, nullable. Stores the full article body. Existing articles default to `NULL`; embeddings for those articles continue using `first_paragraph` as fallback until `content` is populated.
+- `article.scrape_status` — new `ScrapeStatus` enum: `pending | fast_ok | fast_failed | playwright_ok | playwright_failed`. Default `pending` on insert. Index on `(scrape_status)` to support the Playwright worker's poll query.
+- Migration required (Alembic autogenerate).
+
+**Scope constraints (firm).**
+- **New articles only.** No backfill of existing rows. Articles already in the table before this feature lands keep `scrape_status = NULL` and `content = NULL`; the embedding step continues using `first_paragraph` for those.
+- **Fast path timeout: 10 seconds.** Any article that does not resolve within 10 seconds via httpx is immediately moved to the Playwright queue.
+- **Playwright retry cap: 2 attempts.** After two failures the article is marked `playwright_failed` and abandoned.
+- **Rate limiting per domain.** The Playwright worker enforces a per-domain concurrency cap and inter-request delay to avoid hammering any single outlet. The fast path uses httpx with existing User-Agent spoofing (already in `rss.py`).
+- **Browser lifecycle: launch → scrape batch → close.** The Playwright browser is not kept alive between Playwright worker ticks. This prevents resident memory pressure alongside the sentence-transformers and llama-cpp models that share the same container.
+
+**Rationale.** Playwright-for-all was rejected because most Indonesian news sites (Detik, Kompas, Tempo, Tribun) serve full article HTML without JS rendering — a headless browser adds 4–6 s of overhead per article for no gain. `trafilatura`-only was rejected because a minority of outlets are SPA or require JS-rendered bylines. The two-phase model captures the fast case (≥85% of articles, ~0.3–0.8 s each) without surrendering coverage on JS-heavy pages.
+
+An in-memory asyncio queue was rejected in favour of the `scrape_status` column because it does not survive daemon restarts — articles that failed the fast path before a crash would silently lose their Playwright retry. The column is durable and queryable.
+
+A separate `article_scrape_queue` table was rejected for being over-engineered at this scale. The status enum on `article` is sufficient and avoids a join in the embedding step when reading `content`.
+
+**Dependency additions.**
+- `trafilatura` → `backend/packages/ingest/pyproject.toml`. Pure Python, no Docker change beyond dep-cache invalidation.
+- `playwright` → `backend/packages/ingest/pyproject.toml`. Requires: (a) `playwright install chromium` in the `pipeline-build` Dockerfile stage; (b) Chromium system libraries (`libnss3`, `libatk1.0-0`, `libatk-bridge2.0-0`, `libcups2`, `libdrm2`, `libxkbcommon0`, `libxcomposite1`, `libxdamage1`, `libxfixes3`, `libxrandr2`, `libgbm1`, `libasound2`) added via `apt-get` in `pipeline-build`. (c) `--no-sandbox` Chromium flag required when running as non-root inside Docker.
+- Both dependencies must be added to `docs/tech-stack.md` before the PR merges.
+
+**Docker impact.** The `pipeline` image budget is ≤ 6GB (docker-sop.md §Image-size budgets). Playwright + Chromium binary adds approximately 400–600 MB. Verify `docker images | grep editor-intelligence` does not exceed budget after the build. Per docker-sop.md §Layer-cache rules, adding `playwright` to `pyproject.toml` invalidates the `deps` stage cache — expected and intentional.
+
+**Embedding step integration.** The `embedding` module reads the text to vectorize. After this change, the priority is: `article.content` if non-null, else `article.first_paragraph`. This fallback is implemented inside `embedding.pipeline` (not in `ingest`), keeping the modules decoupled.
+
+**Implication.**
+- A new `ScrapeStatus` enum and two new columns (`content`, `scrape_status`) are added to `core.models.Article`. Migration is Alembic autogenerate.
+- A new `ingest/scraper.py` module owns the fast-path logic (httpx + trafilatura + timeout).
+- A new `ingest/playwright_worker.py` module owns the Playwright deferred logic.
+- `pipeline/runner.py` gains a `scrape_new_articles` call after each ingest+embed tick, and a background `playwright_worker_loop` asyncio task started in `serve`.
+- The Playwright worker runs at a fixed poll interval (configurable via `settings`), separate from the 10-minute ingest poll.
+- `docs/schema.dbml` must be updated to reflect the two new columns.
+- `docs/tech-stack.md` must list `trafilatura` and `playwright` under their respective categories before merging.
+- Re-enabling backfill for existing articles requires a new decision entry.
+
+---
+
+## D26. Integrate Google Search Console data into ingest pipeline
+
+**Context.** Script verifikasi (`backend/scripts/gsc_verify.py`) membuktikan service account `user-need@teco-analytics.iam.gserviceaccount.com` bisa menarik data dari GSC property `sc-domain:tempo.co`. Tiga dimensi data tersedia: per page, per query, dan kombinasi page+query. Data ini berguna sebagai scoring input — terutama untuk mendeteksi gap coverage (query volume tinggi tapi tidak ada artikel) dan underperforming articles (posisi > 10 untuk query tertentu).
+
+**Decision.**
+1. Tambah tiga tabel raw GSC: `gsc_page`, `gsc_query`, `gsc_page_query`. Masing-masing menyimpan data agregat per period (period_start, period_end) dengan unique constraint sehingga re-fetch idempoten.
+2. Module baru `ingest/gsc.py` bertanggung jawab fetch dari GSC API dan upsert ke tiga tabel. Fungsi publik: `run(session, settings)`.
+3. GSC fetch dipanggil di awal setiap `cluster_label_score` group — baik dari scheduler harian (06:00 WIB) maupun manual trigger. Data GSC selalu fresh saat cluster+label jalan.
+4. `article_gsc_metric` tetap dipertahankan — dipakai scoring untuk underperformance check per artikel internal. Tiga tabel baru adalah raw storage site-wide, bukan pengganti.
+5. Dua dep baru ditambahkan ke `ingest/pyproject.toml`: `google-api-python-client>=2.0` dan `google-auth>=2.0`.
+6. GSC data tidak pernah keluar ke API (constraint existing tetap berlaku).
+
+**Rationale.** Menempatkan GSC fetch di `ingest` package konsisten dengan pola yang ada — ingest adalah satu-satunya package yang menarik data dari sumber eksternal. Pipeline daemon sudah memiliki daily scheduler; menambahkan GSC fetch sebelum cluster+label tidak membutuhkan scheduler baru. Fetch gagal (network error, credential issue) di-log sebagai WARNING dan tidak menghentikan cluster+label — daemon tetap jalan.
+
+**Implication.**
+- Tiga tabel baru membutuhkan Alembic migration.
+- `GSC_SITE_URL`, `GSC_CREDENTIALS_PATH`, `GSC_FETCH_DAYS` ditambahkan ke `core/config.py` dan `.env.example`.
+- `docs/tech-stack.md` diupdate dengan dua dep baru.
+- Credentials file (`teco-analytics-*.json`) disimpan di `backend/` root, di-gitignore, dan di-mount ke container via volume atau secrets saat deploy.

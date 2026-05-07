@@ -41,12 +41,21 @@ async def _score() -> int:
     return await run()
 
 
+async def _gsc() -> None:
+    from core.db import get_session
+    from ingest import gsc
+
+    async with get_session() as session:
+        await gsc.run(session, settings)
+
+
 _STEP_RUNNERS: dict[str, Callable[[], Coroutine[Any, Any, Any]]] = {
     "ingest": _ingest,
     "embed": _embed,
     "cluster": _cluster,
     "label": _label,
     "score": _score,
+    "gsc": _gsc,
 }
 
 

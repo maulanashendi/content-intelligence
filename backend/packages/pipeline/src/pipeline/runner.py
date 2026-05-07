@@ -32,6 +32,10 @@ async def _run_ingest_then_embed() -> None:
 
     await ingest_run()
 
+    from ingest.scraper import run as scrape_run
+
+    await scrape_run()
+
     from embedding.pipeline import run as embed_run
 
     await embed_run()
@@ -94,6 +98,13 @@ async def _ingest_loop(shutdown: asyncio.Event, immediate: deque[str]) -> None:
                 await asyncio.wait_for(shutdown.wait(), timeout=min(1.0, remaining))
 
 
+async def _run_gsc_fetch() -> None:
+    from ingest import gsc
+
+    async with get_session() as session:
+        await gsc.run(session, settings)
+
+
 async def _run_cluster_label() -> None:
     from clustering.pipeline import run as cluster_run
 
@@ -136,6 +147,7 @@ async def _cluster_worker(queue: asyncio.Queue[None], shutdown: asyncio.Event) -
 
         logger.info("pipeline group=%s started", _GROUP_CLUSTER_LABEL_SCORE)
         try:
+            await _run_gsc_fetch()
             await _run_cluster_label()
             logger.info("pipeline group=%s finished", _GROUP_CLUSTER_LABEL_SCORE)
         except Exception:
@@ -245,11 +257,14 @@ async def run_loop() -> None:
         settings.timezone,
     )
 
+    from ingest.playwright_worker import run_loop as playwright_run_loop
+
     tasks = [
         asyncio.create_task(_listen(shutdown, immediate, cluster_queue)),
         asyncio.create_task(_ingest_loop(shutdown, immediate)),
         asyncio.create_task(_cluster_scheduler(shutdown, cluster_queue)),
         asyncio.create_task(_cluster_worker(cluster_queue, shutdown)),
+        asyncio.create_task(playwright_run_loop(shutdown)),
     ]
 
     try:

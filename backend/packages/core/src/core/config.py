@@ -25,7 +25,14 @@ class Settings(BaseSettings):
     umap_target_dimensions: int = 30
 
     ingest_timeout_seconds: int = 30
+    scrape_fast_timeout_seconds: int = 10
+    playwright_poll_interval_seconds: int = 120
+    playwright_batch_size: int = 10
     timezone: str = "Asia/Jakarta"
+
+    gsc_site_url: str = "sc-domain:tempo.co"
+    gsc_credentials_path: str = "teco-analytics-2cea1d43461c.json"
+    gsc_fetch_days: int = 7
 
 
 settings = Settings()

@@ -20,6 +20,14 @@ Enum insight_recommendation {
   saturated
 }
 
+Enum scrape_status {
+  pending           // baru diingest, belum dicoba scrape
+  fast_ok           // berhasil via httpx + trafilatura
+  fast_failed       // gagal fast path, masuk antrian Playwright
+  playwright_ok     // berhasil via Playwright
+  playwright_failed // gagal setelah 2x percobaan Playwright, tidak diretry
+}
+
 Table content_source {
   id uuid [pk, default: `gen_random_uuid()`]
   name varchar
@@ -38,13 +46,16 @@ Table article {
   title varchar [not null]
   url varchar [unique, not null]
   first_paragraph text
-  last_paragraph text
+  content text                      // full article body; NULL = belum di-scrape atau gagal
+  scrape_status scrape_status       // NULL untuk artikel lama sebelum fitur ini live
+  scrape_attempts int [default: 0]  // jumlah percobaan Playwright (max 2)
   published_at timestamp
   created_at timestamp [default: `now()`]
 
   indexes {
     source_id
     published_at
+    scrape_status  // dipakai Playwright worker: WHERE scrape_status = 'fast_failed'
   }
 }
 
@@ -58,6 +69,69 @@ Table article_embedding {
   model_version varchar
   embedding vector(768)
   created_at timestamp [default: `now()`]
+}
+
+// Raw GSC page-level metrics — one row per URL per period.
+// Covers all pages returned by GSC (articles, tag pages, homepage).
+// Soft-linked to article via page_url = article.url; no FK because not all
+// pages exist in the article table. Scoring input only, never returned to FE.
+Table gsc_page {
+  id           uuid [pk, default: `gen_random_uuid()`]
+  page_url     varchar [not null]
+  clicks       int
+  impressions  int
+  ctr          float
+  avg_position float
+  period_start date [not null]
+  period_end   date [not null]
+  fetched_at   timestamp [default: `now()`]
+
+  indexes {
+    (page_url, period_start, period_end) [unique]
+    period_start
+  }
+}
+
+// Raw GSC site-level query metrics — one row per search query per period.
+// Not linked to any page or article; captures what users searched for across
+// the whole site. Scoring input only, never returned to FE.
+Table gsc_query {
+  id           uuid [pk, default: `gen_random_uuid()`]
+  query        varchar [not null]
+  clicks       int
+  impressions  int
+  ctr          float
+  avg_position float
+  period_start date [not null]
+  period_end   date [not null]
+  fetched_at   timestamp [default: `now()`]
+
+  indexes {
+    (query, period_start, period_end) [unique]
+    period_start
+  }
+}
+
+// Raw GSC page+query combinations — one row per (URL, query) per period.
+// Answers "which queries drive traffic to which page". Soft-linked to
+// gsc_page via page_url (no FK — period may differ). Scoring input only.
+Table gsc_page_query {
+  id           uuid [pk, default: `gen_random_uuid()`]
+  page_url     varchar [not null, ref: > gsc_page.page_url]
+  query        varchar [not null, ref: > gsc_query.query]
+  clicks       int
+  impressions  int
+  ctr          float
+  avg_position float
+  period_start date [not null]
+  period_end   date [not null]
+  fetched_at   timestamp [default: `now()`]
+
+  indexes {
+    (page_url, query, period_start, period_end) [unique]
+    page_url
+    period_start
+  }
 }
 
 // Reference-only. Read by the scoring job to flag underperforming internal

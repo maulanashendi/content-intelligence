@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import httpx
 from core.db import get_session
-from core.models import Article, ContentSource, SourceStatus, SourceType
+from core.models import Article, ContentSource, ScrapeStatus, SourceStatus, SourceType
 from lxml import etree
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -84,6 +84,7 @@ async def ingest_sitemap(client: httpx.AsyncClient) -> int:
                     title=title,
                     url=entry["url"],
                     published_at=entry["published_at"],
+                    scrape_status=ScrapeStatus.pending,
                 )
                 stmt = stmt.on_conflict_do_nothing(index_elements=["url"])
                 await session.execute(stmt)
