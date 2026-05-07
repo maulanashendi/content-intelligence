@@ -48,9 +48,13 @@ services:
       CLUSTER_SCHEDULE_MINUTE: "0"
       CLUSTERING_WINDOW_DAYS: "7"
       INGEST_TIMEOUT_SECONDS: "30"
+      GSC_SITE_URL: ${GSC_SITE_URL:-sc-domain:tempo.co}
+      GSC_CREDENTIALS_PATH: /app/gsc-credentials.json
+      GSC_FETCH_DAYS: ${GSC_FETCH_DAYS:-7}
     volumes:
       - hfcache:/models
       - ./packages:/app/packages
+      - ./teco-analytics-2cea1d43461c.json:/app/gsc-credentials.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,9 +72,13 @@ services:
       HF_HOME: /models
       HF_TOKEN: ${HF_TOKEN}
       TIMEZONE: Asia/Jakarta
+      GSC_SITE_URL: ${GSC_SITE_URL:-sc-domain:tempo.co}
+      GSC_CREDENTIALS_PATH: /app/gsc-credentials.json
+      GSC_FETCH_DAYS: ${GSC_FETCH_DAYS:-7}
     volumes:
       - hfcache:/models
       - ./packages:/app/packages
+      - ./teco-analytics-2cea1d43461c.json:/app/gsc-credentials.json:ro
     depends_on:
       postgres:
         condition: service_healthy

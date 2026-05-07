@@ -39,6 +39,14 @@ class SourceStatus(enum.Enum):
     blocked = "blocked"
 
 
+class ScrapeStatus(enum.Enum):
+    pending = "pending"
+    fast_ok = "fast_ok"
+    fast_failed = "fast_failed"
+    playwright_ok = "playwright_ok"
+    playwright_failed = "playwright_failed"
+
+
 class ClusterAlgorithm(enum.Enum):
     hdbscan = "hdbscan"
     kmeans = "kmeans"
@@ -82,7 +90,9 @@ class Article(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     first_paragraph: Mapped[str | None] = mapped_column(Text)
-    last_paragraph: Mapped[str | None] = mapped_column(Text)
+    content: Mapped[str | None] = mapped_column(Text)
+    scrape_status: Mapped[ScrapeStatus | None] = mapped_column(Enum(ScrapeStatus))
+    scrape_attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
     published_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
@@ -91,6 +101,7 @@ class Article(Base):
     __table_args__ = (
         Index("ix_article_source_id", "source_id"),
         Index("ix_article_published_at", "published_at"),
+        Index("ix_article_scrape_status", "scrape_status"),
     )
 
     source: Mapped["ContentSource"] = relationship(back_populates="articles")
@@ -147,6 +158,79 @@ class ArticleGscMetric(Base):
     )
 
     article: Mapped["Article"] = relationship(back_populates="gsc_metrics")
+
+
+class GscPage(Base):
+    __tablename__ = "gsc_page"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid
+    )
+    page_url: Mapped[str] = mapped_column(String, nullable=False)
+    clicks: Mapped[int | None] = mapped_column(Integer)
+    impressions: Mapped[int | None] = mapped_column(Integer)
+    ctr: Mapped[float | None] = mapped_column(Float)
+    avg_position: Mapped[float | None] = mapped_column(Float)
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("page_url", "period_start", "period_end", name="uq_gsc_page_url_period"),
+        Index("ix_gsc_page_period_start", "period_start"),
+    )
+
+
+class GscQuery(Base):
+    __tablename__ = "gsc_query"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid
+    )
+    query: Mapped[str] = mapped_column(String, nullable=False)
+    clicks: Mapped[int | None] = mapped_column(Integer)
+    impressions: Mapped[int | None] = mapped_column(Integer)
+    ctr: Mapped[float | None] = mapped_column(Float)
+    avg_position: Mapped[float | None] = mapped_column(Float)
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("query", "period_start", "period_end", name="uq_gsc_query_period"),
+        Index("ix_gsc_query_period_start", "period_start"),
+    )
+
+
+class GscPageQuery(Base):
+    __tablename__ = "gsc_page_query"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid
+    )
+    page_url: Mapped[str] = mapped_column(String, nullable=False)
+    query: Mapped[str] = mapped_column(String, nullable=False)
+    clicks: Mapped[int | None] = mapped_column(Integer)
+    impressions: Mapped[int | None] = mapped_column(Integer)
+    ctr: Mapped[float | None] = mapped_column(Float)
+    avg_position: Mapped[float | None] = mapped_column(Float)
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "page_url", "query", "period_start", "period_end", name="uq_gsc_page_query_period"
+        ),
+        Index("ix_gsc_page_query_page_url", "page_url"),
+        Index("ix_gsc_page_query_period_start", "period_start"),
+    )
 
 
 class TrendSignal(Base):

@@ -22,7 +22,7 @@ async def run() -> int:
                 ArticleEmbedding.article_id == Article.id
             )
             result = await session.execute(
-                select(Article.id, Article.title, Article.first_paragraph)
+                select(Article.id, Article.title, Article.first_paragraph, Article.content)
                 .where(~exists(subq))
                 .limit(BATCH_SIZE)
             )
@@ -31,14 +31,14 @@ async def run() -> int:
                 break
 
             texts = [
-                f"{title}\n{first_paragraph}" if first_paragraph else title
-                for _, title, first_paragraph in rows
+                f"{title}\n{body}" if (body := (content or first_paragraph)) else title
+                for _, title, first_paragraph, content in rows
             ]
             vectors = embedder.encode(texts, normalize_embeddings=True)
             if vectors.shape[1] != 768:
                 raise ValueError(f"embedding dim mismatch: got {vectors.shape[1]}, expected 768")
 
-            for (article_id, _, _), vector in zip(rows, vectors, strict=True):
+            for (article_id, _, _, _), vector in zip(rows, vectors, strict=True):
                 session.add(
                     ArticleEmbedding(
                         article_id=article_id,

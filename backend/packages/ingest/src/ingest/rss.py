@@ -8,7 +8,7 @@ import feedparser
 import httpx
 from core.config import settings
 from core.db import get_session
-from core.models import Article, ContentSource, SourceStatus, SourceType
+from core.models import Article, ContentSource, ScrapeStatus, SourceStatus, SourceType
 from lxml import html as lxml_html
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -71,6 +71,7 @@ def _parse_entry(entry: feedparser.FeedParserDict) -> dict:
         "url": link,
         "published_at": published_at,
         "first_paragraph": first_paragraph,
+        "scrape_status": ScrapeStatus.pending,
     }
 
 

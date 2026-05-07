@@ -61,6 +61,10 @@ Switching the embedding model requires a schema migration (vector dimension) and
 | `feedparser` 6.0+ | RSS parsing | Tolerant of malformed feeds, handles timezone and encoding edge cases |
 | `httpx` 0.27+ | HTTP client | Async, supports parallel fetching of all RSS sources |
 | `lxml` 5.3+ | XML parsing for sitemaps | Fast, robust |
+| `trafilatura` 1.9+ | Article body extraction | Boilerplate removal (nav, ads, footer) from raw HTML; fast path in the two-phase scraper (D25) |
+| `playwright` 1.44+ | Headless Chromium fallback scraper | JS-rendered pages that trafilatura+httpx cannot reach; deferred background worker in pipeline-daemon (D25) |
+| `google-api-python-client` 2.0+ | Google Search Console API client | Official Google client for Search Analytics API v1 |
+| `google-auth` 2.0+ | GSC service account credentials | Handles service account JWT auth for Google APIs |
 
 ## Operational
 
