@@ -11,6 +11,7 @@ from core.db import get_session
 from core.models import (
     Article,
     ContentSource,
+    ScrapeStatus,
     TrendSignal,
     TrendSignalArticle,
 )
@@ -160,6 +161,7 @@ async def ingest_trends(client: httpx.AsyncClient) -> int:
                         title=article_data["title"],
                         url=article_data["url"],
                         published_at=None,
+                        scrape_status=ScrapeStatus.pending,
                     )
                     article_stmt = article_stmt.on_conflict_do_nothing(index_elements=["url"])
                     await session.execute(article_stmt)
