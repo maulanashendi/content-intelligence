@@ -14,12 +14,6 @@ Enum cluster_algorithm {
   kmeans
 }
 
-Enum insight_recommendation {
-  trending
-  worth_writing
-  saturated
-}
-
 Enum scrape_status {
   pending           // baru diingest, belum dicoba scrape
   fast_ok           // berhasil via httpx + trafilatura
@@ -220,9 +214,11 @@ Table cluster_insight {
   id uuid [pk, default: `gen_random_uuid()`]
   cluster_id uuid [ref: - article_cluster.id]
   trend_velocity float
-  novelty_score float
-  coverage_score float
-  recommendation insight_recommendation
+  competitor_count int [not null, default: 0]
+  trend_match_count int [not null, default: 0]
+  tempo_covered boolean [not null, default: false]
+  last_internal_days_ago int
+  underperformed boolean [not null, default: false]
   summary text
   calculated_at timestamp [default: `now()`]
 }

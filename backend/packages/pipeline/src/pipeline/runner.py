@@ -105,7 +105,7 @@ async def _run_gsc_fetch() -> None:
         await gsc.run(session, settings)
 
 
-async def _run_cluster_label() -> None:
+async def _run_cluster_label_score() -> None:
     from clustering.pipeline import run as cluster_run
 
     await cluster_run()
@@ -113,6 +113,11 @@ async def _run_cluster_label() -> None:
     from labeling.pipeline import run as label_run
 
     await label_run()
+
+    from scoring.pipeline import run as score_run
+
+    count = await score_run()
+    logger.info("scoring complete cluster_count=%d", count)
 
 
 async def _acquire_lock(group: str) -> bool:
@@ -148,7 +153,7 @@ async def _cluster_worker(queue: asyncio.Queue[None], shutdown: asyncio.Event) -
         logger.info("pipeline group=%s started", _GROUP_CLUSTER_LABEL_SCORE)
         try:
             await _run_gsc_fetch()
-            await _run_cluster_label()
+            await _run_cluster_label_score()
             logger.info("pipeline group=%s finished", _GROUP_CLUSTER_LABEL_SCORE)
         except Exception:
             logger.exception("pipeline group=%s failed", _GROUP_CLUSTER_LABEL_SCORE)
