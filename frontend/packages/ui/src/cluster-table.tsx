@@ -1,5 +1,4 @@
-import { formatScore } from "@ei-fe/core"
-import { RecommendationBadge } from "./primitives/badge.js"
+import { SignalBadge } from "./primitives/badge.js"
 import { VelocityBar } from "./primitives/velocity-bar.js"
 
 interface ClusterRow {
@@ -7,9 +6,10 @@ interface ClusterRow {
   label: string | null
   member_count: number | null
   trend_velocity: number | null
-  novelty_score: number | null
-  coverage_score: number | null
-  recommendation: "trending" | "worth_writing" | "saturated" | null
+  competitor_count: number | null
+  trend_match_count: number | null
+  tempo_covered: boolean | null
+  underperformed: boolean | null
 }
 
 interface ClusterTableProps {
@@ -39,10 +39,10 @@ export function ClusterTable({
         <thead>
           <tr>
             <th style={{ width: "36%" }}>Label</th>
-            <th>Insight</th>
+            <th>Status</th>
             <th style={{ minWidth: 160 }}>Velocity</th>
-            <th>Novelty</th>
-            <th>Coverage</th>
+            <th>Kompetitor</th>
+            <th>Trend</th>
             <th className="right">
               {onToggleOrder ? (
                 <button
@@ -91,13 +91,13 @@ export function ClusterTable({
                   </div>
                 </td>
                 <td>
-                  <RecommendationBadge recommendation={c.recommendation} />
+                  <SignalBadge tempoCovered={c.tempo_covered} underperformed={c.underperformed} />
                 </td>
                 <td>
                   <VelocityBar velocity={c.trend_velocity} />
                 </td>
-                <td className="num">{formatScore(c.novelty_score)}</td>
-                <td className="num">{formatScore(c.coverage_score)}</td>
+                <td className="num">{c.competitor_count ?? "—"}</td>
+                <td className="num">{c.trend_match_count ?? "—"}</td>
                 <td className="num right">{c.member_count ?? "—"}</td>
               </tr>
             ))

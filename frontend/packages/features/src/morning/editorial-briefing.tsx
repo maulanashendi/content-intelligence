@@ -13,11 +13,10 @@ function now(): string {
 }
 
 export function EditorialBriefing({ clusters }: EditorialBriefingProps) {
-  const trending = clusters.filter((c) => c.recommendation === "trending")
-  const worthWriting = clusters.filter((c) => c.recommendation === "worth_writing")
   const topVelocity = [...clusters].sort((a, b) => (b.trend_velocity ?? 0) - (a.trend_velocity ?? 0)).slice(0, 3)
-  const highNovelty = worthWriting.filter((c) => (c.novelty_score ?? 0) > 0.6).slice(0, 3)
-  const lowCoverage = worthWriting.filter((c) => (c.coverage_score ?? 1) < 0.35).slice(0, 2)
+  const highCompetitor = clusters.filter((c) => (c.competitor_count ?? 0) >= 5).slice(0, 3)
+  const underperformed = clusters.filter((c) => c.underperformed).slice(0, 2)
+  const stale = clusters.filter((c) => (c.last_internal_days_ago ?? 0) > 7 && !c.tempo_covered).slice(0, 2)
 
   return (
     <div className="card briefing" style={{ margin: "0 28px 0" }}>
@@ -54,10 +53,10 @@ export function EditorialBriefing({ clusters }: EditorialBriefingProps) {
                 <ul className="briefing-list">
                   {topVelocity.map((c) => (
                     <li key={c.id}>
-                      <strong>{c.label}</strong> mendominasi tren (velocity {c.trend_velocity?.toFixed(1)}).{" "}
-                      {c.member_count} artikel dari berbagai outlet —{" "}
-                      {(c.coverage_score ?? 0) > 0.6
-                        ? "cerita sudah padat, butuh sudut baru."
+                      <strong>{c.label}</strong> mendominasi tren (velocity {c.trend_velocity?.toFixed(2)}).{" "}
+                      {c.member_count} artikel dari {c.competitor_count ?? "—"} outlet kompetitor —{" "}
+                      {(c.competitor_count ?? 0) >= 5
+                        ? "cerita sudah ramai, butuh sudut baru."
                         : "masih ada ruang untuk investigasi."}
                     </li>
                   ))}
@@ -65,19 +64,18 @@ export function EditorialBriefing({ clusters }: EditorialBriefingProps) {
               </div>
             )}
 
-            {highNovelty.length > 0 && (
+            {highCompetitor.length > 0 && (
               <div className="briefing-section">
-                <div className="briefing-h">Nilai Novelty Tinggi — Worth Writing</div>
+                <div className="briefing-h">Kompetitor Aktif — Peluang Worth Writing</div>
                 <ul className="briefing-list">
-                  {highNovelty.map((c) => (
+                  {highCompetitor.map((c) => (
                     <li key={c.id}>
-                      <strong>{c.label}</strong> — novelty{" "}
-                      {c.novelty_score != null ? Math.round(c.novelty_score * 100) : "—"}%,{" "}
-                      coverage {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}%.{" "}
-                      {(c.coverage_score ?? 1) < 0.4 ? (
-                        <em>Belum banyak yang menulis — lane terbuka.</em>
+                      <strong>{c.label}</strong> — {c.competitor_count} sumber kompetitor,{" "}
+                      {c.trend_match_count ?? 0} sinyal trend.{" "}
+                      {!c.tempo_covered ? (
+                        <em>Tempo belum masuk — lane terbuka.</em>
                       ) : (
-                        "Kompetitor sudah masuk tapi masih tipis."
+                        "Tempo sudah menulis topik ini."
                       )}
                     </li>
                   ))}
@@ -85,18 +83,17 @@ export function EditorialBriefing({ clusters }: EditorialBriefingProps) {
               </div>
             )}
 
-            {lowCoverage.length > 0 && (
+            {stale.length > 0 && (
               <div className="briefing-section">
                 <div className="briefing-h">Di Mana Tempo Punya Lane</div>
                 <ul className="briefing-list">
-                  {lowCoverage.map((c) => (
+                  {stale.map((c) => (
                     <li key={c.id}>
-                      <strong>{c.label}</strong> — coverage hanya{" "}
-                      {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}%.{" "}
+                      <strong>{c.label}</strong> — terakhir ditulis {c.last_internal_days_ago} hari lalu.{" "}
                       <em>
-                        {c.member_count != null && c.member_count < 10
-                          ? "Volume masih rendah, kompetitor belum masuk penuh."
-                          : "Ada celah sudut analisis yang belum ditulis."}
+                        {(c.competitor_count ?? 0) < 5
+                          ? "Volume kompetitor masih rendah, momentum tersedia."
+                          : "Kompetitor aktif — pertimbangkan sudut analisis baru."}
                       </em>
                     </li>
                   ))}
@@ -104,19 +101,14 @@ export function EditorialBriefing({ clusters }: EditorialBriefingProps) {
               </div>
             )}
 
-            {trending.length > 0 && (
+            {underperformed.length > 0 && (
               <div className="briefing-section">
-                <div className="briefing-h">Yang Perlu Dipantau</div>
+                <div className="briefing-h">Kandidat Rewrite</div>
                 <ul className="briefing-list">
-                  {trending.map((c) => (
+                  {underperformed.map((c) => (
                     <li key={c.id}>
-                      <strong>{c.label}</strong> — sedang trending dengan velocity {c.trend_velocity?.toFixed(1)}.
-                      {" "}Pantau pergerakan 6 jam ke depan sebelum memutuskan sudut tulisan.
-                    </li>
-                  ))}
-                  {clusters.filter((c) => (c.coverage_score ?? 0) > 0.8).slice(0, 1).map((c) => (
-                    <li key={c.id + "-warn"}>
-                      <strong>{c.label}</strong> coverage sudah {c.coverage_score != null ? Math.round(c.coverage_score * 100) : "—"}% — pertimbangkan deprioritisasi.
+                      <strong>{c.label}</strong> — artikel Tempo underperformed di GSC.{" "}
+                      Pertimbangkan rewrite dengan angle baru.
                     </li>
                   ))}
                 </ul>

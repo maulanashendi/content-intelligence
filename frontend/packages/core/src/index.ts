@@ -1,7 +1,6 @@
 export { env } from "./env.js"
 export { tokens } from "./tokens.js"
 export type { Tokens } from "./tokens.js"
-export type { Recommendation } from "./types.js"
 export { ApiError, isApiError, toUserMessage } from "./errors.js"
 export {
   formatScore,

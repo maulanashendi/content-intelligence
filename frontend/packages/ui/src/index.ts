@@ -1,6 +1,6 @@
 export { cn } from "./lib/cn.js"
 
-export { RecommendationBadge } from "./primitives/badge.js"
+export { SignalBadge } from "./primitives/badge.js"
 export { Button } from "./primitives/button.js"
 export type { ButtonProps } from "./primitives/button.js"
 export { Skeleton } from "./primitives/skeleton.js"

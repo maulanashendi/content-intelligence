@@ -32,9 +32,6 @@ function buildTrail(cluster: ClusterDetail): AuditEvent[] {
     return iso ? formatDateTime(iso) + " WIB" : "—"
   }
 
-  const noveltyPct = cluster.novelty_score != null ? Math.round(cluster.novelty_score * 100) : null
-  const coveragePct = cluster.coverage_score != null ? Math.round(cluster.coverage_score * 100) : null
-
   return [
     {
       step: "01 · ingest",
@@ -84,14 +81,17 @@ function buildTrail(cluster: ClusterDetail): AuditEvent[] {
     },
     {
       step: "05 · scoring",
-      label: "Skor pipeline dihitung",
+      label: "Sinyal dihitung",
       detail: (
         <>
-          velocity <span className="highlight">{cluster.trend_velocity?.toFixed(1) ?? "—"}</span>
-          {" · "}novelty <span className="highlight">{noveltyPct != null ? noveltyPct + "%" : "—"}</span>
-          {" · "}coverage <span className="highlight">{coveragePct != null ? coveragePct + "%" : "—"}</span>
-          {coveragePct != null && coveragePct < 40 && (
-            <><br /><span style={{ color: "var(--ok)" }}>✓ coverage rendah — lane terbuka</span></>
+          velocity <span className="highlight">{cluster.trend_velocity?.toFixed(2) ?? "—"}</span>
+          {" · "}kompetitor <span className="highlight">{cluster.competitor_count ?? "—"}</span>
+          {" · "}trend match <span className="highlight">{cluster.trend_match_count ?? "—"}</span>
+          {cluster.underperformed && (
+            <><br /><span style={{ color: "var(--warn)" }}>⚠ artikel underperformed di GSC</span></>
+          )}
+          {!cluster.tempo_covered && (
+            <><br /><span style={{ color: "var(--ok)" }}>✓ Tempo belum menulis — lane terbuka</span></>
           )}
         </>
       ),
@@ -110,20 +110,21 @@ function buildTrail(cluster: ClusterDetail): AuditEvent[] {
       dot: "done",
     },
     {
-      step: "07 · rekomendasi",
-      label: "Masuk Morning Brief",
+      step: "07 · status",
+      label: "Status Tempo",
       detail: (
         <>
-          rekomendasi: <span className="highlight">{cluster.recommendation ?? "—"}</span>
-          <br />siap untuk ditulis oleh redaksi
+          tempo_covered: <span className="highlight">{cluster.tempo_covered ? "ya" : "belum"}</span>
+          {cluster.last_internal_days_ago != null && (
+            <><br />terakhir ditulis <span className="highlight">{cluster.last_internal_days_ago} hari lalu</span></>
+          )}
+          <br />siap untuk editorial review
         </>
       ),
       dot: "active",
-      tag: {
-        label: cluster.recommendation === "trending" ? "recommended" : cluster.recommendation === "worth_writing" ? "worth writing" : "saturated",
-        bg: cluster.recommendation === "trending" ? "var(--accent-soft)" : cluster.recommendation === "worth_writing" ? "var(--info-soft)" : "var(--warn-soft)",
-        color: cluster.recommendation === "trending" ? "var(--accent-fg)" : cluster.recommendation === "worth_writing" ? "oklch(0.42 0.13 230)" : "oklch(0.45 0.13 75)",
-      },
+      tag: cluster.tempo_covered
+        ? { label: "sudah ditulis", bg: "var(--ok-soft)", color: "var(--ok-fg)" }
+        : { label: "belum ditulis", bg: "var(--accent-soft)", color: "var(--accent-fg)" },
     },
   ]
 }

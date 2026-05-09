@@ -1,20 +1,20 @@
 import type { ClusterDetail } from "@ei-fe/api"
-import { formatScore, formatVelocity } from "@ei-fe/core"
-import { RecommendationBadge } from "@ei-fe/ui"
+import { formatVelocity } from "@ei-fe/core"
+import { SignalBadge } from "@ei-fe/ui"
 
 interface ClusterHeaderProps {
   cluster: ClusterDetail
 }
 
 export function ClusterHeader({ cluster }: ClusterHeaderProps) {
-  const pct = Math.min(100, Math.max(0, (cluster.trend_velocity ?? 0) / 100 * 100))
+  const pct = Math.min(100, Math.max(0, (cluster.trend_velocity ?? 0) * 100))
 
   return (
     <div className="card" style={{ margin: "24px 28px" }}>
       <div className="card-head">
         <span className="card-title">Cluster Detail</span>
         <div style={{ marginLeft: "auto" }}>
-          <RecommendationBadge recommendation={cluster.recommendation} />
+          <SignalBadge tempoCovered={cluster.tempo_covered} underperformed={cluster.underperformed} />
         </div>
       </div>
       <div style={{ padding: "16px 18px" }}>
@@ -40,13 +40,19 @@ export function ClusterHeader({ cluster }: ClusterHeaderProps) {
             </div>
           </div>
           <div className="score-chip">
-            <span className="lab">Novelty</span>
-            <span className="v">{formatScore(cluster.novelty_score)}</span>
+            <span className="lab">Kompetitor</span>
+            <span className="v">{cluster.competitor_count ?? "—"}</span>
           </div>
           <div className="score-chip">
-            <span className="lab">Coverage</span>
-            <span className="v">{formatScore(cluster.coverage_score)}</span>
+            <span className="lab">Sinyal Trend</span>
+            <span className="v">{cluster.trend_match_count ?? "—"}</span>
           </div>
+          {cluster.last_internal_days_ago != null && (
+            <div className="score-chip">
+              <span className="lab">Ditulis</span>
+              <span className="v">{cluster.last_internal_days_ago}h lalu</span>
+            </div>
+          )}
           <div className="score-chip">
             <span className="lab">Artikel</span>
             <span className="v">{cluster.member_count ?? "—"}</span>
