@@ -1,206 +1,180 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID
 
+from core.config import settings
 from core.db import get_session
-from core.models import (
-    Article,
-    ArticleCluster,
-    ArticleClusterMember,
-    ArticleGscMetric,
-    ClusterInsight,
-    ContentSource,
-    InsightRecommendation,
-    SourceType,
-    TrendSignal,
-    TrendSignalArticle,
-)
-from sqlalchemy import Select, select
+from core.models import ClusterInsight
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scoring.coverage import CoverageInputs, compute_coverage_score
-from scoring.novelty import compute_novelty_score
 from scoring.velocity import compute_trend_velocity
-
-RECENT_INTERNAL_WINDOW_DAYS = 30
 
 
 @dataclass(slots=True)
-class ClusterArticleFacts:
-    published_at_values: list[datetime | None]
-    interest_scores: list[float]
-    competitor_articles: int
-    internal_articles: int
-    recent_internal_articles: int
-    internal_underperformed: bool
+class ClusterFacts:
+    count_24h: int = 0
+    count_7d: int = 0
+    competitor_count: int = 0
+    trend_match_count: int = 0
+    tempo_covered: bool = False
+    last_internal_days_ago: int | None = None
+    underperformed: bool = False
 
 
 async def run(*, now: datetime | None = None) -> int:
     current_time = _normalize_now(now)
+    t24h = current_time - timedelta(hours=24)
+    t7d = current_time - timedelta(days=7)
+
     async with get_session() as session:
-        cluster_ids = await _current_cluster_ids(session)
-        for cluster_id in cluster_ids:
-            facts = await _load_cluster_facts(session, cluster_id, current_time)
-            await _upsert_cluster_insight(session, cluster_id, facts, current_time)
+        facts_by_cluster: dict[UUID, ClusterFacts] = {}
+
+        await _load_article_facts(session, facts_by_cluster, t24h, t7d, current_time)
+        await _load_trend_match(session, facts_by_cluster, t24h)
+        await _load_underperformed(session, facts_by_cluster)
+
+        if not facts_by_cluster:
+            return 0
+
+        rows = [
+            {
+                "cluster_id": cid,
+                "trend_velocity": compute_trend_velocity(f.count_24h, f.count_7d),
+                "competitor_count": f.competitor_count,
+                "trend_match_count": f.trend_match_count,
+                "tempo_covered": f.tempo_covered,
+                "last_internal_days_ago": f.last_internal_days_ago,
+                "underperformed": f.underperformed,
+                "calculated_at": current_time,
+            }
+            for cid, f in facts_by_cluster.items()
+        ]
+
+        stmt = pg_insert(ClusterInsight).values(rows)
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["cluster_id"],
+                set_={
+                    "trend_velocity": stmt.excluded.trend_velocity,
+                    "competitor_count": stmt.excluded.competitor_count,
+                    "trend_match_count": stmt.excluded.trend_match_count,
+                    "tempo_covered": stmt.excluded.tempo_covered,
+                    "last_internal_days_ago": stmt.excluded.last_internal_days_ago,
+                    "underperformed": stmt.excluded.underperformed,
+                    "calculated_at": stmt.excluded.calculated_at,
+                },
+            )
+        )
         await session.commit()
-    return len(cluster_ids)
+
+    return len(rows)
 
 
-async def _current_cluster_ids(session: AsyncSession) -> Sequence[UUID]:
-    stmt = select(ArticleCluster.id).where(ArticleCluster.is_current.is_(True))
-    return list((await session.execute(stmt)).scalars())
-
-
-async def _load_cluster_facts(
+async def _load_article_facts(
     session: AsyncSession,
-    cluster_id: UUID,
-    now: datetime,
-) -> ClusterArticleFacts:
-    recent_internal_cutoff = now - timedelta(days=RECENT_INTERNAL_WINDOW_DAYS)
-
-    article_rows = (await session.execute(_cluster_article_stmt(cluster_id))).all()
-    interest_scores = await _cluster_interest_scores(session, cluster_id)
-
-    published_at_values = [row.published_at for row in article_rows]
-
-    competitor_articles = sum(1 for row in article_rows if row.source_type == SourceType.rss)
-    internal_articles = sum(1 for row in article_rows if row.source_type == SourceType.internal)
-    recent_internal_articles = sum(
-        1
-        for row in article_rows
-        if row.source_type == SourceType.internal
-        and row.published_at is not None
-        and _normalize_now(row.published_at) >= recent_internal_cutoff
-    )
-
-    internal_article_ids = [
-        row.article_id for row in article_rows if row.source_type == SourceType.internal
-    ]
-    internal_underperformed = False
-    if internal_article_ids:
-        internal_underperformed = await _has_underperformed_internal_articles(
-            session, internal_article_ids
-        )
-
-    return ClusterArticleFacts(
-        published_at_values=published_at_values,
-        interest_scores=interest_scores,
-        competitor_articles=competitor_articles,
-        internal_articles=internal_articles,
-        recent_internal_articles=recent_internal_articles,
-        internal_underperformed=internal_underperformed,
-    )
-
-
-def _cluster_article_stmt(cluster_id: UUID) -> Select[tuple[Any, ...]]:
-    return (
-        select(
-            Article.id.label("article_id"),
-            Article.published_at,
-            ContentSource.source_type,
-        )
-        .select_from(ArticleClusterMember)
-        .join(Article, Article.id == ArticleClusterMember.article_id)
-        .join(ContentSource, ContentSource.id == Article.source_id)
-        .where(ArticleClusterMember.cluster_id == cluster_id)
-    )
-
-
-async def _cluster_interest_scores(session: AsyncSession, cluster_id: UUID) -> list[float]:
-    stmt = (
-        select(TrendSignal.interest_score)
-        .select_from(ArticleClusterMember)
-        .join(Article, Article.id == ArticleClusterMember.article_id)
-        .join(TrendSignalArticle, TrendSignalArticle.article_id == Article.id)
-        .join(TrendSignal, TrendSignal.id == TrendSignalArticle.trend_signal_id)
-        .where(ArticleClusterMember.cluster_id == cluster_id)
-        .where(TrendSignal.interest_score.is_not(None))
-    )
-    return list((await session.execute(stmt)).scalars())
-
-
-async def _has_underperformed_internal_articles(
-    session: AsyncSession,
-    article_ids: Sequence[UUID],
-) -> bool:
-    stmt = select(ArticleGscMetric.ctr, ArticleGscMetric.avg_position).where(
-        ArticleGscMetric.article_id.in_(article_ids)
-    )
-    rows = (await session.execute(stmt)).all()
-    return any(
-        (row.ctr is not None and row.ctr < 0.02)
-        or (row.avg_position is not None and row.avg_position > 20)
-        for row in rows
-    )
-
-
-async def _upsert_cluster_insight(
-    session: AsyncSession,
-    cluster_id: UUID,
-    facts: ClusterArticleFacts,
+    facts: dict[UUID, ClusterFacts],
+    t24h: datetime,
+    t7d: datetime,
     now: datetime,
 ) -> None:
-    trend_velocity = compute_trend_velocity(
-        facts.published_at_values,
-        facts.interest_scores,
-        now=now,
+    sql = text(
+        """
+        SELECT
+            m.cluster_id AS cluster_id,
+            COUNT(*) FILTER (WHERE a.published_at >= :t24h) AS count_24h,
+            COUNT(*) FILTER (WHERE a.published_at >= :t7d)  AS count_7d,
+            COUNT(DISTINCT cs.id) FILTER (WHERE cs.source_type = 'rss') AS competitor_count,
+            BOOL_OR(cs.source_type = 'internal') AS tempo_covered,
+            FLOOR(EXTRACT(EPOCH FROM (
+                :now - MAX(a.published_at) FILTER (WHERE cs.source_type = 'internal')
+            )) / 86400)::int AS last_internal_days_ago
+        FROM article_cluster_member m
+        JOIN article a         ON a.id = m.article_id
+        JOIN content_source cs ON cs.id = a.source_id
+        JOIN article_cluster c ON c.id = m.cluster_id AND c.is_current = true
+        GROUP BY m.cluster_id
+        """
     )
-    novelty_score = compute_novelty_score(facts.published_at_values, now=now)
-    coverage_score = compute_coverage_score(
-        CoverageInputs(
-            competitor_articles=facts.competitor_articles,
-            internal_articles=facts.internal_articles,
-            recent_internal_articles=facts.recent_internal_articles,
-            internal_underperformed=facts.internal_underperformed,
-        )
-    )
+    rows = (await session.execute(sql, {"t24h": t24h, "t7d": t7d, "now": now})).mappings()
+    for row in rows:
+        cid = row["cluster_id"]
+        f = facts.setdefault(cid, ClusterFacts())
+        f.count_24h = int(row["count_24h"] or 0)
+        f.count_7d = int(row["count_7d"] or 0)
+        f.competitor_count = int(row["competitor_count"] or 0)
+        f.tempo_covered = bool(row["tempo_covered"])
+        last = row["last_internal_days_ago"]
+        f.last_internal_days_ago = int(last) if last is not None else None
 
-    stmt = pg_insert(ClusterInsight).values(
-        cluster_id=cluster_id,
-        trend_velocity=trend_velocity,
-        novelty_score=novelty_score,
-        coverage_score=coverage_score,
-        recommendation=_derive_recommendation(
-            trend_velocity=trend_velocity,
-            novelty_score=novelty_score,
-            coverage_score=coverage_score,
-            recent_internal_articles=facts.recent_internal_articles,
-        ),
-        calculated_at=now,
+
+async def _load_trend_match(
+    session: AsyncSession,
+    facts: dict[UUID, ClusterFacts],
+    t24h: datetime,
+) -> None:
+    # trend_signal exposes captured_at (NOT fetched_at); see core/models.py:246.
+    sql = text(
+        """
+        SELECT
+            m.cluster_id AS cluster_id,
+            COUNT(DISTINCT tsa.trend_signal_id) AS trend_match_count
+        FROM article_cluster_member m
+        JOIN trend_signal_article tsa ON tsa.article_id = m.article_id
+        JOIN trend_signal ts          ON ts.id = tsa.trend_signal_id
+        JOIN article_cluster c        ON c.id = m.cluster_id AND c.is_current = true
+        WHERE ts.captured_at >= :t24h
+        GROUP BY m.cluster_id
+        """
     )
-    await session.execute(
-        stmt.on_conflict_do_update(
-            index_elements=["cluster_id"],
-            set_={
-                "trend_velocity": stmt.excluded.trend_velocity,
-                "novelty_score": stmt.excluded.novelty_score,
-                "coverage_score": stmt.excluded.coverage_score,
-                "recommendation": stmt.excluded.recommendation,
-                "calculated_at": stmt.excluded.calculated_at,
+    rows = (await session.execute(sql, {"t24h": t24h})).mappings()
+    for row in rows:
+        cid = row["cluster_id"]
+        f = facts.setdefault(cid, ClusterFacts())
+        f.trend_match_count = int(row["trend_match_count"] or 0)
+
+
+async def _load_underperformed(
+    session: AsyncSession,
+    facts: dict[UUID, ClusterFacts],
+) -> None:
+    # AND across all three thresholds (D27 user decision; current coverage.py
+    # used OR — that file is being deleted). avg_position is the GSC column
+    # name (core/models.py:147).
+    sql = text(
+        """
+        SELECT
+            m.cluster_id AS cluster_id,
+            BOOL_OR(
+                g.impressions > :imp_thr
+                AND g.avg_position > :pos_thr
+                AND g.ctr < :ctr_thr
+            ) AS underperformed
+        FROM article_cluster_member m
+        JOIN article a            ON a.id = m.article_id
+        JOIN content_source cs    ON cs.id = a.source_id AND cs.source_type = 'internal'
+        JOIN article_gsc_metric g ON g.article_id = a.id
+        JOIN article_cluster c    ON c.id = m.cluster_id AND c.is_current = true
+        GROUP BY m.cluster_id
+        """
+    )
+    rows = (
+        await session.execute(
+            sql,
+            {
+                "imp_thr": settings.gsc_underperform_impressions_min,
+                "pos_thr": settings.gsc_underperform_position_min,
+                "ctr_thr": settings.gsc_underperform_ctr_max,
             },
         )
-    )
-
-
-def _derive_recommendation(
-    *,
-    trend_velocity: float,
-    novelty_score: float,
-    coverage_score: float,
-    recent_internal_articles: int,
-) -> InsightRecommendation:
-    if recent_internal_articles > 0 and coverage_score < 0.55:
-        return InsightRecommendation.saturated
-    if trend_velocity >= 0.65 and novelty_score >= 0.45:
-        return InsightRecommendation.trending
-    if coverage_score >= 0.4:
-        return InsightRecommendation.worth_writing
-    return InsightRecommendation.saturated
+    ).mappings()
+    for row in rows:
+        cid = row["cluster_id"]
+        f = facts.setdefault(cid, ClusterFacts())
+        f.underperformed = bool(row["underperformed"])
 
 
 def _normalize_now(value: datetime | None) -> datetime:

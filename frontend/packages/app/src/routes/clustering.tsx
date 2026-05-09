@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useLatestClusterRun, useCurrentClusters, type ClusterRun, type ClusterSummary } from "@ei-fe/api"
-import { RecommendationBadge } from "@ei-fe/ui"
+import { SignalBadge, VelocityBar } from "@ei-fe/ui"
 import { TrendSignalCard, ArticleClustersCard } from "@ei-fe/features"
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
@@ -98,20 +98,18 @@ function ClusterInsightPanel({ cluster, run }: { cluster: ClusterSummary | undef
     <div className="card" style={{ marginTop: 16 }}>
       <div className="card-head">
         <span className="card-title">Cluster Insight</span>
-        {cluster.recommendation && (
-          <RecommendationBadge recommendation={cluster.recommendation} />
-        )}
+        <SignalBadge tempoCovered={cluster.tempo_covered} underperformed={cluster.underperformed} />
       </div>
       <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <p style={{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 500, margin: "0 0 10px", letterSpacing: "-0.01em" }}>
             {cluster.label ?? "Tanpa label"}
           </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <VelocityBar velocity={cluster.trend_velocity} />
             {[
-              { lab: "Velocity", val: cluster.trend_velocity?.toFixed(1) ?? "—" },
-              { lab: "Novelty", val: cluster.novelty_score != null ? Math.round(cluster.novelty_score * 100) + "%" : "—" },
-              { lab: "Coverage", val: cluster.coverage_score != null ? Math.round(cluster.coverage_score * 100) + "%" : "—" },
+              { lab: "Kompetitor", val: cluster.competitor_count != null ? String(cluster.competitor_count) : "—" },
+              { lab: "Trend Match", val: cluster.trend_match_count != null ? String(cluster.trend_match_count) : "—" },
               { lab: "Artikel", val: cluster.member_count != null ? String(cluster.member_count) : "—" },
             ].map(({ lab, val }) => (
               <div key={lab} className="score-chip">

@@ -52,12 +52,6 @@ class ClusterAlgorithm(enum.Enum):
     kmeans = "kmeans"
 
 
-class InsightRecommendation(enum.Enum):
-    trending = "trending"
-    worth_writing = "worth_writing"
-    saturated = "saturated"
-
-
 class ContentSource(Base):
     __tablename__ = "content_source"
 
@@ -338,10 +332,18 @@ class ClusterInsight(Base):
         ForeignKey("article_cluster.id"), unique=True, nullable=False
     )
     trend_velocity: Mapped[float | None] = mapped_column(Float)
-    novelty_score: Mapped[float | None] = mapped_column(Float)
-    coverage_score: Mapped[float | None] = mapped_column(Float)
-    recommendation: Mapped[InsightRecommendation | None] = mapped_column(
-        Enum(InsightRecommendation)
+    competitor_count: Mapped[int] = mapped_column(
+        Integer, server_default=text("0"), nullable=False
+    )
+    trend_match_count: Mapped[int] = mapped_column(
+        Integer, server_default=text("0"), nullable=False
+    )
+    tempo_covered: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), nullable=False
+    )
+    last_internal_days_ago: Mapped[int | None] = mapped_column(Integer)
+    underperformed: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), nullable=False
     )
     summary: Mapped[str | None] = mapped_column(Text)
     calculated_at: Mapped[datetime] = mapped_column(

@@ -465,6 +465,8 @@ The two new hard rules in `CLAUDE.md` are deliberately scoped: Docker-only dev (
 
 ## D24. Replace OS cron with a daemon-internal scheduler; merge ingest serve into pipeline-daemon; disable scoring; tighten cluster window
 
+> **Status update**: D24's "scoring step is disabled" clause is **superseded by D27** (2026-05-09). Scoring is re-enabled with a redesigned `cluster_insight` shape. All other D24 decisions stand.
+
 **Context.** D9 chose OS-level `cron` to fire `python -m pipeline.cli run-daily` once at 06:00 WIB. Two pressures broke that model:
 
 1. The daily cron was the only thing driving ingest+embed at scale, but D20 had already added a reactive `ingest serve` daemon that polled continuously and fetched new sources on demand. The cron's ingest pass became redundant work that ran 23 hours late.
@@ -582,3 +584,27 @@ A separate `article_scrape_queue` table was rejected for being over-engineered a
 - `GSC_SITE_URL`, `GSC_CREDENTIALS_PATH`, `GSC_FETCH_DAYS` ditambahkan ke `core/config.py` dan `.env.example`.
 - `docs/tech-stack.md` diupdate dengan dua dep baru.
 - Credentials file (`teco-analytics-*.json`) disimpan di `backend/` root, di-gitignore, dan di-mount ke container via volume atau secrets saat deploy.
+
+---
+
+## D27. Re-enable scoring with raw signals (supersedes D24's scoring-disabled clause)
+
+> **Status: Supersedes D24's "scoring step disabled" clause only.** D24's other decisions (cron → daemon, ingest+embed merge, removed `/ingest-embed` endpoint, 7-day cluster window) all stand. Mark this at the top of D24 inline.
+
+**Context.** D24 disabled `scoring.pipeline.run` because the composite outputs (velocity blend + novelty + coverage + `recommendation` enum) didn't earn editor trust. PRD §6 had already mandated raw signals: editors trust raw numbers, not opaque composite scores.
+
+**Options considered.**
+- (a) Keep scoring off, render only labels + member counts. No ranking; no "trending" surface.
+- (b) Re-introduce composite blend with tuned weights. Same trust failure mode.
+- (c) Replace composite with raw, named, threshold-derived booleans + one explicit ratio.
+
+**Decision.** Option (c). `cluster_insight` retains `trend_velocity` (redefined as `count_24h / count_7d`), `summary`, `calculated_at`, `cluster_id`, `id`. Adds `competitor_count`, `trend_match_count`, `tempo_covered`, `last_internal_days_ago`, `underperformed`. Drops `novelty_score`, `coverage_score`, `recommendation`, and the `InsightRecommendation` Postgres enum type. Old rows are wiped in the migration.
+
+**Rationale.** Editors read raw numbers; composites hide tradeoffs. Booleans make API filters trivial: `/morning` = "uncovered & high velocity", `/deferred` = "high velocity & uncovered & stale". All thresholds are config-driven (D7's pattern), so tuning doesn't require schema changes. The `aligned_trends` boolean is explicitly *not* a column — FE computes `trend_match_count > 0` as a single source of truth.
+
+**Implication.**
+- `scoring.pipeline.run()` rejoins the daemon's cluster → label → score chain.
+- `/morning` and `/deferred` switch from no-join / saturated-only to INNER JOIN on `cluster_insight`. The first post-deploy scoring run produces rows; until then, both endpoints return `[]`.
+- GSC raw values still never leak to the API; only `underperformed: bool` derived per D7.
+- Scoring queries are batched: 3 aggregate SQL statements per `run()`, not N+1 per cluster. Tests guard this.
+- Trends ingest's `scrape_status=NULL` bug must be fixed first (PR-1) — see decision body for why.

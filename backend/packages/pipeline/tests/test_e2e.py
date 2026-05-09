@@ -93,6 +93,14 @@ async def test_e2e_pipeline_and_api(
     monkeypatch.setattr("ingest.pipeline.ingest_trends", fake_ingest_trends)
     monkeypatch.setattr("embedding.pipeline.get_embedder", _build_fake_embedder)
 
+    async def fake_gsc_run(_session, _settings) -> None:
+        return None
+
+    import types
+    fake_gsc_mod = types.ModuleType("gsc")
+    fake_gsc_mod.run = fake_gsc_run  # type: ignore[attr-defined]
+    monkeypatch.setitem(__import__("sys").modules, "ingest.gsc", fake_gsc_mod)
+
     label_counter = {"n": 0}
 
     def fake_label(_articles: list[dict[str, str | None]]) -> str:
@@ -112,15 +120,17 @@ async def test_e2e_pipeline_and_api(
     assert isinstance(elapsed, float), f"expected float total_elapsed_s, got {elapsed!r}"
 
     async with get_session() as session:
-        recommendations = list(
-            (await session.execute(select(ClusterInsight.recommendation))).scalars()
+        insight_rows = list(
+            (await session.execute(select(ClusterInsight))).scalars()
         )
-    assert recommendations, "scoring did not upsert any cluster_insight rows"
-    accepted = {"trending", "worth_writing"}
-    actionable = [r for r in recommendations if r.value in accepted]
-    assert actionable, (
-        f"expected ≥1 trending/worth_writing cluster, got {[r.value for r in recommendations]}"
-    )
+    assert insight_rows, "scoring did not upsert any cluster_insight rows"
+    assert all(
+        row.trend_velocity is not None
+        and isinstance(row.competitor_count, int)
+        and isinstance(row.tempo_covered, bool)
+        and isinstance(row.underperformed, bool)
+        for row in insight_rows
+    ), "cluster_insight rows missing expected raw-signal fields"
 
     from api.main import app
 

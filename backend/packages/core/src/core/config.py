@@ -34,5 +34,13 @@ class Settings(BaseSettings):
     gsc_credentials_path: str = "teco-analytics-2cea1d43461c.json"
     gsc_fetch_days: int = 7
 
+    # cluster_insight scoring (D27)
+    gsc_underperform_impressions_min: int = 100
+    gsc_underperform_position_min: float = 10.0
+    gsc_underperform_ctr_max: float = 0.02
+    scoring_recent_internal_days: int = 7
+    scoring_morning_top_n: int = 10
+    scoring_deferred_velocity_min: float = 0.4
+
 
 settings = Settings()

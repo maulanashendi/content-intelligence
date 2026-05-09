@@ -5,8 +5,9 @@ from datetime import datetime
 import pytest
 import pytest_asyncio
 from core.db import get_session
-from core.models import ContentSource, SourceStatus, SourceType
-from ingest.trends import _extract_traffic_number, _parse_trends_feed, _resolve_source
+from core.models import Article, ContentSource, ScrapeStatus, SourceStatus, SourceType
+from ingest.trends import _extract_traffic_number, _parse_trends_feed, _resolve_source, ingest_trends
+from sqlalchemy import select
 
 NOW = datetime(2026, 5, 2, 6, 0, 0)
 
@@ -206,3 +207,55 @@ async def test_resolve_source_returns_none_for_unknown_domain(
     async with get_session() as session:
         result = await _resolve_source(session, "https://www.tribunnews.com/ekonomi/article")
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# ingest_trends — scrape_status regression
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ingest_trends_sets_scrape_status_pending(null_pool_db) -> None:
+    async with get_session() as session:
+        source = ContentSource(
+            id=uuid.uuid4(),
+            name="Detik",
+            url="https://detik.com/rss",
+            source_type=SourceType.rss,
+            is_enabled=True,
+            status=SourceStatus.active,
+        )
+        session.add(source)
+        await session.commit()
+
+    feed_xml = """\
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:ht="https://trends.google.com/trending/rss">
+  <channel>
+    <item>
+      <title>harga beras</title>
+      <ht:approx_traffic>50K+</ht:approx_traffic>
+      <ht:news_item>
+        <ht:news_item_title>Harga beras naik</ht:news_item_title>
+        <ht:news_item_url>https://detik.com/foo</ht:news_item_url>
+      </ht:news_item>
+    </item>
+  </channel>
+</rss>"""
+
+    class FakeResp:
+        text = feed_xml
+
+        def raise_for_status(self) -> None: ...
+
+    class FakeClient:
+        async def get(self, url: str) -> FakeResp:
+            return FakeResp()
+
+    await ingest_trends(FakeClient())  # type: ignore[arg-type]
+
+    async with get_session() as session:
+        article = (
+            await session.execute(select(Article).where(Article.url == "https://detik.com/foo"))
+        ).scalar_one()
+    assert article.scrape_status == ScrapeStatus.pending

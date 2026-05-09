@@ -1,6 +1,7 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from typing import Literal
 
+from core.config import settings
 from core.models import (
     Article,
     ArticleCluster,
@@ -8,14 +9,10 @@ from core.models import (
     ClusterInsight,
     ClusterRun,
     ContentSource,
-    InsightRecommendation,
-    SourceType,
 )
-from typing import Literal
-
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from api.deps import SessionDep
 from api.types import UtcDateTime
@@ -30,9 +27,11 @@ class ClusterSummary(BaseModel):
     is_current: bool
     created_at: UtcDateTime
     trend_velocity: float | None
-    novelty_score: float | None
-    coverage_score: float | None
-    recommendation: str | None
+    competitor_count: int | None
+    trend_match_count: int | None
+    tempo_covered: bool | None
+    last_internal_days_ago: int | None
+    underperformed: bool | None
     summary: str | None
     insight_calculated_at: UtcDateTime | None
 
@@ -62,7 +61,9 @@ class ClusterRunResponse(BaseModel):
     cluster_count: int
 
 
-def _to_summary(cluster: ArticleCluster, insight: ClusterInsight | None) -> ClusterSummary:
+def _to_summary(
+    cluster: ArticleCluster, insight: ClusterInsight | None
+) -> ClusterSummary:
     return ClusterSummary(
         id=cluster.id,
         label=cluster.label,
@@ -70,9 +71,11 @@ def _to_summary(cluster: ArticleCluster, insight: ClusterInsight | None) -> Clus
         is_current=cluster.is_current,
         created_at=cluster.created_at,
         trend_velocity=insight.trend_velocity if insight else None,
-        novelty_score=insight.novelty_score if insight else None,
-        coverage_score=insight.coverage_score if insight else None,
-        recommendation=insight.recommendation.value if insight and insight.recommendation else None,
+        competitor_count=insight.competitor_count if insight else None,
+        trend_match_count=insight.trend_match_count if insight else None,
+        tempo_covered=insight.tempo_covered if insight else None,
+        last_internal_days_ago=insight.last_internal_days_ago if insight else None,
+        underperformed=insight.underperformed if insight else None,
         summary=insight.summary if insight else None,
         insight_calculated_at=insight.calculated_at if insight else None,
     )
@@ -80,34 +83,18 @@ def _to_summary(cluster: ArticleCluster, insight: ClusterInsight | None) -> Clus
 
 @router.get("/morning", response_model=list[ClusterSummary])
 async def morning_clusters(session: SessionDep) -> list[ClusterSummary]:
-    thirty_days_ago = (datetime.now(UTC) - timedelta(days=30)).replace(tzinfo=None)
-
-    # Exclude clusters where Tempo already published an article on this topic recently.
-    has_internal_recent = (
-        select(ArticleClusterMember.cluster_id)
-        .join(Article, Article.id == ArticleClusterMember.article_id)
-        .join(ContentSource, ContentSource.id == Article.source_id)
-        .where(
-            ArticleClusterMember.cluster_id == ArticleCluster.id,
-            ContentSource.source_type == SourceType.internal,
-            Article.published_at >= thirty_days_ago,
-        )
-        .correlate(ArticleCluster)
-        .exists()
-    )
-
     stmt = (
-        select(ArticleCluster)
+        select(ArticleCluster, ClusterInsight)
+        .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
         .where(
             ArticleCluster.is_current.is_(True),
-            ~has_internal_recent,
+            ClusterInsight.tempo_covered.is_(False),
         )
-        .order_by(ArticleCluster.member_count.desc().nullslast())
-        .limit(10)
+        .order_by(ClusterInsight.trend_velocity.desc().nullslast())
+        .limit(settings.scoring_morning_top_n)
     )
-
-    rows = (await session.execute(stmt)).scalars().all()
-    return [_to_summary(cluster, None) for cluster in rows]
+    rows = (await session.execute(stmt)).all()
+    return [_to_summary(cluster, insight) for cluster, insight in rows]
 
 
 @router.get("/deferred", response_model=list[ClusterSummary])
@@ -117,11 +104,16 @@ async def deferred_clusters(session: SessionDep) -> list[ClusterSummary]:
         .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
         .where(
             ArticleCluster.is_current.is_(True),
-            ClusterInsight.recommendation == InsightRecommendation.saturated,
+            ClusterInsight.trend_velocity > settings.scoring_deferred_velocity_min,
+            ClusterInsight.tempo_covered.is_(False),
+            or_(
+                ClusterInsight.last_internal_days_ago.is_(None),
+                ClusterInsight.last_internal_days_ago
+                > settings.scoring_recent_internal_days,
+            ),
         )
         .order_by(ClusterInsight.trend_velocity.desc().nullslast())
     )
-
     rows = (await session.execute(stmt)).all()
     return [_to_summary(cluster, insight) for cluster, insight in rows]
 
@@ -228,9 +220,11 @@ async def cluster_detail(cluster_id: uuid.UUID, session: SessionDep) -> ClusterD
         is_current=cluster.is_current,
         created_at=cluster.created_at,
         trend_velocity=insight.trend_velocity if insight else None,
-        novelty_score=insight.novelty_score if insight else None,
-        coverage_score=insight.coverage_score if insight else None,
-        recommendation=insight.recommendation.value if insight and insight.recommendation else None,
+        competitor_count=insight.competitor_count if insight else None,
+        trend_match_count=insight.trend_match_count if insight else None,
+        tempo_covered=insight.tempo_covered if insight else None,
+        last_internal_days_ago=insight.last_internal_days_ago if insight else None,
+        underperformed=insight.underperformed if insight else None,
         summary=insight.summary if insight else None,
         insight_calculated_at=insight.calculated_at if insight else None,
         members=members,

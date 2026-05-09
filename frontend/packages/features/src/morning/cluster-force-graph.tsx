@@ -2,17 +2,11 @@ import { useEffect, useRef, useCallback } from "react"
 import * as d3 from "d3"
 import type { ClusterDetail } from "@ei-fe/api"
 
-type Rec = "trending" | "worth_writing" | "saturated" | null
-
-const REC_CONFIG: Record<string, { label: string; color: string; colorLight: string; colorDark: string }> = {
-  trending: { label: "Trending", color: "#2EA868", colorLight: "#B6E8D4", colorDark: "#1B7249" },
-  worth_writing: { label: "Worth Writing", color: "#4B63DC", colorLight: "#C5CEFF", colorDark: "#2E47B8" },
-  saturated: { label: "Saturated", color: "#D9960A", colorLight: "#FFE5A0", colorDark: "#9B6A00" },
-  unknown: { label: "Lainnya", color: "#7A7A8C", colorLight: "#D4D4DF", colorDark: "#4E4E5A" },
-}
-
-function recKey(rec: Rec): string {
-  return rec ?? "unknown"
+function clusterColor(velocity: number | null): { color: string; colorLight: string } {
+  const v = velocity ?? 0
+  if (v >= 0.7) return { color: "#2EA868", colorLight: "#B6E8D4" }
+  if (v >= 0.4) return { color: "#4B63DC", colorLight: "#C5CEFF" }
+  return { color: "#7A7A8C", colorLight: "#D4D4DF" }
 }
 
 type NodeKind = "cluster" | "article"
@@ -22,7 +16,6 @@ interface GraphNode extends d3.SimulationNodeDatum {
   kind: NodeKind
   label: string
   fullLabel: string
-  recommendation: Rec
   clusterId: string
   color: string
   colorLight: string
@@ -50,8 +43,7 @@ function buildGraph(
   const rows = Math.ceil(details.length / cols)
 
   details.forEach((cluster, ci) => {
-    const rk = recKey(cluster.recommendation)
-    const cfg = REC_CONFIG[rk]!
+    const { color, colorLight } = clusterColor(cluster.trend_velocity)
     const col = ci % cols
     const row = Math.floor(ci / cols)
     const cx = width * ((col + 1) / (cols + 1))
@@ -62,10 +54,9 @@ function buildGraph(
       kind: "cluster",
       label: cluster.label?.slice(0, 26) ?? cluster.id.slice(0, 8),
       fullLabel: cluster.label ?? "Tanpa label",
-      recommendation: cluster.recommendation,
       clusterId: cluster.id,
-      color: cfg.color,
-      colorLight: cfg.colorLight,
+      color,
+      colorLight,
       size: 26,
       x: cx,
       y: cy,
@@ -81,10 +72,9 @@ function buildGraph(
         kind: "article",
         label: a.source_name,
         fullLabel: a.title,
-        recommendation: cluster.recommendation,
         clusterId: cluster.id,
-        color: cfg.color,
-        colorLight: cfg.colorLight,
+        color,
+        colorLight,
         sourceName: a.source_name,
         size,
         x: cx + (Math.random() - 0.5) * 70,
@@ -98,12 +88,11 @@ function buildGraph(
         source: `cluster-${cluster.id}`,
         target: an.id,
         linkType: "hub",
-        color: cfg.color,
+        color,
         strength: 0.5,
       })
     })
 
-    // Peer links between articles in the same cluster
     const seen = new Set<string>()
     articleNodes.forEach((a, i) => {
       const numPeers = 1 + Math.floor(Math.random() * 2)
@@ -118,7 +107,7 @@ function buildGraph(
             source: a.id,
             target: b.id,
             linkType: "peer",
-            color: cfg.colorLight,
+            color: colorLight,
             strength: 0.12,
           })
           added++
@@ -135,10 +124,10 @@ interface ClusterForceGraphProps {
   onClusterClick: (id: string) => void
 }
 
-const LEGEND: { rec: Rec; label: string }[] = [
-  { rec: "trending", label: "Trending" },
-  { rec: "worth_writing", label: "Worth Writing" },
-  { rec: "saturated", label: "Saturated" },
+const LEGEND = [
+  { label: "Velocity tinggi (≥0.7)", color: "#2EA868" },
+  { label: "Velocity sedang (≥0.4)", color: "#4B63DC" },
+  { label: "Velocity rendah (<0.4)", color: "#7A7A8C" },
 ]
 
 export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraphProps) {
@@ -188,7 +177,6 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
       .force("charge", d3.forceManyBody<GraphNode>().strength((d) => (d.kind === "cluster" ? -200 : -40)))
       .force("collide", d3.forceCollide<GraphNode>().radius((d) => d.size + 3))
       .force("cluster", (alpha) => {
-        // Gently pull articles toward their cluster hub
         const clusterPos = new Map<string, { x: number; y: number }>()
         nodes.forEach((n) => {
           if (n.kind === "cluster") clusterPos.set(n.clusterId, { x: n.x ?? 0, y: n.y ?? 0 })
@@ -218,7 +206,6 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
         })
       })
 
-    // Draw peer links behind hub links
     const peerLink = g
       .append("g")
       .attr("class", "peer-links")
@@ -254,7 +241,6 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
       .attr("stroke-width", (d) => (d.kind === "cluster" ? 2.5 : 0.8))
       .attr("stroke-opacity", (d) => (d.kind === "article" ? 0.6 : 1))
 
-    // Cluster label — two-line truncated text
     const clusterNodes = node.filter((d) => d.kind === "cluster")
     clusterNodes.each(function (d) {
       const el = d3.select(this)
@@ -300,9 +286,8 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
       .on("mouseenter", function (event, d) {
         const rect = container.getBoundingClientRect()
         tooltip.style.opacity = "1"
-        const recLabel = REC_CONFIG[recKey(d.recommendation)]!.label
         if (d.kind === "cluster") {
-          tooltip.innerHTML = `<div style="font-weight:600;margin-bottom:3px">${d.fullLabel}</div><div style="font-size:11px;opacity:0.6">${recLabel}</div>`
+          tooltip.innerHTML = `<div style="font-weight:600;margin-bottom:3px">${d.fullLabel}</div>`
         } else {
           tooltip.innerHTML = `<div style="font-weight:500;margin-bottom:3px;line-height:1.35">${d.fullLabel}</div><div style="font-size:11px;opacity:0.6">${d.sourceName ?? ""}</div>`
         }
@@ -413,21 +398,20 @@ export function ClusterForceGraph({ details, onClusterClick }: ClusterForceGraph
   }, [])
 
   const totalArticles = details.reduce((s, d) => s + d.members.slice(0, 10).length, 0)
-  const presentRecs = LEGEND.filter((item) => details.some((d) => d.recommendation === item.rec))
 
   return (
     <div className="card">
       <div className="card-head">
         <span className="card-title">Topic cluster map</span>
         <div style={{ display: "flex", gap: 14, marginLeft: 12, flexWrap: "wrap" }}>
-          {presentRecs.map(({ rec, label }) => (
-            <div key={rec} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5 }}>
+          {LEGEND.map(({ label, color }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5 }}>
               <span
                 style={{
                   width: 9,
                   height: 9,
                   borderRadius: "50%",
-                  background: REC_CONFIG[recKey(rec)]!.color,
+                  background: color,
                   display: "inline-block",
                   flexShrink: 0,
                 }}

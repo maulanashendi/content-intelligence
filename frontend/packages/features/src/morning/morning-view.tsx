@@ -9,9 +9,9 @@ import { ClusterForceGraph } from "./cluster-force-graph.js"
 import { EditorialBriefing } from "./editorial-briefing.js"
 import { TrendSignalCard } from "./trend-signal-card.js"
 
-function KpiRow({ clusters }: { clusters: { recommendation: string | null; member_count: number | null; trend_velocity: number | null }[] }) {
-  const trending = clusters.filter((c) => c.recommendation === "trending").length
-  const worthWriting = clusters.filter((c) => c.recommendation === "worth_writing").length
+function KpiRow({ clusters }: { clusters: { tempo_covered: boolean | null; underperformed: boolean | null; member_count: number | null; trend_velocity: number | null }[] }) {
+  const uncovered = clusters.filter((c) => !c.tempo_covered).length
+  const underperformed = clusters.filter((c) => c.underperformed).length
   const totalArticles = clusters.reduce((sum, c) => sum + (c.member_count ?? 0), 0)
   const avgVelocity =
     clusters.length > 0
@@ -21,12 +21,12 @@ function KpiRow({ clusters }: { clusters: { recommendation: string | null; membe
   return (
     <div className="grid grid-4" style={{ padding: "20px 28px 0" }}>
       <div className="kpi">
-        <div className="kpi-label">Trending</div>
-        <div className="kpi-value">{trending}</div>
+        <div className="kpi-label">Belum Ditulis</div>
+        <div className="kpi-value">{uncovered}</div>
       </div>
       <div className="kpi">
-        <div className="kpi-label">Worth Writing</div>
-        <div className="kpi-value">{worthWriting}</div>
+        <div className="kpi-label">Underperformed</div>
+        <div className="kpi-value">{underperformed}</div>
       </div>
       <div className="kpi">
         <div className="kpi-label">Total Artikel</div>
@@ -34,7 +34,7 @@ function KpiRow({ clusters }: { clusters: { recommendation: string | null; membe
       </div>
       <div className="kpi">
         <div className="kpi-label">Avg Velocity</div>
-        <div className="kpi-value">{avgVelocity.toFixed(1)}</div>
+        <div className="kpi-value">{avgVelocity.toFixed(2)}</div>
       </div>
     </div>
   )

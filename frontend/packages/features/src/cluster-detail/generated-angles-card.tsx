@@ -18,12 +18,12 @@ function buildAngles(cluster: ClusterDetail): Angle[] {
   const secondSource = cluster.members[1]?.source_name ?? "Detik"
   const thirdSource = cluster.members[2]?.source_name ?? "CNN Indonesia"
   const highRelevance = cluster.members.filter((m) => (m.relevance_score ?? 0) > 0.85)
-  const coverage = cluster.coverage_score != null ? Math.round(cluster.coverage_score * 100) : 0
+  const competitorCount = cluster.competitor_count ?? 0
 
   return [
     {
       headline: `Dampak jangka panjang ${label} terhadap kelompok rentan`,
-      insight: `Coverage saat ini ${coverage}% — mayoritas outlet hanya menyentuh permukaan berita. Belum ada yang mengangkat perspektif masyarakat terdampak secara mendalam.`,
+      insight: `${competitorCount} outlet kompetitor sudah menulis topik ini — mayoritas hanya menyentuh permukaan berita. Belum ada yang mengangkat perspektif masyarakat terdampak secara mendalam.`,
       openAngle: `Investigasi lapangan ke komunitas terdampak langsung.`,
       competitors: [
         { name: topSource, note: "breaking news saja, tanpa analisis dampak" },
