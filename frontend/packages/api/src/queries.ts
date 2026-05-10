@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
 import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys, clusterRunKeys } from "./keys.js"
 import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema } from "./schemas.js"
+import type { SourceUpdate } from "./schemas.js"
 
 export function useMorningClusters() {
   return useQuery({
@@ -95,6 +96,15 @@ export function useLatestClusterRun() {
   return useQuery({
     queryKey: clusterRunKeys.latest(),
     queryFn: () => apiGet("/clusters/runs/latest", ClusterRunSchema),
+  })
+}
+
+export function useUpdateSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: SourceUpdate }) =>
+      apiPatch(`/sources/${id}`, data, ContentSourceSchema),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sourceKeys.list() }),
   })
 }
 

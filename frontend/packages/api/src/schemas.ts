@@ -73,6 +73,14 @@ export type ContentSource = z.infer<typeof ContentSourceSchema>
 
 export const ContentSourceListSchema = z.array(ContentSourceSchema)
 
+export const SourceUpdateSchema = z.object({
+  name: z.string().optional(),
+  url: z.string().url().optional(),
+  source_type: z.enum(["rss", "internal"]).optional(),
+  is_enabled: z.boolean().optional(),
+})
+export type SourceUpdate = z.infer<typeof SourceUpdateSchema>
+
 export const PipelineTriggerResultSchema = z.object({
   group: z.string(),
   channel: z.string(),

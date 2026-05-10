@@ -1,6 +1,7 @@
 """Alembic environment for async SQLAlchemy 2.0."""
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 # Import core models so autogenerate sees them
@@ -15,6 +16,9 @@ config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
+
+if db_url := os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
 

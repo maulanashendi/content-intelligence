@@ -26,12 +26,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./packages:/app/packages
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
 
   pipeline-daemon:
     build:

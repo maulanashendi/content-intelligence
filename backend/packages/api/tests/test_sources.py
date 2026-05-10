@@ -236,6 +236,78 @@ async def test_patch_source_rejects_unknown_fields(
     assert resp.status_code == 422
 
 
+@pytest.mark.asyncio
+async def test_patch_source_updates_name(client: AsyncClient, session: AsyncSession) -> None:
+    source = await _seed_source(session, url="https://patch-name.example.com/feed", name="Old")
+    resp = await client.patch(f"/api/v1/sources/{source.id}", json={"name": "New Name"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "New Name"
+
+
+@pytest.mark.asyncio
+async def test_patch_source_trims_long_name(client: AsyncClient, session: AsyncSession) -> None:
+    source = await _seed_source(session, url="https://patch-longname.example.com/feed")
+    resp = await client.patch(f"/api/v1/sources/{source.id}", json={"name": "x" * 300})
+    assert resp.status_code == 200
+    assert len(resp.json()["name"]) == 200
+
+
+@pytest.mark.asyncio
+async def test_patch_source_updates_url(client: AsyncClient, session: AsyncSession) -> None:
+    source = await _seed_source(session, url="https://patch-url-old.example.com/feed")
+    resp = await client.patch(
+        f"/api/v1/sources/{source.id}",
+        json={"url": "https://patch-url-new.example.com/feed"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["url"] == "https://patch-url-new.example.com/feed"
+
+
+@pytest.mark.asyncio
+async def test_patch_source_updates_source_type(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    source = await _seed_source(session, url="https://patch-type.example.com/feed")
+    resp = await client.patch(f"/api/v1/sources/{source.id}", json={"source_type": "internal"})
+    assert resp.status_code == 200
+    assert resp.json()["source_type"] == "internal"
+
+
+@pytest.mark.asyncio
+async def test_patch_source_updates_multiple_fields(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    source = await _seed_source(
+        session, url="https://patch-multi-old.example.com/feed", name="Multi Old"
+    )
+    resp = await client.patch(
+        f"/api/v1/sources/{source.id}",
+        json={
+            "name": "Multi New",
+            "url": "https://patch-multi-new.example.com/feed",
+            "source_type": "internal",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Multi New"
+    assert body["url"] == "https://patch-multi-new.example.com/feed"
+    assert body["source_type"] == "internal"
+
+
+@pytest.mark.asyncio
+async def test_patch_source_409_on_duplicate_url(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await _seed_source(session, url="https://taken.example.com/feed", name="Taken")
+    source = await _seed_source(session, url="https://patch-dup.example.com/feed", name="Dup")
+    resp = await client.patch(
+        f"/api/v1/sources/{source.id}", json={"url": "https://taken.example.com/feed"}
+    )
+    assert resp.status_code == 409
+    assert "sudah terdaftar" in resp.json()["detail"]
+
+
 # ---------------------------------------------------------------------------
 # article_count_24h semantics
 # ---------------------------------------------------------------------------
