@@ -587,6 +587,39 @@ A separate `article_scrape_queue` table was rejected for being over-engineered a
 
 ---
 
+## D28. Post-cluster LLM analysis: per-article claim extraction and deduplication
+
+**Context.** After D27, `cluster_insight` surfaces quantitative signals (velocity, competitor count, coverage) but no qualitative picture of what the cluster actually reports. Editors need to know not just "this topic is hot" but "what distinct facts are being reported across these articles" — to identify angles and coverage gaps without reading every article.
+
+**Options considered.**
+- New `article_analysis` table (unique on `article_id`) — cross-run cache built in, clean FK, separate ORM model. Cost: new table, new migration, new ORM class, harder to query per-cluster without joining through `article_cluster_member`.
+- JSONB column on `cluster_insight` — no new table, everything co-located. Rejected: `cluster_insight` is tied to `article_cluster.id` which is a fresh UUID each run, so no cross-run caching; per-article data semantically belongs with the article-cluster join, not the cluster summary.
+- `text[]` columns on `article_cluster_member` — no new table, natural home (already the article-in-cluster join with `relevance_score`), composite PK `(cluster_id, article_id)` covers all write and read paths, existing `ix_article_cluster_member_article_id` index enables cross-run cache lookup.
+
+**Decision.** Add `main_entity text` and `information_claims text[]` to `article_cluster_member`. Change `cluster_insight.summary` from `text` to `text[]` to store deduplicated unique claims.
+
+Pipeline step added after score:
+1. For each current cluster, fetch member articles ordered by `published_at DESC`.
+2. Per article: query `article_cluster_member WHERE article_id = X AND information_claims IS NOT NULL LIMIT 1` — if hit, copy to new row; if miss, call Gemma `extract_article_claims`, write result to current row.
+3. After all articles in cluster: call Gemma `deduplicate_claims` with all `information_claims` — write unique claims list to `cluster_insight.summary`.
+
+`labeling` package is extended (not split) since both cluster labeling and article analysis use the same Gemma singleton. No new package.
+
+**Rationale.** `article_cluster_member` is the correct granularity: each row already represents one article's participation in one cluster run. Adding extraction columns there means the cache lookup is a simple index scan on `article_id`, and the per-cluster read is `WHERE cluster_id = X` with no extra join. `text[]` over `jsonb` because claims are a flat list of strings — no internal structure.
+
+`n_ctx` raised from 2048 to 4096 on the Gemma singleton to accommodate full article content (D25 scrapes full body) and multi-claim deduplication context.
+
+**Implication.**
+- `article_cluster_member`: two new nullable columns. One Alembic migration covers all schema changes.
+- `cluster_insight.summary`: type changes `text → text[]` in the same migration. Existing NULL rows unaffected.
+- `labeling` package: two new functions (`extract_article_claims`, `deduplicate_claims`), `n_ctx` raised to 4096, `MAX_TOKENS` becomes per-call argument.
+- Pipeline execution order: cluster → label → score → **analysis** (new step). Analysis calls `labeling` functions; `pipeline/runner.py` gains one new step call.
+- API: `cluster_insight.summary` surfaced as `list[str] | None` in cluster detail response. Pydantic schema updated in the same PR.
+- FE: `gen:api` must be re-run after API change; `schemas.ts` updated.
+- Re-running analysis on a manual trigger re-uses cached `information_claims` from the morning run for unchanged articles — only new articles since the last run incur a Gemma call.
+
+---
+
 ## D27. Re-enable scoring with raw signals (supersedes D24's scoring-disabled clause)
 
 > **Status: Supersedes D24's "scoring step disabled" clause only.** D24's other decisions (cron → daemon, ingest+embed merge, removed `/ingest-embed` endpoint, 7-day cluster window) all stand. Mark this at the top of D24 inline.
@@ -608,3 +641,23 @@ A separate `article_scrape_queue` table was rejected for being over-engineered a
 - GSC raw values still never leak to the API; only `underperformed: bool` derived per D7.
 - Scoring queries are batched: 3 aggregate SQL statements per `run()`, not N+1 per cluster. Tests guard this.
 - Trends ingest's `scrape_status=NULL` bug must be fixed first (PR-1) — see decision body for why.
+
+---
+
+## D29. Decouple analysis pipeline step from cluster-label-score group
+
+**Context.** D28 added `labeling.analysis.run()` as the fourth step inside `_run_cluster_label_score()`, chained under the same `cluster_label_score` lock. The analysis step runs per-article LLM extraction across all clusters (~100+ minutes). This holds the lock for the entire duration, blocking any manual re-trigger of clustering while analysis is in progress. The cluster label (written by `labeling.pipeline.run()` in step 2) is what editors need for the basic cluster view — analysis output (`main_entity`, `information_claims`, `cluster_insight.summary`) feeds only the AI editor feature and is not needed for cluster browsing.
+
+**Options considered.**
+- Keep the sequential chain; accept the lock duration as the cost of simplicity.
+- Fire analysis as `asyncio.create_task` after releasing the cluster lock (no dedup, no manual trigger).
+- Add a separate `"analysis"` pipeline group with its own lock, worker, asyncio queue, and `pg_notify` channel — symmetric with the existing `cluster_label_score` group.
+
+**Decision.** Separate `"analysis"` pipeline group. After `cluster + label + score` completes successfully, `_cluster_worker` enqueues analysis non-blockingly. A new `_analysis_worker` task picks it up, acquires its own `pipeline_group_lock` row keyed `"analysis"`, runs `_run_analysis()`, then releases the lock. A new `pg_notify` channel `pipeline_analysis_requested` and `POST /api/v1/pipeline/analysis` endpoint enable manual trigger. `GET /api/v1/pipeline/status` exposes `analysis: datetime | null` alongside `cluster_label_score`.
+
+**Rationale.** The existing worker/lock/notify pattern is the right abstraction — reusing it keeps both groups symmetric with no new primitives. The lock guards against concurrent auto-enqueue + manual trigger producing duplicate LLM runs. Fire-and-forget without a lock was rejected for that reason. The `run-daily` CLI keeps analysis in its sequential chain — it is an operator debug tool, not a production path, so blocking is acceptable there.
+
+**Implication.**
+- `runner.py`: `_run_cluster_label_score()` no longer calls `analysis_run()`. New constants `_GROUP_ANALYSIS`, `_CHANNEL_ANALYSIS`. New `_run_analysis()` and `_analysis_worker()`. `_cluster_worker` gains `analysis_queue` param and auto-enqueues on clean success. `_listen()` gains `analysis_queue` param and handles `_CHANNEL_ANALYSIS`. `run_loop()` adds `analysis_queue` and a sixth task.
+- `api/routes/pipeline.py`: New constants `_GROUP_ANALYSIS`, `_CHANNEL_ANALYSIS`. `PipelineStatusResponse` gains `analysis: UtcDateTime | None`. New `POST /api/v1/pipeline/analysis` endpoint. Stale summary on cluster-label-score endpoint corrected.
+- Frontend: `PipelineStatusSchema` drops stale `ingest_embed` field (removed in D24, never cleaned up), adds `analysis`. `useTriggerIngestEmbed` hook removed (called deleted endpoint). `useTriggerAnalysis` added. `sources.tsx` drops "Ingest + Embed" button, adds "Analysis" button. `generated.ts` regenerated after backend deploy.

@@ -109,7 +109,7 @@ RUN .venv/bin/playwright install chromium
 
 FROM python:3.11-slim AS pipeline
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+    libpq5 libgomp1 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
     libxfixes3 libxrandr2 libgbm1 libasound2 \
     && rm -rf /var/lib/apt/lists/*
@@ -127,7 +127,7 @@ CMD ["run-daily"]
 # ============ Pipeline dev — venv only, source via bind mount ============
 FROM python:3.11-slim AS pipeline-dev
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+    libpq5 libgomp1 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
     libxfixes3 libxrandr2 libgbm1 libasound2 \
     && rm -rf /var/lib/apt/lists/*

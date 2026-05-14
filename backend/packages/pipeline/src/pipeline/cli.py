@@ -41,6 +41,12 @@ async def _score() -> int:
     return await run()
 
 
+async def _analysis() -> dict[str, int]:
+    from labeling.analysis import run
+
+    return await run()
+
+
 async def _gsc() -> None:
     from core.db import get_session
     from ingest import gsc
@@ -55,6 +61,7 @@ _STEP_RUNNERS: dict[str, Callable[[], Coroutine[Any, Any, Any]]] = {
     "cluster": _cluster,
     "label": _label,
     "score": _score,
+    "analysis": _analysis,
     "gsc": _gsc,
 }
 

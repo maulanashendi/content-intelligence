@@ -12,7 +12,8 @@ from core.models import (
 )
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, literal, or_, select
+from sqlalchemy.orm import aliased
 
 from api.deps import SessionDep
 from api.types import UtcDateTime
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/clusters", tags=["clusters"])
 
 class ClusterSummary(BaseModel):
     id: uuid.UUID
+    parent_cluster_id: uuid.UUID | None
     label: str | None
     member_count: int | None
     is_current: bool
@@ -32,7 +34,7 @@ class ClusterSummary(BaseModel):
     tempo_covered: bool | None
     last_internal_days_ago: int | None
     underperformed: bool | None
-    summary: str | None
+    summary: list[str] | None
     insight_calculated_at: UtcDateTime | None
 
 
@@ -48,6 +50,7 @@ class ArticleSummary(BaseModel):
 
 class ClusterDetail(ClusterSummary):
     members: list[ArticleSummary]
+    sub_clusters: list[ClusterSummary] | None
 
 
 class ClusterRunResponse(BaseModel):
@@ -66,6 +69,7 @@ def _to_summary(
 ) -> ClusterSummary:
     return ClusterSummary(
         id=cluster.id,
+        parent_cluster_id=cluster.parent_cluster_id,
         label=cluster.label,
         member_count=cluster.member_count,
         is_current=cluster.is_current,
@@ -81,6 +85,15 @@ def _to_summary(
     )
 
 
+def _leaf_guard() -> object:
+    child = aliased(ArticleCluster)
+    return ~exists(
+        select(literal(1))
+        .where(child.parent_cluster_id == ArticleCluster.id)
+        .correlate(ArticleCluster)
+    )
+
+
 @router.get("/morning", response_model=list[ClusterSummary])
 async def morning_clusters(session: SessionDep) -> list[ClusterSummary]:
     stmt = (
@@ -89,6 +102,7 @@ async def morning_clusters(session: SessionDep) -> list[ClusterSummary]:
         .where(
             ArticleCluster.is_current.is_(True),
             ClusterInsight.tempo_covered.is_(False),
+            _leaf_guard(),
         )
         .order_by(ClusterInsight.trend_velocity.desc().nullslast())
         .limit(settings.scoring_morning_top_n)
@@ -111,6 +125,7 @@ async def deferred_clusters(session: SessionDep) -> list[ClusterSummary]:
                 ClusterInsight.last_internal_days_ago
                 > settings.scoring_recent_internal_days,
             ),
+            _leaf_guard(),
         )
         .order_by(ClusterInsight.trend_velocity.desc().nullslast())
     )
@@ -213,8 +228,18 @@ async def cluster_detail(cluster_id: uuid.UUID, session: SessionDep) -> ClusterD
         for r in member_rows
     ]
 
+    sub_clusters_stmt = (
+        select(ArticleCluster, ClusterInsight)
+        .outerjoin(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
+        .where(ArticleCluster.parent_cluster_id == cluster_id)
+        .order_by(ArticleCluster.member_count.desc().nullslast())
+    )
+    sub_rows = (await session.execute(sub_clusters_stmt)).all()
+    sub_clusters = [_to_summary(c, i) for c, i in sub_rows] or None
+
     return ClusterDetail(
         id=cluster.id,
+        parent_cluster_id=cluster.parent_cluster_id,
         label=cluster.label,
         member_count=cluster.member_count,
         is_current=cluster.is_current,
@@ -228,4 +253,5 @@ async def cluster_detail(cluster_id: uuid.UUID, session: SessionDep) -> ClusterD
         summary=insight.summary if insight else None,
         insight_calculated_at=insight.calculated_at if insight else None,
         members=members,
+        sub_clusters=sub_clusters,
     )

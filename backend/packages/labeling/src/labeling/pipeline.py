@@ -3,8 +3,9 @@ import uuid
 
 from core.db import get_session
 from core.models import Article, ArticleCluster, ArticleClusterMember
-from sqlalchemy import select
+from sqlalchemy import literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from labeling.llm import generate_label
 
@@ -14,9 +15,18 @@ TOP_ARTICLES_PER_CLUSTER = 5
 
 
 async def _load_current_clusters(session: AsyncSession) -> list[ArticleCluster]:
+    child = aliased(ArticleCluster)
     stmt = (
         select(ArticleCluster)
-        .where(ArticleCluster.is_current.is_(True))
+        .where(
+            ArticleCluster.is_current.is_(True),
+            ~(
+                select(literal(1))
+                .where(child.parent_cluster_id == ArticleCluster.id)
+                .correlate(ArticleCluster)
+                .exists()
+            ),
+        )
         .order_by(ArticleCluster.member_count.desc())
     )
     result = await session.execute(stmt)
@@ -44,9 +54,10 @@ async def run() -> dict[str, int]:
 
     async with get_session() as session:
         clusters = await _load_current_clusters(session)
-        logger.info("found current clusters to label", extra={"cluster_count": len(clusters)})
+    logger.info("found current clusters to label", extra={"cluster_count": len(clusters)})
 
-        for cluster in clusters:
+    for cluster in clusters:
+        async with get_session() as session:
             articles = await _get_top_articles(session, cluster.id)
             if not articles:
                 logger.warning("cluster has no articles", extra={"cluster_id": str(cluster.id)})
@@ -62,11 +73,15 @@ async def run() -> dict[str, int]:
                 skipped += 1
                 continue
 
-            cluster.label = label
-            labeled += 1
-            logger.info("cluster labeled", extra={"cluster_id": str(cluster.id), "label": label})
+            cluster_row = await session.get(ArticleCluster, cluster.id)
+            if cluster_row is None:
+                skipped += 1
+                continue
+            cluster_row.label = label
+            await session.commit()
 
-        await session.commit()
+        labeled += 1
+        logger.info("cluster labeled", extra={"cluster_id": str(cluster.id), "label": label})
 
     result = {"labeled": labeled, "skipped": skipped}
     logger.info("labeling complete", extra=result)

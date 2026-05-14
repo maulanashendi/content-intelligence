@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     umap_random_state: int = 42
     umap_target_dimensions: int = 30
 
+    cluster_merge_top_k: int = 3
+    cluster_merge_similarity_threshold: float = 0.85
+    cluster_split_min_avg_relevance: float = 0.6
+    cluster_split_min_member_count: int = 10
+    cluster_split_max_noise_ratio: float = 0.2
+
     ingest_timeout_seconds: int = 30
     scrape_fast_timeout_seconds: int = 10
     playwright_poll_interval_seconds: int = 120

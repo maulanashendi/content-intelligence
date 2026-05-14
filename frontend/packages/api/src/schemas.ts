@@ -33,7 +33,7 @@ export const ClusterSummarySchema = z.object({
   tempo_covered: z.boolean().nullable(),
   last_internal_days_ago: z.number().int().nullable(),
   underperformed: z.boolean().nullable(),
-  summary: z.string().nullable(),
+  summary: z.array(z.string()).nullable(),
   insight_calculated_at: z.string().datetime().nullable(),
 })
 export type ClusterSummary = z.infer<typeof ClusterSummarySchema>
@@ -73,6 +73,14 @@ export type ContentSource = z.infer<typeof ContentSourceSchema>
 
 export const ContentSourceListSchema = z.array(ContentSourceSchema)
 
+export const SourceUpdateSchema = z.object({
+  name: z.string().optional(),
+  url: z.string().url().optional(),
+  source_type: z.enum(["rss", "internal"]).optional(),
+  is_enabled: z.boolean().optional(),
+})
+export type SourceUpdate = z.infer<typeof SourceUpdateSchema>
+
 export const PipelineTriggerResultSchema = z.object({
   group: z.string(),
   channel: z.string(),
@@ -81,8 +89,8 @@ export const PipelineTriggerResultSchema = z.object({
 export type PipelineTriggerResult = z.infer<typeof PipelineTriggerResultSchema>
 
 export const PipelineStatusSchema = z.object({
-  ingest_embed: z.string().nullable(),
   cluster_label_score: z.string().nullable(),
+  analysis: z.string().nullable(),
 })
 export type PipelineStatus = z.infer<typeof PipelineStatusSchema>
 

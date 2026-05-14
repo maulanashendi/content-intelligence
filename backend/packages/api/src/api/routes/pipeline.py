@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 _GROUP_CLUSTER_LABEL_SCORE = "cluster_label_score"
+_GROUP_ANALYSIS = "analysis"
 _CHANNEL_CLUSTER_LABEL_SCORE = "pipeline_cluster_label_score_requested"
+_CHANNEL_ANALYSIS = "pipeline_analysis_requested"
 
 
 class PipelineTriggerResult(BaseModel):
@@ -24,6 +26,7 @@ class PipelineTriggerResult(BaseModel):
 
 class PipelineStatusResponse(BaseModel):
     cluster_label_score: UtcDateTime | None
+    analysis: UtcDateTime | None
 
 
 async def _trigger(group: str, channel: str, session: SessionDep) -> PipelineTriggerResult:
@@ -55,6 +58,7 @@ async def pipeline_status(session: SessionDep) -> PipelineStatusResponse:
     lock_map = {lock.group_name: lock.locked_at for lock in locks}
     return PipelineStatusResponse(
         cluster_label_score=lock_map.get(_GROUP_CLUSTER_LABEL_SCORE),
+        analysis=lock_map.get(_GROUP_ANALYSIS),
     )
 
 
@@ -62,7 +66,17 @@ async def pipeline_status(session: SessionDep) -> PipelineStatusResponse:
     "/cluster-label-score",
     status_code=202,
     response_model=PipelineTriggerResult,
-    summary="Manually trigger cluster + label (score is currently disabled)",
+    summary="Manually trigger cluster + label + score",
 )
 async def trigger_cluster_label_score(session: SessionDep) -> PipelineTriggerResult:
     return await _trigger(_GROUP_CLUSTER_LABEL_SCORE, _CHANNEL_CLUSTER_LABEL_SCORE, session)
+
+
+@router.post(
+    "/analysis",
+    status_code=202,
+    response_model=PipelineTriggerResult,
+    summary="Manually trigger analysis (per-article LLM claim extraction)",
+)
+async def trigger_analysis(session: SessionDep) -> PipelineTriggerResult:
+    return await _trigger(_GROUP_ANALYSIS, _CHANNEL_ANALYSIS, session)

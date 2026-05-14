@@ -36,8 +36,7 @@ Rule: `api` never imports ML modules. Batch modules never import each other — 
 One supervised daemon, `python -m pipeline.cli serve`, owns every long-running concern. There is no host cron and no separate `ingest serve`.
 
 - **Reactive ingest + embed (continuous).** The daemon polls all enabled RSS sources every 10 minutes (`POLL_INTERVAL=600`), runs the embed cycle inline after each ingest, and listens on `pg_notify('rss_source_created')` to fetch a single new source on demand.
-- **Scheduled cluster + label (06:00 WIB daily).** An in-process `asyncio` scheduler emits `pg_notify('pipeline_cluster_label_score_requested')`; the same channel is used by the manual API trigger. Schedule is config-driven (`TIMEZONE`, `CLUSTER_SCHEDULE_HOUR`, `CLUSTER_SCHEDULE_MINUTE`).
-- **Scoring is disabled in the daemon path.** The package and `cluster_insight` table are kept; new daemon runs do not write rows. Re-enabling requires a new `decisions.md` entry.
+- **Scheduled cluster + label + score (06:00 WIB daily).** An in-process `asyncio` scheduler emits `pg_notify('pipeline_cluster_label_score_requested')`; the same channel is used by the manual API trigger. Schedule is config-driven (`TIMEZONE`, `CLUSTER_SCHEDULE_HOUR`, `CLUSTER_SCHEDULE_MINUTE`). After clustering and labeling, `scoring.pipeline.run()` upserts raw signals into `cluster_insight` per D27 (supersedes D24's disabled clause). Signals: `tempo_covered`, `competitor_count`, `trend_match_count`, `trend_velocity`, `last_internal_days_ago`, `underperformed`.
 - **Singleton.** In-memory immediate-fetch queue and the `pipeline_group_lock` row both assume a single replica.
 
 Each batch step is also exposed as `python -m pipeline.cli <step>` for ad-hoc debugging (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`); these are operator tools, not the production execution surface.

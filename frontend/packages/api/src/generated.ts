@@ -149,8 +149,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Manually trigger cluster + label (score is currently disabled) */
+        /** Manually trigger cluster + label + score */
         post: operations["trigger_cluster_label_score_api_v1_pipeline_cluster_label_score_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manually trigger analysis (per-article LLM claim extraction) */
+        post: operations["trigger_analysis_api_v1_pipeline_analysis_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -284,7 +301,7 @@ export interface components {
             /** Underperformed */
             underperformed: boolean | null;
             /** Summary */
-            summary: string | null;
+            summary: string[] | null;
             /** Insight Calculated At */
             insight_calculated_at: string | null;
             /** Members */
@@ -342,7 +359,7 @@ export interface components {
             /** Underperformed */
             underperformed: boolean | null;
             /** Summary */
-            summary: string | null;
+            summary: string[] | null;
             /** Insight Calculated At */
             insight_calculated_at: string | null;
         };
@@ -368,6 +385,8 @@ export interface components {
         PipelineStatusResponse: {
             /** Cluster Label Score */
             cluster_label_score: string | null;
+            /** Analysis */
+            analysis: string | null;
         };
         /** PipelineTriggerResult */
         PipelineTriggerResult: {
@@ -399,7 +418,12 @@ export interface components {
         /** SourcePatch */
         SourcePatch: {
             /** Is Enabled */
-            is_enabled: boolean;
+            is_enabled?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Url */
+            url?: string | null;
+            source_type?: components["schemas"]["SourceType"] | null;
         };
         /** SourceResponse */
         SourceResponse: {
@@ -427,6 +451,11 @@ export interface components {
             /** Article Count 24H */
             article_count_24h: number;
         };
+        /**
+         * SourceType
+         * @enum {string}
+         */
+        SourceType: "rss" | "internal";
         /** TrendSignalOut */
         TrendSignalOut: {
             /**
@@ -662,6 +691,26 @@ export interface operations {
         };
     };
     trigger_cluster_label_score_api_v1_pipeline_cluster_label_score_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineTriggerResult"];
+                };
+            };
+        };
+    };
+    trigger_analysis_api_v1_pipeline_analysis_post: {
         parameters: {
             query?: never;
             header?: never;

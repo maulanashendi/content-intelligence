@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
-import { useSources, useDeleteSource, useToggleSource, useTriggerIngestEmbed, useTriggerClusterLabelScore, usePipelineStatus } from "@ei-fe/api"
-import type { PipelineStatus } from "@ei-fe/api"
+import { useSources, useDeleteSource, useToggleSource, useUpdateSource, useTriggerClusterLabelScore, useTriggerAnalysis, usePipelineStatus } from "@ei-fe/api"
+import type { ContentSource, PipelineStatus } from "@ei-fe/api"
 import { formatDateTime } from "@ei-fe/core"
-import { LoadingState, ErrorState, EmptyState } from "@ei-fe/ui"
+import { Button, LoadingState, ErrorState, EmptyState } from "@ei-fe/ui"
 
 const STATUS_DOT: Record<string, string> = {
   active: "dot-ok",
@@ -21,11 +21,11 @@ const TYPE_LABEL: Record<string, string> = {
   internal: "internal",
 }
 
-type GroupKey = "ingest_embed" | "cluster_label_score"
+type GroupKey = "cluster_label_score" | "analysis"
 
 const GROUPS: { key: GroupKey; label: string }[] = [
-  { key: "ingest_embed", label: "Ingest + Embed" },
   { key: "cluster_label_score", label: "Cluster + Label + Score" },
+  { key: "analysis", label: "Analysis" },
 ]
 
 // How long to keep a button in "waiting for daemon" state after triggering
@@ -35,8 +35,15 @@ export function SourcesRoute() {
   const { data: sources, isLoading, isError, error, refetch } = useSources()
   const deleteMutation = useDeleteSource()
   const toggleMutation = useToggleSource()
-  const triggerIngestEmbed = useTriggerIngestEmbed()
+  const updateMutation = useUpdateSource()
   const triggerClusterLabelScore = useTriggerClusterLabelScore()
+  const triggerAnalysis = useTriggerAnalysis()
+
+  const [editingSource, setEditingSource] = useState<ContentSource | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editUrl, setEditUrl] = useState("")
+  const [editType, setEditType] = useState<"rss" | "internal">("rss")
+  const [editError, setEditError] = useState<string | null>(null)
 
   const [watching, setWatching] = useState(false)
   const [pipelineMsg, setPipelineMsg] = useState<string | null>(null)
@@ -50,7 +57,7 @@ export function SourcesRoute() {
   // Bootstrap: start watching if any group is already running when page loads
   useEffect(() => {
     if (!pipelineStatus || prevStatusRef.current !== null) return
-    if (pipelineStatus.ingest_embed !== null || pipelineStatus.cluster_label_score !== null) {
+    if (pipelineStatus.cluster_label_score !== null || pipelineStatus.analysis !== null) {
       setWatching(true)
     }
   }, [pipelineStatus])
@@ -78,7 +85,7 @@ export function SourcesRoute() {
       }
     }
 
-    const anyRunning = pipelineStatus.ingest_embed !== null || pipelineStatus.cluster_label_score !== null
+    const anyRunning = pipelineStatus.cluster_label_score !== null || pipelineStatus.analysis !== null
     const anyPending = Object.keys(triggeredRef.current).length > 0
     if (!anyRunning && !anyPending) setWatching(false)
   }, [pipelineStatus])
@@ -97,7 +104,7 @@ export function SourcesRoute() {
   }
 
   function handleTrigger(
-    mutation: typeof triggerIngestEmbed,
+    mutation: typeof triggerClusterLabelScore,
     key: GroupKey,
     label: string,
   ) {
@@ -138,6 +145,34 @@ export function SourcesRoute() {
     deleteMutation.mutate(id)
   }
 
+  function openEdit(s: ContentSource) {
+    setEditingSource(s)
+    setEditName(s.name)
+    setEditUrl(s.url)
+    setEditType(s.source_type)
+    setEditError(null)
+  }
+
+  function closeEdit() {
+    setEditingSource(null)
+    setEditError(null)
+  }
+
+  function submitEdit() {
+    if (!editingSource) return
+    if (!/^https?:\/\/.+/i.test(editUrl.trim())) {
+      setEditError("URL tidak valid")
+      return
+    }
+    updateMutation.mutate(
+      { id: editingSource.id, data: { name: editName.trim(), url: editUrl.trim(), source_type: editType } },
+      {
+        onSuccess: closeEdit,
+        onError: () => setEditError("Gagal menyimpan. Periksa URL tidak duplikat."),
+      },
+    )
+  }
+
   return (
     <>
       <div className="page-head">
@@ -156,19 +191,19 @@ export function SourcesRoute() {
             <span className="card-title" style={{ marginRight: 4 }}>Pipeline Manual</span>
             <button
               className="btn"
-              disabled={isGroupBusy("ingest_embed") || triggerIngestEmbed.isPending}
-              onClick={() => handleTrigger(triggerIngestEmbed, "ingest_embed", "Ingest + Embed")}
-              style={{ fontSize: 12 }}
-            >
-              {groupButtonLabel("ingest_embed", "Ingest + Embed")}
-            </button>
-            <button
-              className="btn"
               disabled={isGroupBusy("cluster_label_score") || triggerClusterLabelScore.isPending}
               onClick={() => handleTrigger(triggerClusterLabelScore, "cluster_label_score", "Cluster + Label + Score")}
               style={{ fontSize: 12 }}
             >
               {groupButtonLabel("cluster_label_score", "Cluster + Label + Score")}
+            </button>
+            <button
+              className="btn"
+              disabled={isGroupBusy("analysis") || triggerAnalysis.isPending}
+              onClick={() => handleTrigger(triggerAnalysis, "analysis", "Analysis")}
+              style={{ fontSize: 12 }}
+            >
+              {groupButtonLabel("analysis", "Analysis")}
             </button>
             {pipelineMsg && (
               <span className="faint" style={{ fontSize: 12, marginLeft: 4 }}>{pipelineMsg}</span>
@@ -240,7 +275,14 @@ export function SourcesRoute() {
                         <span className={`dot-status ${STATUS_DOT[s.status] ?? "dot-warn"}`} />
                       )}
                     </td>
-                    <td>
+                    <td style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: "2px 8px" }}
+                        onClick={() => openEdit(s)}
+                      >
+                        Edit
+                      </button>
                       <button
                         className="btn btn-ghost"
                         style={{ fontSize: 11, padding: "2px 8px", color: "var(--bad)" }}
@@ -257,6 +299,58 @@ export function SourcesRoute() {
           </div>
         )}
       </div>
+
+      {editingSource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="flex w-96 flex-col gap-4 rounded border border-[var(--line-strong)] bg-[var(--bg-elev)] p-6">
+            <p className="text-sm font-semibold">Edit Sumber</p>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-[var(--fg-muted)]">Nama</label>
+              <input
+                className="rounded border border-[var(--line-strong)] bg-[var(--bg-elev)] px-2.5 py-1.5 text-[13px] text-[var(--fg)] outline-none"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                maxLength={200}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-[var(--fg-muted)]">Tipe</label>
+              <select
+                className="rounded border border-[var(--line-strong)] bg-[var(--bg-elev)] px-2.5 py-1.5 text-[13px] text-[var(--fg)] outline-none"
+                value={editType}
+                onChange={e => setEditType(e.target.value as "rss" | "internal")}
+              >
+                <option value="rss">RSS</option>
+                <option value="internal">Internal</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium uppercase tracking-wide text-[var(--fg-muted)]">URL</label>
+              <input
+                className="rounded border border-[var(--line-strong)] bg-[var(--bg-elev)] px-2.5 py-1.5 text-[13px] font-mono text-[var(--fg)] outline-none"
+                value={editUrl}
+                onChange={e => setEditUrl(e.target.value)}
+              />
+            </div>
+
+            {editError && (
+              <p className="text-[12px] text-[var(--bad)]">{editError}</p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={closeEdit} disabled={updateMutation.isPending}>
+                Batal
+              </Button>
+              <Button size="sm" onClick={submitEdit} disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Menyimpan..." : "Simpan"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -46,7 +46,17 @@ class SourceCreate(BaseModel):
 class SourcePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    is_enabled: bool
+    is_enabled: bool | None = None
+    name: str | None = None
+    url: AnyHttpUrl | None = None
+    source_type: SourceType | None = None
+
+    @field_validator("name")
+    @classmethod
+    def trim_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return v.strip()[:200]
 
 
 def _cutoff_24h() -> datetime:
@@ -54,10 +64,11 @@ def _cutoff_24h() -> datetime:
 
 
 async def _count_24h_for_source(session: AsyncSession, source_id: uuid.UUID) -> int:
+    effective_date = func.coalesce(Article.published_at, Article.created_at)
     result = await session.execute(
         select(func.count(Article.id)).where(
             Article.source_id == source_id,
-            Article.created_at >= _cutoff_24h(),
+            effective_date >= _cutoff_24h(),
         )
     )
     return result.scalar_one()
@@ -80,9 +91,10 @@ def _serialize(source: ContentSource, article_count_24h: int) -> SourceResponse:
 
 @router.get("", response_model=list[SourceResponse])
 async def list_sources(session: SessionDep) -> list[SourceResponse]:
+    effective_date = func.coalesce(Article.published_at, Article.created_at)
     count_subq = (
         select(Article.source_id, func.count(Article.id).label("cnt"))
-        .where(Article.created_at >= _cutoff_24h())
+        .where(effective_date >= _cutoff_24h())
         .group_by(Article.source_id)
         .subquery()
     )
@@ -159,7 +171,18 @@ async def patch_source(
     source = await session.get(ContentSource, source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source tidak ditemukan.")
-    source.is_enabled = body.is_enabled
-    await session.commit()
-    await session.refresh(source)
+    if body.is_enabled is not None:
+        source.is_enabled = body.is_enabled
+    if body.name is not None:
+        source.name = body.name
+    if body.url is not None:
+        source.url = str(body.url)
+    if body.source_type is not None:
+        source.source_type = body.source_type
+    try:
+        await session.commit()
+        await session.refresh(source)
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="URL sudah terdaftar.") from exc
     return _serialize(source, await _count_24h_for_source(session, source_id))

@@ -14,7 +14,7 @@ export function ClusterHeader({ cluster }: ClusterHeaderProps) {
       <div className="card-head">
         <span className="card-title">Cluster Detail</span>
         <div style={{ marginLeft: "auto" }}>
-          <SignalBadge tempoCovered={cluster.tempo_covered} underperformed={cluster.underperformed} />
+          <SignalBadge tempoCovered={cluster.tempo_covered} lastInternalDaysAgo={cluster.last_internal_days_ago} underperformed={cluster.underperformed} />
         </div>
       </div>
       <div style={{ padding: "16px 18px" }}>

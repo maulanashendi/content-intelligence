@@ -16,7 +16,9 @@ from core.models import (
 from sqlalchemy import func, select, true, update
 
 from clustering.clusterer import cluster as hdbscan_cluster
+from clustering.merge import run as merge_run
 from clustering.reducer import reduce as umap_reduce
+from clustering.split import run as split_run
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,13 @@ async def run() -> None:
     )
 
     await _persist_clusters(started_at, labels, probs, embeddings, article_ids)
+
+    merged = await merge_run()
+    logger.info("merge complete merged=%d", merged)
+
+    split = await split_run()
+    logger.info("split complete split=%d", split)
+
     logger.info("clustering run complete")
 
 

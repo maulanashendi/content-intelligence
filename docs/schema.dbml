@@ -187,7 +187,8 @@ Table cluster_run {
 Table article_cluster {
   id uuid [pk, default: `gen_random_uuid()`]
   run_id uuid [ref: > cluster_run.id]
-  label varchar
+  parent_cluster_id uuid [ref: > article_cluster.id]  // null = top-level; set when split from oversized cluster
+  label varchar                                        // null on parent shells (too broad to label); set only on leaves
   centroid vector(768)
   member_count int
   is_current bool [default: true]
@@ -196,13 +197,22 @@ Table article_cluster {
   indexes {
     run_id
     is_current
+    parent_cluster_id
   }
 }
 
+// relevance_score populated by clustering. main_entity and information_claims
+// populated by the post-cluster analysis step: Gemma runs per article after
+// scoring completes, ordered by published_at DESC within each cluster.
+// Cache: before calling Gemma, query prior rows for the same article_id where
+// information_claims IS NOT NULL — article content is stable so a prior run's
+// extraction is valid to copy into the new row without re-calling Gemma.
 Table article_cluster_member {
   cluster_id uuid [ref: > article_cluster.id]
   article_id uuid [ref: > article.id]
   relevance_score float
+  main_entity text    // primary entity Gemma identifies from the article; null until analysis runs
+  information_claims text[]  // factual claims Gemma extracts from the article; null until analysis runs
 
   indexes {
     (cluster_id, article_id) [pk]
@@ -219,7 +229,7 @@ Table cluster_insight {
   tempo_covered boolean [not null, default: false]
   last_internal_days_ago int
   underperformed boolean [not null, default: false]
-  summary text
+  summary text[]  // deduplicated unique claims across all cluster articles, populated by analysis step after scoring; null until analysis runs
   calculated_at timestamp [default: `now()`]
 }
 

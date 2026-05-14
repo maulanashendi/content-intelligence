@@ -9,6 +9,7 @@ interface ClusterRow {
   competitor_count: number | null
   trend_match_count: number | null
   tempo_covered: boolean | null
+  last_internal_days_ago: number | null
   underperformed: boolean | null
 }
 
@@ -91,7 +92,7 @@ export function ClusterTable({
                   </div>
                 </td>
                 <td>
-                  <SignalBadge tempoCovered={c.tempo_covered} underperformed={c.underperformed} />
+                  <SignalBadge tempoCovered={c.tempo_covered} lastInternalDaysAgo={c.last_internal_days_ago} underperformed={c.underperformed} />
                 </td>
                 <td>
                   <VelocityBar velocity={c.trend_velocity} />
