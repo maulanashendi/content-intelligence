@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    ARRAY,
     Boolean,
     Date,
     DateTime,
@@ -85,6 +86,8 @@ class Article(Base):
     url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     first_paragraph: Mapped[str | None] = mapped_column(Text)
     content: Mapped[str | None] = mapped_column(Text)
+    main_entity: Mapped[str | None] = mapped_column(Text)
+    information_claims: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
     scrape_status: Mapped[ScrapeStatus | None] = mapped_column(Enum(ScrapeStatus))
     scrape_attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
     published_at: Mapped[datetime | None] = mapped_column(DateTime)
@@ -289,6 +292,9 @@ class ArticleCluster(Base):
         UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid
     )
     run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cluster_run.id"), nullable=False)
+    parent_cluster_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("article_cluster.id"), nullable=True
+    )
     label: Mapped[str | None] = mapped_column(String)
     centroid: Mapped[list[float] | None] = mapped_column(Vector(768))
     member_count: Mapped[int | None] = mapped_column(Integer)
@@ -300,9 +306,19 @@ class ArticleCluster(Base):
     __table_args__ = (
         Index("ix_article_cluster_run_id", "run_id"),
         Index("ix_article_cluster_is_current", "is_current"),
+        Index("ix_article_cluster_parent_cluster_id", "parent_cluster_id"),
     )
 
     run: Mapped["ClusterRun"] = relationship(back_populates="clusters")
+    parent: Mapped["ArticleCluster | None"] = relationship(
+        back_populates="sub_clusters",
+        foreign_keys="[ArticleCluster.parent_cluster_id]",
+        remote_side="ArticleCluster.id",
+    )
+    sub_clusters: Mapped[list["ArticleCluster"]] = relationship(
+        back_populates="parent",
+        foreign_keys="[ArticleCluster.parent_cluster_id]",
+    )
     members: Mapped[list["ArticleClusterMember"]] = relationship(back_populates="cluster")
     insight: Mapped["ClusterInsight | None"] = relationship(back_populates="cluster", uselist=False)
 
@@ -345,7 +361,7 @@ class ClusterInsight(Base):
     underperformed: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false"), nullable=False
     )
-    summary: Mapped[str | None] = mapped_column(Text)
+    summary: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
     calculated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

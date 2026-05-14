@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
-import { useSources, useDeleteSource, useToggleSource, useUpdateSource, useTriggerIngestEmbed, useTriggerClusterLabelScore, usePipelineStatus } from "@ei-fe/api"
+import { useSources, useDeleteSource, useToggleSource, useUpdateSource, useTriggerClusterLabelScore, useTriggerAnalysis, usePipelineStatus } from "@ei-fe/api"
 import type { ContentSource, PipelineStatus } from "@ei-fe/api"
 import { formatDateTime } from "@ei-fe/core"
 import { Button, LoadingState, ErrorState, EmptyState } from "@ei-fe/ui"
@@ -21,11 +21,11 @@ const TYPE_LABEL: Record<string, string> = {
   internal: "internal",
 }
 
-type GroupKey = "ingest_embed" | "cluster_label_score"
+type GroupKey = "cluster_label_score" | "analysis"
 
 const GROUPS: { key: GroupKey; label: string }[] = [
-  { key: "ingest_embed", label: "Ingest + Embed" },
   { key: "cluster_label_score", label: "Cluster + Label + Score" },
+  { key: "analysis", label: "Analysis" },
 ]
 
 // How long to keep a button in "waiting for daemon" state after triggering
@@ -36,8 +36,8 @@ export function SourcesRoute() {
   const deleteMutation = useDeleteSource()
   const toggleMutation = useToggleSource()
   const updateMutation = useUpdateSource()
-  const triggerIngestEmbed = useTriggerIngestEmbed()
   const triggerClusterLabelScore = useTriggerClusterLabelScore()
+  const triggerAnalysis = useTriggerAnalysis()
 
   const [editingSource, setEditingSource] = useState<ContentSource | null>(null)
   const [editName, setEditName] = useState("")
@@ -57,7 +57,7 @@ export function SourcesRoute() {
   // Bootstrap: start watching if any group is already running when page loads
   useEffect(() => {
     if (!pipelineStatus || prevStatusRef.current !== null) return
-    if (pipelineStatus.ingest_embed !== null || pipelineStatus.cluster_label_score !== null) {
+    if (pipelineStatus.cluster_label_score !== null || pipelineStatus.analysis !== null) {
       setWatching(true)
     }
   }, [pipelineStatus])
@@ -85,7 +85,7 @@ export function SourcesRoute() {
       }
     }
 
-    const anyRunning = pipelineStatus.ingest_embed !== null || pipelineStatus.cluster_label_score !== null
+    const anyRunning = pipelineStatus.cluster_label_score !== null || pipelineStatus.analysis !== null
     const anyPending = Object.keys(triggeredRef.current).length > 0
     if (!anyRunning && !anyPending) setWatching(false)
   }, [pipelineStatus])
@@ -104,7 +104,7 @@ export function SourcesRoute() {
   }
 
   function handleTrigger(
-    mutation: typeof triggerIngestEmbed,
+    mutation: typeof triggerClusterLabelScore,
     key: GroupKey,
     label: string,
   ) {
@@ -191,19 +191,19 @@ export function SourcesRoute() {
             <span className="card-title" style={{ marginRight: 4 }}>Pipeline Manual</span>
             <button
               className="btn"
-              disabled={isGroupBusy("ingest_embed") || triggerIngestEmbed.isPending}
-              onClick={() => handleTrigger(triggerIngestEmbed, "ingest_embed", "Ingest + Embed")}
-              style={{ fontSize: 12 }}
-            >
-              {groupButtonLabel("ingest_embed", "Ingest + Embed")}
-            </button>
-            <button
-              className="btn"
               disabled={isGroupBusy("cluster_label_score") || triggerClusterLabelScore.isPending}
               onClick={() => handleTrigger(triggerClusterLabelScore, "cluster_label_score", "Cluster + Label + Score")}
               style={{ fontSize: 12 }}
             >
               {groupButtonLabel("cluster_label_score", "Cluster + Label + Score")}
+            </button>
+            <button
+              className="btn"
+              disabled={isGroupBusy("analysis") || triggerAnalysis.isPending}
+              onClick={() => handleTrigger(triggerAnalysis, "analysis", "Analysis")}
+              style={{ fontSize: 12 }}
+            >
+              {groupButtonLabel("analysis", "Analysis")}
             </button>
             {pipelineMsg && (
               <span className="faint" style={{ fontSize: 12, marginLeft: 4 }}>{pipelineMsg}</span>

@@ -23,8 +23,10 @@ RECONNECT_BACKOFF_BASE = 10
 IMMEDIATE_QUEUE_MAX = 1024
 
 _GROUP_CLUSTER_LABEL_SCORE = "cluster_label_score"
+_GROUP_ANALYSIS = "analysis"
 _CHANNEL_RSS_SOURCE_CREATED = "rss_source_created"
 _CHANNEL_CLUSTER_LABEL_SCORE = "pipeline_cluster_label_score_requested"
+_CHANNEL_ANALYSIS = "pipeline_analysis_requested"
 
 
 async def _run_ingest_then_embed() -> None:
@@ -120,6 +122,12 @@ async def _run_cluster_label_score() -> None:
     logger.info("scoring complete cluster_count=%d", count)
 
 
+async def _run_analysis() -> None:
+    from labeling.analysis import run as analysis_run
+
+    await analysis_run()
+
+
 async def _acquire_lock(group: str) -> bool:
     async with get_session() as session:
         try:
@@ -140,7 +148,11 @@ async def _release_lock(group: str) -> None:
         await session.commit()
 
 
-async def _cluster_worker(queue: asyncio.Queue[None], shutdown: asyncio.Event) -> None:
+async def _cluster_worker(
+    queue: asyncio.Queue[None],
+    shutdown: asyncio.Event,
+    analysis_queue: asyncio.Queue[None],
+) -> None:
     while not shutdown.is_set():
         try:
             await asyncio.wait_for(queue.get(), timeout=1.0)
@@ -155,10 +167,35 @@ async def _cluster_worker(queue: asyncio.Queue[None], shutdown: asyncio.Event) -
             await _run_gsc_fetch()
             await _run_cluster_label_score()
             logger.info("pipeline group=%s finished", _GROUP_CLUSTER_LABEL_SCORE)
+            if not analysis_queue.full():
+                analysis_queue.put_nowait(None)
+                logger.info("analysis enqueued by cluster worker")
+            else:
+                logger.warning("analysis queue full, auto-enqueue skipped")
         except Exception:
             logger.exception("pipeline group=%s failed", _GROUP_CLUSTER_LABEL_SCORE)
         finally:
             await _release_lock(_GROUP_CLUSTER_LABEL_SCORE)
+
+
+async def _analysis_worker(queue: asyncio.Queue[None], shutdown: asyncio.Event) -> None:
+    while not shutdown.is_set():
+        try:
+            await asyncio.wait_for(queue.get(), timeout=1.0)
+        except TimeoutError:
+            continue
+
+        if not await _acquire_lock(_GROUP_ANALYSIS):
+            continue
+
+        logger.info("pipeline group=%s started", _GROUP_ANALYSIS)
+        try:
+            await _run_analysis()
+            logger.info("pipeline group=%s finished", _GROUP_ANALYSIS)
+        except Exception:
+            logger.exception("pipeline group=%s failed", _GROUP_ANALYSIS)
+        finally:
+            await _release_lock(_GROUP_ANALYSIS)
 
 
 def _next_run_at(now_utc: datetime, hour: int, minute: int, tz: ZoneInfo) -> datetime:
@@ -199,6 +236,7 @@ async def _listen(
     shutdown: asyncio.Event,
     immediate: deque[str],
     cluster_queue: asyncio.Queue[None],
+    analysis_queue: asyncio.Queue[None],
 ) -> None:
     def _on_source_created(conn: Any, pid: int, channel: str, payload: str) -> None:
         _enqueue_immediate(immediate, payload)
@@ -209,9 +247,16 @@ async def _listen(
             return
         cluster_queue.put_nowait(None)
 
+    def _on_analysis_requested(conn: Any, pid: int, channel: str, payload: str) -> None:
+        if analysis_queue.full():
+            logger.warning("analysis queue full, manual trigger dropped")
+            return
+        analysis_queue.put_nowait(None)
+
     handlers: dict[str, Any] = {
         _CHANNEL_RSS_SOURCE_CREATED: _on_source_created,
         _CHANNEL_CLUSTER_LABEL_SCORE: _on_cluster_requested,
+        _CHANNEL_ANALYSIS: _on_analysis_requested,
     }
 
     dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
@@ -253,6 +298,7 @@ async def run_loop() -> None:
 
     immediate: deque[str] = deque(maxlen=IMMEDIATE_QUEUE_MAX)
     cluster_queue: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
+    analysis_queue: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
 
     logger.info(
         "pipeline daemon started poll_interval=%ds cluster_schedule=%02d:%02d %s",
@@ -265,11 +311,12 @@ async def run_loop() -> None:
     from ingest.playwright_worker import run_loop as playwright_run_loop
 
     tasks = [
-        asyncio.create_task(_listen(shutdown, immediate, cluster_queue)),
+        asyncio.create_task(_listen(shutdown, immediate, cluster_queue, analysis_queue)),
         asyncio.create_task(_ingest_loop(shutdown, immediate)),
         asyncio.create_task(_cluster_scheduler(shutdown, cluster_queue)),
-        asyncio.create_task(_cluster_worker(cluster_queue, shutdown)),
+        asyncio.create_task(_cluster_worker(cluster_queue, shutdown, analysis_queue)),
         asyncio.create_task(playwright_run_loop(shutdown)),
+        asyncio.create_task(_analysis_worker(analysis_queue, shutdown)),
     ]
 
     try:

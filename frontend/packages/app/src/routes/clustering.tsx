@@ -98,7 +98,7 @@ function ClusterInsightPanel({ cluster, run }: { cluster: ClusterSummary | undef
     <div className="card" style={{ marginTop: 16 }}>
       <div className="card-head">
         <span className="card-title">Cluster Insight</span>
-        <SignalBadge tempoCovered={cluster.tempo_covered} underperformed={cluster.underperformed} />
+        <SignalBadge tempoCovered={cluster.tempo_covered} lastInternalDaysAgo={cluster.last_internal_days_ago} underperformed={cluster.underperformed} />
       </div>
       <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
@@ -120,14 +120,16 @@ function ClusterInsightPanel({ cluster, run }: { cluster: ClusterSummary | undef
           </div>
         </div>
 
-        {cluster.summary && (
+        {cluster.summary && cluster.summary.length > 0 && (
           <div style={{ padding: "10px 12px", background: "var(--bg-sunken)", borderRadius: "var(--radius)", borderLeft: "3px solid var(--accent)" }}>
             <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--accent-fg)", fontWeight: 600, marginBottom: 4 }}>
               AI Summary
             </div>
-            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--fg-muted)", fontFamily: "var(--font-serif)" }}>
-              {cluster.summary}
-            </p>
+            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, lineHeight: 1.6, color: "var(--fg-muted)", fontFamily: "var(--font-serif)" }}>
+              {cluster.summary.map((claim, i) => (
+                <li key={i}>{claim}</li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -153,11 +155,10 @@ function ClusterInsightPanel({ cluster, run }: { cluster: ClusterSummary | undef
 
 export function ClusteringRoute() {
   const navigate = useNavigate()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
   const { data: run } = useLatestClusterRun()
   const { data: clusters = [] } = useCurrentClusters("desc")
 
-  const effectiveId = selectedId ?? clusters[0]?.id ?? null
+  const effectiveId = clusters[0]?.id ?? null
   const selectedCluster = clusters.find(c => c.id === effectiveId)
 
   return (

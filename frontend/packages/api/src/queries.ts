@@ -73,15 +73,15 @@ export function usePipelineStatus(refetchInterval: number | false = false) {
   })
 }
 
-export function useTriggerIngestEmbed() {
-  return useMutation({
-    mutationFn: () => apiPost("/pipeline/ingest-embed", {}, PipelineTriggerResultSchema),
-  })
-}
-
 export function useTriggerClusterLabelScore() {
   return useMutation({
     mutationFn: () => apiPost("/pipeline/cluster-label-score", {}, PipelineTriggerResultSchema),
+  })
+}
+
+export function useTriggerAnalysis() {
+  return useMutation({
+    mutationFn: () => apiPost("/pipeline/analysis", {}, PipelineTriggerResultSchema),
   })
 }
 

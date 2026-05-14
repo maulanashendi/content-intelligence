@@ -64,10 +64,11 @@ def _cutoff_24h() -> datetime:
 
 
 async def _count_24h_for_source(session: AsyncSession, source_id: uuid.UUID) -> int:
+    effective_date = func.coalesce(Article.published_at, Article.created_at)
     result = await session.execute(
         select(func.count(Article.id)).where(
             Article.source_id == source_id,
-            Article.created_at >= _cutoff_24h(),
+            effective_date >= _cutoff_24h(),
         )
     )
     return result.scalar_one()
@@ -90,9 +91,10 @@ def _serialize(source: ContentSource, article_count_24h: int) -> SourceResponse:
 
 @router.get("", response_model=list[SourceResponse])
 async def list_sources(session: SessionDep) -> list[SourceResponse]:
+    effective_date = func.coalesce(Article.published_at, Article.created_at)
     count_subq = (
         select(Article.source_id, func.count(Article.id).label("cnt"))
-        .where(Article.created_at >= _cutoff_24h())
+        .where(effective_date >= _cutoff_24h())
         .group_by(Article.source_id)
         .subquery()
     )

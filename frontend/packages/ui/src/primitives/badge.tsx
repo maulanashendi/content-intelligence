@@ -1,13 +1,17 @@
 interface SignalBadgeProps {
   tempoCovered: boolean | null | undefined
+  lastInternalDaysAgo?: number | null
   underperformed?: boolean | null
   className?: string
 }
 
-export function SignalBadge({ tempoCovered, underperformed, className }: SignalBadgeProps) {
+export function SignalBadge({ tempoCovered, lastInternalDaysAgo, underperformed, className }: SignalBadgeProps) {
   if (tempoCovered) {
     const cls = `badge badge-ok${className ? " " + className : ""}`
-    return <span className={cls}>sudah ditulis</span>
+    const label = lastInternalDaysAgo != null
+      ? `sudah ditulis ${lastInternalDaysAgo} hari lalu`
+      : "sudah ditulis"
+    return <span className={cls}>{label}</span>
   }
   if (underperformed) {
     const cls = `badge badge-warn${className ? " " + className : ""}`

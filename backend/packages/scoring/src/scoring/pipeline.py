@@ -90,12 +90,15 @@ async def _load_article_facts(
             COUNT(DISTINCT cs.id) FILTER (WHERE cs.source_type = 'rss') AS competitor_count,
             BOOL_OR(cs.source_type = 'internal') AS tempo_covered,
             FLOOR(EXTRACT(EPOCH FROM (
-                :now - MAX(a.published_at) FILTER (WHERE cs.source_type = 'internal')
+                :now - MAX(COALESCE(a.published_at, a.created_at)) FILTER (WHERE cs.source_type = 'internal')
             )) / 86400)::int AS last_internal_days_ago
         FROM article_cluster_member m
         JOIN article a         ON a.id = m.article_id
         JOIN content_source cs ON cs.id = a.source_id
         JOIN article_cluster c ON c.id = m.cluster_id AND c.is_current = true
+        WHERE NOT EXISTS (
+            SELECT 1 FROM article_cluster child WHERE child.parent_cluster_id = c.id
+        )
         GROUP BY m.cluster_id
         """
     )
@@ -127,6 +130,9 @@ async def _load_trend_match(
         JOIN trend_signal ts          ON ts.id = tsa.trend_signal_id
         JOIN article_cluster c        ON c.id = m.cluster_id AND c.is_current = true
         WHERE ts.captured_at >= :t24h
+          AND NOT EXISTS (
+              SELECT 1 FROM article_cluster child WHERE child.parent_cluster_id = c.id
+          )
         GROUP BY m.cluster_id
         """
     )
@@ -158,6 +164,9 @@ async def _load_underperformed(
         JOIN content_source cs    ON cs.id = a.source_id AND cs.source_type = 'internal'
         JOIN article_gsc_metric g ON g.article_id = a.id
         JOIN article_cluster c    ON c.id = m.cluster_id AND c.is_current = true
+        WHERE NOT EXISTS (
+            SELECT 1 FROM article_cluster child WHERE child.parent_cluster_id = c.id
+        )
         GROUP BY m.cluster_id
         """
     )
