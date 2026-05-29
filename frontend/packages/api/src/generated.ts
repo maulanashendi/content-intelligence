@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Morning Clusters */
+        /** Morning briefing — top uncovered clusters */
         get: operations["morning_clusters_api_v1_clusters_morning_get"];
         put?: never;
         post?: never;
@@ -45,7 +45,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deferred Clusters */
+        /** Deferred clusters — high velocity, uncovered, stale internal coverage */
         get: operations["deferred_clusters_api_v1_clusters_deferred_get"];
         put?: never;
         post?: never;
@@ -79,7 +79,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Current Clusters */
+        /** All clusters in the current scored run */
         get: operations["current_clusters_api_v1_clusters_current_get"];
         put?: never;
         post?: never;
@@ -96,7 +96,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Cluster Detail */
+        /** Full detail for a single cluster */
         get: operations["cluster_detail_api_v1_clusters__cluster_id__get"];
         put?: never;
         post?: never;
@@ -280,6 +280,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Parent Cluster Id */
+            parent_cluster_id: string | null;
             /** Label */
             label: string | null;
             /** Member Count */
@@ -294,18 +296,41 @@ export interface components {
             competitor_count: number | null;
             /** Trend Match Count */
             trend_match_count: number | null;
+            /** Weighted Trend Score */
+            weighted_trend_score: number | null;
             /** Tempo Covered */
             tempo_covered: boolean | null;
             /** Last Internal Days Ago */
             last_internal_days_ago: number | null;
             /** Underperformed */
             underperformed: boolean | null;
-            /** Summary */
-            summary: string[] | null;
+            /** Competitor Freshness Days */
+            competitor_freshness_days: number | null;
+            /** What Happened */
+            what_happened: string | null;
+            /** Parties Involved */
+            parties_involved: string[] | null;
+            /** Editorial Angle */
+            editorial_angle: string | null;
             /** Insight Calculated At */
             insight_calculated_at: string | null;
             /** Members */
             members: components["schemas"]["ArticleSummary"][];
+            /** Sub Clusters */
+            sub_clusters: components["schemas"]["ClusterSummary"][] | null;
+            /** Is Stale */
+            is_stale: boolean;
+        };
+        /** ClusterListResponse */
+        ClusterListResponse: {
+            /** Clusters */
+            clusters: components["schemas"]["ClusterSummary"][];
+            /** Served At */
+            served_at: string | null;
+            /** Is Stale */
+            is_stale: boolean;
+            /** Max Age Hours */
+            max_age_hours: number;
         };
         /** ClusterRunResponse */
         ClusterRunResponse: {
@@ -330,6 +355,8 @@ export interface components {
             notes: string | null;
             /** Cluster Count */
             cluster_count: number;
+            /** Has Insights */
+            has_insights: boolean;
         };
         /** ClusterSummary */
         ClusterSummary: {
@@ -338,6 +365,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Parent Cluster Id */
+            parent_cluster_id: string | null;
             /** Label */
             label: string | null;
             /** Member Count */
@@ -352,14 +381,22 @@ export interface components {
             competitor_count: number | null;
             /** Trend Match Count */
             trend_match_count: number | null;
+            /** Weighted Trend Score */
+            weighted_trend_score: number | null;
             /** Tempo Covered */
             tempo_covered: boolean | null;
             /** Last Internal Days Ago */
             last_internal_days_ago: number | null;
             /** Underperformed */
             underperformed: boolean | null;
-            /** Summary */
-            summary: string[] | null;
+            /** Competitor Freshness Days */
+            competitor_freshness_days: number | null;
+            /** What Happened */
+            what_happened: string | null;
+            /** Parties Involved */
+            parties_involved: string[] | null;
+            /** Editorial Angle */
+            editorial_angle: string | null;
             /** Insight Calculated At */
             insight_calculated_at: string | null;
         };
@@ -541,7 +578,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterSummary"][];
+                    "application/json": components["schemas"]["ClusterListResponse"];
                 };
             };
         };
@@ -561,7 +598,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterSummary"][];
+                    "application/json": components["schemas"]["ClusterListResponse"];
                 };
             };
         };
@@ -603,7 +640,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterSummary"][];
+                    "application/json": components["schemas"]["ClusterListResponse"];
                 };
             };
             /** @description Validation Error */

@@ -61,6 +61,7 @@ services:
       postgres:
         condition: service_healthy
     restart: always
+    stop_grace_period: 30s
     command: ["serve"]
     deploy:
       resources:
