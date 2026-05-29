@@ -1,13 +1,14 @@
 import logging
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
+from core.config import settings
 from core.db import get_session
 from core.models import Article, ArticleCluster, ArticleClusterMember, ArticleEmbedding, ClusterInsight
-from sqlalchemy import literal, select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from labeling.llm import generate_cluster_insight, generate_label
 
@@ -79,23 +80,42 @@ def _pick_representatives(
     return selected
 
 
-async def _load_current_clusters(session: AsyncSession) -> list[ArticleCluster]:
-    child = aliased(ArticleCluster)
-    stmt = (
-        select(ArticleCluster)
-        .where(
-            ArticleCluster.is_current.is_(True),
-            ~(
-                select(literal(1))
-                .where(child.parent_cluster_id == ArticleCluster.id)
-                .correlate(ArticleCluster)
-                .exists()
-            ),
-        )
-        .order_by(ArticleCluster.member_count.desc())
+async def _select_cluster_ids_for_labeling(
+    session: AsyncSession,
+) -> tuple[list[uuid.UUID], int]:
+    """Current top-level cluster ids in labeling priority order, capped at
+    settings.labeling_max_clusters.
+
+    Priority: trend match (distinct trend signals captured in the last 24h that
+    the cluster's articles hit) desc, then member_count desc. When a run produces
+    more clusters than the cap, the Gemma budget is spent on the most newsworthy
+    (trending) and largest clusters; the long tail is left unlabeled this run
+    (still scored). Returns (selected_ids, total_current_count).
+    """
+    t24h = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
+    sql = text(
+        """
+        SELECT c.id AS cluster_id
+        FROM article_cluster c
+        LEFT JOIN (
+            SELECT m.cluster_id, COUNT(DISTINCT tsa.trend_signal_id) AS trend_match_count
+            FROM article_cluster_member m
+            JOIN trend_signal_article tsa ON tsa.article_id = m.article_id
+            JOIN trend_signal ts          ON ts.id = tsa.trend_signal_id
+            WHERE ts.captured_at >= :t24h
+            GROUP BY m.cluster_id
+        ) t ON t.cluster_id = c.id
+        WHERE c.is_current = true
+          AND NOT EXISTS (
+              SELECT 1 FROM article_cluster child WHERE child.parent_cluster_id = c.id
+          )
+        ORDER BY COALESCE(t.trend_match_count, 0) DESC,
+                 COALESCE(c.member_count, 0) DESC,
+                 c.id
+        """
     )
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
+    all_ids = [row.cluster_id for row in (await session.execute(sql, {"t24h": t24h})).all()]
+    return all_ids[: settings.labeling_max_clusters], len(all_ids)
 
 
 async def _get_top_articles(
@@ -192,17 +212,21 @@ async def run() -> dict[str, int]:
     skipped = 0
 
     async with get_session() as session:
-        clusters = await _load_current_clusters(session)
-    logger.info("found current clusters to label", extra={"cluster_count": len(clusters)})
+        cluster_ids, total = await _select_cluster_ids_for_labeling(session)
+    capped = total - len(cluster_ids)
+    logger.info(
+        "selected clusters to label",
+        extra={"cluster_count": len(cluster_ids), "total_current": total, "capped": capped},
+    )
 
-    for cluster in clusters:
+    for cluster_id in cluster_ids:
         async with get_session() as session:
-            reps = await _get_representative_articles(session, cluster.id)
+            reps = await _get_representative_articles(session, cluster_id)
             if not reps:
-                reps = await _get_top_articles(session, cluster.id)
+                reps = await _get_top_articles(session, cluster_id)
 
             if not reps:
-                logger.warning("cluster has no articles", extra={"cluster_id": str(cluster.id)})
+                logger.warning("cluster has no articles", extra={"cluster_id": str(cluster_id)})
                 skipped += 1
                 continue
 
@@ -216,7 +240,7 @@ async def run() -> dict[str, int]:
             except Exception:
                 logger.exception(
                     "failed to generate cluster insight",
-                    extra={"cluster_id": str(cluster.id)},
+                    extra={"cluster_id": str(cluster_id)},
                 )
                 result = {
                     "label": None,
@@ -230,27 +254,27 @@ async def run() -> dict[str, int]:
             if not label:
                 logger.warning(
                     "cluster llm output missing LABEL, attempting fallback",
-                    extra={"cluster_id": str(cluster.id)},
+                    extra={"cluster_id": str(cluster_id)},
                 )
                 try:
                     label = await generate_label(articles_simple)
                 except Exception:
                     logger.exception(
                         "fallback generate_label also failed, skipping cluster",
-                        extra={"cluster_id": str(cluster.id)},
+                        extra={"cluster_id": str(cluster_id)},
                     )
                     skipped += 1
                     continue
                 if not label:
                     logger.warning(
                         "fallback generate_label returned empty, skipping cluster",
-                        extra={"cluster_id": str(cluster.id)},
+                        extra={"cluster_id": str(cluster_id)},
                     )
                     skipped += 1
                     continue
                 logger.warning(
                     "cluster labeled via fallback after missing LABEL",
-                    extra={"cluster_id": str(cluster.id)},
+                    extra={"cluster_id": str(cluster_id)},
                 )
                 # Partial insight from a no-label response is unreliable; reset to None
                 # (non-destructive upsert means existing good values are preserved)
@@ -262,14 +286,14 @@ async def run() -> dict[str, int]:
                     "summary": None,
                 }
 
-            cluster_row = await session.get(ArticleCluster, cluster.id)
+            cluster_row = await session.get(ArticleCluster, cluster_id)
             if cluster_row is None:
                 skipped += 1
                 continue
             cluster_row.label = label
             await _upsert_insight(
                 session,
-                cluster.id,
+                cluster_id,
                 result.get("what_happened"),
                 result.get("parties_involved"),
                 result.get("editorial_angle"),
@@ -281,12 +305,12 @@ async def run() -> dict[str, int]:
         logger.info(
             "cluster labeled",
             extra={
-                "cluster_id": str(cluster.id),
+                "cluster_id": str(cluster_id),
                 "label": label,
                 "parties_count": len(result.get("parties_involved") or []),
             },
         )
 
-    out = {"labeled": labeled, "skipped": skipped}
+    out = {"labeled": labeled, "skipped": skipped, "capped": capped}
     logger.info("labeling complete", extra=out)
     return out

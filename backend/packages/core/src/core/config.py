@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     scoring_deferred_velocity_min: float = 0.4
     cluster_staleness_max_age_hours: int = 36
     cluster_run_retention_count: int = 14
+    # When a run has more current clusters than this, label only the top N by
+    # trend match (fresh signals, 24h) then member_count — cap the Gemma budget.
+    labeling_max_clusters: int = 100
 
 
 settings = Settings()

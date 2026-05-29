@@ -765,3 +765,24 @@ The margin is safe: the longest blocked native call after the `asyncio.to_thread
 - `alembic/versions/e1f3a5c7b9d2_*.py`: FK drop/recreate with CASCADE (down reverts to NO ACTION).
 - `conftest.py`: pin test DB during migration. `docs/schema.dbml`: `delete: cascade` annotations.
 - New `packages/pipeline/tests/test_prune_retention.py`: cascade, served-run protection, within-retention no-op, empty-DB guard.
+
+---
+
+## D34. Cap labeling to top-N clusters when a run is large
+
+**Context.** Daily runs now produce ~700–814 current clusters. Even after D31 reduced labeling to one Gemma call per cluster (~55s on CPU), labeling *every* cluster is ~12h for 800 — far past the daily window, and wasteful: only a small editorial slice is ever surfaced (`morning` top-10, `deferred`, manual browse). The long tail of tiny, non-trending clusters is labeled at full cost but rarely read.
+
+**Options considered.**
+- Label everything (status quo). Doesn't fit the window at current cluster counts.
+- Hard global cap with no ordering. Bounds cost but may skip the newsworthy clusters.
+- Cap with editorial priority: when current top-level clusters exceed `labeling_max_clusters` (=100), label only the top 100 ordered by trend match (distinct trend signals captured in the last 24h that the cluster's articles hit) desc, then `member_count` desc.
+
+**Decision.** Option (c). `labeling.pipeline._select_cluster_ids_for_labeling` ranks current top-level clusters by `(trend_match_count_24h DESC, member_count DESC)` and slices to `settings.labeling_max_clusters`. The trend-match join mirrors scoring's `_load_trend_match` (same 24h `captured_at` window, distinct `trend_signal_id`). When the count is at or under the cap, every cluster is labeled (order only affects processing sequence). `run()` now returns `{labeled, skipped, capped}`.
+
+**Rationale.** Editorial value concentrates in trending and large clusters; the tail seldom surfaces. The cap bounds the Gemma budget to ≤100 calls (≈≤90 min) regardless of how many clusters a run produces. It is self-correcting: each run re-selects, so a cluster that starts trending on a later day gets labeled then. **Scoring is untouched** — all clusters still receive `cluster_insight` signals (velocity, competitor count, coverage); only the qualitative text (label, what_happened, editorial_angle, summary) is capped. An unlabeled capped cluster serves `label=null`, indistinguishable from a not-yet-labeled cluster, so there is no API/contract change.
+
+**Implication.**
+- `core/config.py`: `labeling_max_clusters: int = 100`.
+- `labeling/pipeline.py`: `_select_cluster_ids_for_labeling` (replaces `_load_current_clusters`); `run()` iterates capped ids and reports `capped`.
+- No schema change, no API change.
+- New `packages/pipeline/tests/test_labeling_cap.py`: cap honors trend-then-member priority; stale (>24h) trend signals excluded; full order when under cap.
