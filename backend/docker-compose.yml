@@ -1,4 +1,4 @@
-name: editor-intelligence
+name: content-intelligence
 
 services:
   postgres:
@@ -26,7 +26,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO
     ports:
-      - "8001:8000"
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,6 +34,21 @@ services:
       - ./packages:/app/packages
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      target: prod
+    environment:
+      VITE_BACKEND_URL: http://api:8000
+      VITE_ENABLE_MOCK: "false"
+    ports:
+      - "5173:5173"
+    working_dir: /app/packages/app
+    command: ["./node_modules/.bin/vite", "--host"]
+    depends_on:
+      - api
 
   pipeline-daemon:
     build:
@@ -53,6 +68,8 @@ services:
       GSC_SITE_URL: ${GSC_SITE_URL:-sc-domain:tempo.co}
       GSC_CREDENTIALS_PATH: /app/gsc-credentials.json
       GSC_FETCH_DAYS: ${GSC_FETCH_DAYS:-7}
+      PIPELINE_LOCK_LEASE_TTL_SECONDS: ${PIPELINE_LOCK_LEASE_TTL_SECONDS:-300}
+      PIPELINE_LOCK_HEARTBEAT_SECONDS: ${PIPELINE_LOCK_HEARTBEAT_SECONDS:-30}
     volumes:
       - hfcache:/models
       - ./packages:/app/packages
@@ -61,6 +78,8 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 3g
     command: ["serve"]
 
   pipeline:

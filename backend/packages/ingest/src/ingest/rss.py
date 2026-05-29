@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import feedparser
@@ -10,7 +10,7 @@ from core.config import settings
 from core.db import get_session
 from core.models import Article, ContentSource, ScrapeStatus, SourceStatus, SourceType
 from lxml import html as lxml_html
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 logger = logging.getLogger(__name__)
@@ -81,9 +81,10 @@ async def _set_source_status(source_id: UUID, status: SourceStatus) -> None:
         await session.execute(
             update(ContentSource)
             .where(ContentSource.id == source_id)
-            .values(status=status, updated_at=now)
+            .values(status=status, last_fetched_at=now, updated_at=now)
         )
         await session.commit()
+    logger.info("source_status_set source_id=%s status=%s", source_id, status.value)
 
 
 async def fetch_and_store_source(
@@ -145,11 +146,33 @@ async def _ingest_one(
 
 
 async def ingest_rss(client: httpx.AsyncClient) -> int:
+    now = datetime.now(UTC).replace(tzinfo=None)
+    error_cutoff = now - timedelta(seconds=settings.source_error_backoff_seconds)
+    blocked_cutoff = now - timedelta(seconds=settings.source_blocked_backoff_seconds)
+
     async with get_session() as session:
         result = await session.execute(
             select(ContentSource.id, ContentSource.url, ContentSource.name).where(
                 ContentSource.source_type == SourceType.rss,
                 ContentSource.is_enabled.is_(True),
+                or_(
+                    ContentSource.status.is_(None),
+                    ContentSource.status == SourceStatus.active,
+                    and_(
+                        ContentSource.status == SourceStatus.error,
+                        or_(
+                            ContentSource.last_fetched_at.is_(None),
+                            ContentSource.last_fetched_at < error_cutoff,
+                        ),
+                    ),
+                    and_(
+                        ContentSource.status == SourceStatus.blocked,
+                        or_(
+                            ContentSource.last_fetched_at.is_(None),
+                            ContentSource.last_fetched_at < blocked_cutoff,
+                        ),
+                    ),
+                ),
             )
         )
         sources = result.all()

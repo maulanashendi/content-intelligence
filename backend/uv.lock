@@ -1074,6 +1074,7 @@ dependencies = [
     { name = "core" },
     { name = "huggingface-hub" },
     { name = "llama-cpp-python" },
+    { name = "numpy" },
 ]
 
 [package.metadata]
@@ -1082,6 +1083,7 @@ requires-dist = [
     { name = "core", editable = "packages/core" },
     { name = "huggingface-hub", specifier = ">=0.30" },
     { name = "llama-cpp-python", specifier = ">=0.3" },
+    { name = "numpy", specifier = ">=1.26" },
 ]
 
 [[package]]

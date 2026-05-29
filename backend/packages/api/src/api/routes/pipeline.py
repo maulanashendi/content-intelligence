@@ -1,9 +1,11 @@
 import logging
+from datetime import UTC, datetime, timedelta
 
+from core.config import settings
 from core.models import PipelineGroupLock
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 
 from api.deps import SessionDep
 from api.types import UtcDateTime
@@ -30,6 +32,17 @@ class PipelineStatusResponse(BaseModel):
 
 
 async def _trigger(group: str, channel: str, session: SessionDep) -> PipelineTriggerResult:
+    lease_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+        seconds=settings.pipeline_lock_lease_ttl_seconds
+    )
+    await session.execute(
+        delete(PipelineGroupLock).where(
+            PipelineGroupLock.group_name == group,
+            PipelineGroupLock.locked_at < lease_cutoff,
+        )
+    )
+    await session.commit()
+
     lock = await session.get(PipelineGroupLock, group)
     if lock is not None:
         raise HTTPException(status_code=409, detail=f"Pipeline group {group} sedang berjalan.")

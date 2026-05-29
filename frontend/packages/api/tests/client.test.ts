@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
 import { apiGet, apiPost, apiPatch, apiDelete } from "../src/client.js"
-import { ContentSourceListSchema, ContentSourceSchema, ClusterListSchema, PaginatedArticlesSchema } from "../src/schemas.js"
+import { ContentSourceListSchema, ContentSourceSchema, ClusterListResponseSchema, PaginatedArticlesSchema } from "../src/schemas.js"
 import { ApiError } from "@ei-fe/core"
 
 function mockFetch(body: unknown, status = 200) {
@@ -286,12 +286,12 @@ describe("apiGet /articles — schema validation", () => {
 describe("apiGet — generic error paths", () => {
   test("throws ApiError(500) on server error", async () => {
     mockFetch({ detail: "Internal Server Error" }, 500)
-    await expect(apiGet("/clusters/morning", ClusterListSchema)).rejects.toMatchObject({ status: 500 })
+    await expect(apiGet("/clusters/morning", ClusterListResponseSchema)).rejects.toMatchObject({ status: 500 })
   })
 
   test("includes detail message from response body", async () => {
     mockFetch({ detail: "Cluster not found" }, 404)
-    const err = await apiGet("/clusters/abc", ClusterListSchema).catch((e) => e)
+    const err = await apiGet("/clusters/abc", ClusterListResponseSchema).catch((e) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect(err.message).toBe("Cluster not found")
   })

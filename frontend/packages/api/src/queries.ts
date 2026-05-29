@@ -1,20 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
 import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys, clusterRunKeys } from "./keys.js"
-import { ClusterListSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema } from "./schemas.js"
+import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema } from "./schemas.js"
 import type { SourceUpdate } from "./schemas.js"
 
 export function useMorningClusters() {
   return useQuery({
     queryKey: clusterKeys.morning(),
-    queryFn: () => apiGet("/clusters/morning", ClusterListSchema),
+    queryFn: () => apiGet("/clusters/morning", ClusterListResponseSchema),
   })
 }
 
 export function useCurrentClusters(order: "asc" | "desc" = "desc") {
   return useQuery({
     queryKey: clusterKeys.current(order),
-    queryFn: () => apiGet(`/clusters/current?order=${order}`, ClusterListSchema),
+    queryFn: () => apiGet(`/clusters/current?order=${order}`, ClusterListResponseSchema),
   })
 }
 

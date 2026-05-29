@@ -12,8 +12,8 @@ from zoneinfo import ZoneInfo
 import asyncpg
 from core.config import settings
 from core.db import get_session
-from core.models import ContentSource, PipelineGroupLock, SourceStatus
-from sqlalchemy import delete
+from core.models import ClusterRun, ContentSource, PipelineGroupLock, SourceStatus
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,10 @@ _GROUP_ANALYSIS = "analysis"
 _CHANNEL_RSS_SOURCE_CREATED = "rss_source_created"
 _CHANNEL_CLUSTER_LABEL_SCORE = "pipeline_cluster_label_score_requested"
 _CHANNEL_ANALYSIS = "pipeline_analysis_requested"
+
+# Groups currently held by this process — used by the heartbeat task.
+# Written/discarded on the loop (single-threaded coroutines) — no lock needed.
+_held_groups: set[str] = set()
 
 
 async def _run_ingest_then_embed() -> None:
@@ -108,18 +112,9 @@ async def _run_gsc_fetch() -> None:
 
 
 async def _run_cluster_label_score() -> None:
-    from clustering.pipeline import run as cluster_run
+    from pipeline.cluster_label_score import run
 
-    await cluster_run()
-
-    from labeling.pipeline import run as label_run
-
-    await label_run()
-
-    from scoring.pipeline import run as score_run
-
-    count = await score_run()
-    logger.info("scoring complete cluster_count=%d", count)
+    await run()
 
 
 async def _run_analysis() -> None:
@@ -128,7 +123,25 @@ async def _run_analysis() -> None:
     await analysis_run()
 
 
+def _lease_cutoff() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None) - timedelta(
+        seconds=settings.pipeline_lock_lease_ttl_seconds
+    )
+
+
+async def _reap_expired_lock(group: str) -> None:
+    async with get_session() as session:
+        await session.execute(
+            delete(PipelineGroupLock).where(
+                PipelineGroupLock.group_name == group,
+                PipelineGroupLock.locked_at < _lease_cutoff(),
+            )
+        )
+        await session.commit()
+
+
 async def _acquire_lock(group: str) -> bool:
+    await _reap_expired_lock(group)
     async with get_session() as session:
         try:
             session.add(PipelineGroupLock(group_name=group))
@@ -136,7 +149,7 @@ async def _acquire_lock(group: str) -> bool:
             return True
         except IntegrityError:
             await session.rollback()
-            logger.warning("group=%s lock already held, skipping trigger", group)
+            logger.warning("group=%s lock already held (fresh lease), skipping", group)
             return False
 
 
@@ -146,6 +159,29 @@ async def _release_lock(group: str) -> None:
             delete(PipelineGroupLock).where(PipelineGroupLock.group_name == group)
         )
         await session.commit()
+
+
+async def _heartbeat(shutdown: asyncio.Event, held: set[str]) -> None:
+    interval = settings.pipeline_lock_heartbeat_seconds
+    while not shutdown.is_set():
+        try:
+            await asyncio.wait_for(shutdown.wait(), timeout=interval)
+            return
+        except TimeoutError:
+            pass
+        groups = list(held)
+        if not groups:
+            continue
+        try:
+            async with get_session() as session:
+                await session.execute(
+                    update(PipelineGroupLock)
+                    .where(PipelineGroupLock.group_name.in_(groups))
+                    .values(locked_at=datetime.now(UTC).replace(tzinfo=None))
+                )
+                await session.commit()
+        except Exception:
+            logger.exception("lock heartbeat bump failed groups=%s", groups)
 
 
 async def _cluster_worker(
@@ -162,6 +198,7 @@ async def _cluster_worker(
         if not await _acquire_lock(_GROUP_CLUSTER_LABEL_SCORE):
             continue
 
+        _held_groups.add(_GROUP_CLUSTER_LABEL_SCORE)
         logger.info("pipeline group=%s started", _GROUP_CLUSTER_LABEL_SCORE)
         try:
             await _run_gsc_fetch()
@@ -175,6 +212,7 @@ async def _cluster_worker(
         except Exception:
             logger.exception("pipeline group=%s failed", _GROUP_CLUSTER_LABEL_SCORE)
         finally:
+            _held_groups.discard(_GROUP_CLUSTER_LABEL_SCORE)
             await _release_lock(_GROUP_CLUSTER_LABEL_SCORE)
 
 
@@ -188,6 +226,7 @@ async def _analysis_worker(queue: asyncio.Queue[None], shutdown: asyncio.Event) 
         if not await _acquire_lock(_GROUP_ANALYSIS):
             continue
 
+        _held_groups.add(_GROUP_ANALYSIS)
         logger.info("pipeline group=%s started", _GROUP_ANALYSIS)
         try:
             await _run_analysis()
@@ -195,6 +234,7 @@ async def _analysis_worker(queue: asyncio.Queue[None], shutdown: asyncio.Event) 
         except Exception:
             logger.exception("pipeline group=%s failed", _GROUP_ANALYSIS)
         finally:
+            _held_groups.discard(_GROUP_ANALYSIS)
             await _release_lock(_GROUP_ANALYSIS)
 
 
@@ -206,30 +246,54 @@ def _next_run_at(now_utc: datetime, hour: int, minute: int, tz: ZoneInfo) -> dat
     return target.astimezone(UTC)
 
 
+def _scheduled_boundary(now_utc: datetime, hour: int, minute: int, tz: ZoneInfo) -> datetime:
+    """Return the most recent scheduled boundary before now (naive UTC)."""
+    local_now = now_utc.astimezone(tz)
+    target = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target > local_now:
+        target -= timedelta(days=1)
+    return target.astimezone(UTC).replace(tzinfo=None)
+
+
+async def _last_cluster_run_finished_at() -> datetime | None:
+    async with get_session() as session:
+        result = await session.execute(select(func.max(ClusterRun.finished_at)))
+        return result.scalar_one_or_none()
+
+
 async def _cluster_scheduler(shutdown: asyncio.Event, queue: asyncio.Queue[None]) -> None:
     tz = ZoneInfo(settings.timezone)
+    poll = settings.cluster_scheduler_poll_seconds
     while not shutdown.is_set():
         now = datetime.now(UTC)
-        next_run = _next_run_at(
+        boundary = _scheduled_boundary(
             now, settings.cluster_schedule_hour, settings.cluster_schedule_minute, tz
         )
-        wait_seconds = (next_run - now).total_seconds()
-        logger.info(
-            "cluster scheduler: next tick at %s (in %.0fs)",
-            next_run.isoformat(),
-            wait_seconds,
-        )
-        try:
-            await asyncio.wait_for(shutdown.wait(), timeout=wait_seconds)
-            return
-        except TimeoutError:
-            pass
+        last_run = await _last_cluster_run_finished_at()
 
-        if queue.full():
-            logger.warning("cluster queue full at scheduled tick, dropping")
-            continue
-        queue.put_nowait(None)
-        logger.info("cluster scheduler fired")
+        should_fire = last_run is None or last_run < boundary
+        if should_fire:
+            if queue.full():
+                logger.warning("cluster queue full at scheduled tick, dropping")
+            else:
+                queue.put_nowait(None)
+                logger.info(
+                    "cluster scheduler fired boundary=%s last_run=%s",
+                    boundary.isoformat(),
+                    last_run.isoformat() if last_run else "never",
+                )
+        else:
+            next_run = _next_run_at(
+                now, settings.cluster_schedule_hour, settings.cluster_schedule_minute, tz
+            )
+            logger.info(
+                "cluster scheduler: next tick at %s (in %.0fs)",
+                next_run.isoformat(),
+                (next_run - now).total_seconds(),
+            )
+
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(shutdown.wait(), timeout=poll)
 
 
 async def _listen(
@@ -293,12 +357,20 @@ def _install_signal_handlers(shutdown: asyncio.Event) -> None:
 
 
 async def run_loop() -> None:
+    global _held_groups
+    _held_groups = set()
+
     shutdown = asyncio.Event()
     _install_signal_handlers(shutdown)
 
     immediate: deque[str] = deque(maxlen=IMMEDIATE_QUEUE_MAX)
     cluster_queue: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
     analysis_queue: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
+
+    # Reap any lock rows left by a previous container that was SIGKILLed.
+    for group in (_GROUP_CLUSTER_LABEL_SCORE, _GROUP_ANALYSIS):
+        await _reap_expired_lock(group)
+    logger.info("startup lock reap complete")
 
     logger.info(
         "pipeline daemon started poll_interval=%ds cluster_schedule=%02d:%02d %s",
@@ -317,6 +389,7 @@ async def run_loop() -> None:
         asyncio.create_task(_cluster_worker(cluster_queue, shutdown, analysis_queue)),
         asyncio.create_task(playwright_run_loop(shutdown)),
         asyncio.create_task(_analysis_worker(analysis_queue, shutdown)),
+        asyncio.create_task(_heartbeat(shutdown, _held_groups)),
     ]
 
     try:

@@ -661,3 +661,79 @@ Pipeline step added after score:
 - `runner.py`: `_run_cluster_label_score()` no longer calls `analysis_run()`. New constants `_GROUP_ANALYSIS`, `_CHANNEL_ANALYSIS`. New `_run_analysis()` and `_analysis_worker()`. `_cluster_worker` gains `analysis_queue` param and auto-enqueues on clean success. `_listen()` gains `analysis_queue` param and handles `_CHANNEL_ANALYSIS`. `run_loop()` adds `analysis_queue` and a sixth task.
 - `api/routes/pipeline.py`: New constants `_GROUP_ANALYSIS`, `_CHANNEL_ANALYSIS`. `PipelineStatusResponse` gains `analysis: UtcDateTime | None`. New `POST /api/v1/pipeline/analysis` endpoint. Stale summary on cluster-label-score endpoint corrected.
 - Frontend: `PipelineStatusSchema` drops stale `ingest_embed` field (removed in D24, never cleaned up), adds `analysis`. `useTriggerIngestEmbed` hook removed (called deleted endpoint). `useTriggerAnalysis` added. `sources.tsx` drops "Ingest + Embed" button, adds "Analysis" button. `generated.ts` regenerated after backend deploy.
+
+---
+
+## D30. Reuse `pipeline_group_lock.locked_at` as a lease heartbeat (no migration)
+
+**Context.** A stale `pipeline_group_lock` row (left by a SIGKILLed container) was orphaned for 9 days because the daemon had no TTL, no heartbeat, and no startup reaper. The ML-blocking asyncio loop made SIGTERM unobservable → Docker SIGKILL after 10s → `finally: _release_lock()` never executed. Every scheduled and manual trigger silently no-opped with `"lock already held, skipping"`.
+
+**Options considered.**
+- Add a new `expires_at` column (Alembic migration required; simple to reason about).
+- Use PostgreSQL advisory locks (no table needed; but harder to inspect via `psql` and outside the existing ORM pattern).
+- Reuse `locked_at` as a heartbeat timestamp — daemon bumps it every N seconds; rows older than TTL are treated as expired and reaped.
+
+**Decision.** Reuse `locked_at` as the lease heartbeat. No schema migration needed.
+
+**Rationale.** The daemon is a singleton (CLAUDE.md constraint), so concurrent heartbeat writes to the same row cannot race. `locked_at` is already indexed (PK lookup), observable via `psql`, and used by the existing `/pipeline/status` endpoint. Adding a column would require a migration and a deploy window with no behavioral advantage. Advisory locks were rejected because they are session-scoped (connection pool churn drops them silently) and cannot be inspected from the API.
+
+The margin is safe: the longest blocked native call after the `asyncio.to_thread` offload (introduced in the same PR) is one embed batch (~102s) or one UMAP/HDBSCAN call — both ≪ the 300s lease TTL. Heartbeat fires every 30s while the loop is free between `to_thread` calls.
+
+**Implication.**
+- `core/config.py`: two new settings: `pipeline_lock_lease_ttl_seconds: int = 300`, `pipeline_lock_heartbeat_seconds: int = 30`.
+- `runner.py`: `_acquire_lock` first DELETEs any expired row (separate txn), then attempts INSERT. New `_heartbeat` task bumps `locked_at` every 30s for `_held_groups`. Startup reap in `run_loop` clears both groups' stale rows before spawning tasks. Workers track `_held_groups` for the heartbeat.
+- `api/routes/pipeline.py`: `_trigger` reaps expired rows before the 409 check — a dead daemon's stale lock no longer blocks manual recovery.
+- All datetime comparisons use naive UTC (`datetime.now(UTC).replace(tzinfo=None)`) to match the stored column type.
+
+
+---
+
+## D31. Single-call cluster insight; analysis fan-out folded into labeling
+
+**Context.** After D28/D29, the labeling + analysis pipeline required ~1,610 Gemma-2B-Q4 LLM calls per daily run (~7 calls × ~230 clusters for labeling, plus ~5 calls × ~230 clusters × ~1.4 articles avg for analysis). On CPU, each call takes ~55s, giving a total wall-time of ~27h — longer than the 24h scheduling window, so labeling never completed. Additionally, `editorial_angle` was populated on only 3/229 clusters (1.3%), because the old `_INSIGHT_USER` prompt placed `SUDUT:` *after* the variable-length `PIHAK:` list; when `max_tokens=384` was exhausted, the model stopped before reaching `SUDUT:`.
+
+**Options considered.**
+- Keep per-article extraction + cluster-level dedup (D28/D29 design). Too slow; ~27h wall-time.
+- Batch articles into one call per cluster with existing LABEL+APA_TERJADI+PIHAK+SUDUT fields. Reduces calls but doesn't fix SUDUT truncation without reordering fields.
+- Single call per cluster with sub-cluster representative selection (cosine ≥ 0.90 + greedy MMR cap 20) and reordered output fields (SUDUT before variable-length PIHAK+KLAIM). Reduces to ~230 calls and fixes the truncation root cause.
+
+**Decision.** Option (c). One Gemma call per cluster using:
+1. Sub-cluster intra-cluster members at cosine ≥ 0.90 (UnionFind, free), pick highest-relevance rep per sub-group, MMR-diversify to 20 reps max.
+2. New field order: `LABEL → APA_TERJADI → SUDUT → PIHAK[] → KLAIM[]`. `SUDUT` comes before both variable-length lists so token budget exhaustion eats `KLAIM`, not the angle.
+3. `max_tokens=600` (was 384 for insight, 512 for claims).
+4. n_ctx=4096 budget guard: trims reps until `prompt_tokens + 600 ≤ 3968`; logs WARNING on trim.
+5. Robust parser via regex `(?P<key>LABEL|APA_TERJADI|APA\s+TERJADI|SUDUT|PIHAK|KLAIM)\s*:` (case-insensitive) — tolerates markdown bold, numbered bullets, and `SUDUT :` (space before colon).
+6. `analysis.run()` is a no-op stub (`{"analyzed": 0, "skipped": 0}`); the D29 group/lock/channel/endpoint are preserved to avoid API contract churn (full removal deferred to PR5/post-MVP).
+
+**Rationale.** The representative selection reduces input noise: near-duplicate articles (cosine ≥ 0.90) contribute only one voice. MMR diversification ensures coverage. Moving `SUDUT` before `PIHAK[]` is the direct fix for the 1.3% fill rate — it's a prompt-order change, not a parser change. The non-destructive `_upsert_insight` (only overwrite a field when the new value is non-None) fixes fallback clobber: if labeling falls back to `generate_label` (label-only), the existing `what_happened`/`editorial_angle` from a prior run are not wiped.
+
+**Implication.**
+- `labeling/pyproject.toml`: add `numpy>=1.26`.
+- `labeling/prompts.py`: new `format_cluster_insight_messages(reps)` + `FIRST_PARA_MAX_CHARS=350`.
+- `labeling/llm.py`: `_token_len`, `_parse_cluster_insight`, `_cluster_insight_sync` (trim-then-generate under `_llm_lock`), `async generate_cluster_insight`.
+- `labeling/pipeline.py`: `_get_representative_articles` (sub-cluster + MMR), `_upsert_insight` gains `summary` param and non-destructive semantics, `run()` calls `generate_cluster_insight` with fallback ladder.
+- `labeling/analysis.py`: no-op stub; `_load_cluster_articles`, `_find_cached_claims`, the `UPDATE article` cache-write, and `deduplicate_claims` call are all removed.
+- Expected call count: ~1,610 → ~230 (8× reduction). Expected wall-time: ~27h → 60–90 min (CPU).
+- `editorial_angle` fill rate: 1.3% → ≥90% (field-order + max_tokens fix, not parser).
+
+---
+
+## D32. Freshness guard on served cluster run
+
+**Context.** After the 9-day daemon outage (D30), the API continued serving a 9-day-stale cluster run with no indication to the frontend. The caller had no way to distinguish live data from severely stale data.
+
+**Options considered.**
+- Reject stale runs (return 503 when run age > max_age_hours). Safe but breaks availability: during any daemon outage, the dashboard goes blank.
+- Add `is_stale: bool` + `served_at: datetime | None` to each list response (flag, don't reject). Dashboard always serves what it has; consumers can surface a warning banner.
+- Per-cluster staleness in `ClusterSummary` (spreads the field across every item). Verbose; the run-level flag is sufficient for the list view.
+
+**Decision.** Option (b): wrap list endpoints in a `ClusterListResponse` envelope `{clusters, served_at, is_stale, max_age_hours}`. `ClusterDetail` also gains `is_stale` (computed from the cluster's own `insight.calculated_at`). Flag, don't reject.
+
+**Rationale.** Outage availability trumps freshness enforcement. The banner UI (deferred to the FE team) needs the metadata attached to the list, not per-item, so a list envelope is the minimal shape. `served_at = MAX(ClusterInsight.calculated_at)` for the served run is computed in one extra DB query per list call — cheap on a local DB. `is_stale = (now - served_at) > max_age_hours` where `max_age_hours = 36` (config `cluster_staleness_max_age_hours`): one missed 06:00 run (24h) is fine; two missed runs (48h) should trigger the banner.
+
+**Implication.**
+- `core/config.py`: `cluster_staleness_max_age_hours: int = 36`.
+- `api/routes/clusters.py`: `ClusterListResponse` envelope; `_get_served_at(session, run_filter)` helper; `_compute_is_stale(served_at)` helper; `is_stale: bool` on `ClusterDetail`.
+- `response_model=` updated for `morning`, `deferred`, `current`, and `{id}` routes (same commit, per API-contract rule).
+- Breaking change (pre-1.0, per constraints.md): `morning`, `deferred`, `current` responses change from bare arrays to envelopes. FE consumers updated to access `.clusters`.
+- FE banner UI deferred to FE team.

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 
@@ -59,7 +60,7 @@ async def _split_cluster(cluster_id: uuid.UUID, run_id: uuid.UUID) -> bool:
     article_ids = [r.article_id for r in rows]
     embeddings = np.array([r.embedding for r in rows], dtype=np.float32)
 
-    labels, probs = hdbscan_cluster(embeddings)
+    labels, probs = await asyncio.to_thread(hdbscan_cluster, embeddings)
     unique_labels = sorted(set(labels.tolist()) - {-1})
 
     if len(unique_labels) < 2:

@@ -23,6 +23,7 @@ export type PaginatedArticles = z.infer<typeof PaginatedArticlesSchema>
 
 export const ClusterSummarySchema = z.object({
   id: z.string().uuid(),
+  parent_cluster_id: z.string().uuid().nullable(),
   label: z.string().nullable(),
   member_count: z.number().int().nullable(),
   is_current: z.boolean(),
@@ -30,16 +31,25 @@ export const ClusterSummarySchema = z.object({
   trend_velocity: z.number().nullable(),
   competitor_count: z.number().int().nullable(),
   trend_match_count: z.number().int().nullable(),
+  weighted_trend_score: z.number().nullable(),
   tempo_covered: z.boolean().nullable(),
   last_internal_days_ago: z.number().int().nullable(),
   underperformed: z.boolean().nullable(),
-  summary: z.array(z.string()).nullable(),
+  competitor_freshness_days: z.number().int().nullable(),
+  what_happened: z.string().nullable(),
+  parties_involved: z.array(z.string()).nullable(),
+  editorial_angle: z.string().nullable(),
   insight_calculated_at: z.string().datetime().nullable(),
 })
 export type ClusterSummary = z.infer<typeof ClusterSummarySchema>
 
-export const ClusterListSchema = z.array(ClusterSummarySchema)
-export type ClusterList = z.infer<typeof ClusterListSchema>
+export const ClusterListResponseSchema = z.object({
+  clusters: z.array(ClusterSummarySchema),
+  served_at: z.string().datetime().nullable(),
+  is_stale: z.boolean(),
+  max_age_hours: z.number().int(),
+})
+export type ClusterListResponse = z.infer<typeof ClusterListResponseSchema>
 
 export const ArticleMemberSchema = z.object({
   id: z.string().uuid(),
@@ -54,6 +64,8 @@ export type ArticleMember = z.infer<typeof ArticleMemberSchema>
 
 export const ClusterDetailSchema = ClusterSummarySchema.extend({
   members: z.array(ArticleMemberSchema),
+  sub_clusters: z.array(ClusterSummarySchema).nullable(),
+  is_stale: z.boolean(),
 })
 export type ClusterDetail = z.infer<typeof ClusterDetailSchema>
 
@@ -114,5 +126,6 @@ export const ClusterRunSchema = z.object({
   finished_at: z.string().datetime().nullable(),
   notes: z.string().nullable(),
   cluster_count: z.number().int(),
+  has_insights: z.boolean(),
 })
 export type ClusterRun = z.infer<typeof ClusterRunSchema>

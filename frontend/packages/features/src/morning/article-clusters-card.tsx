@@ -9,7 +9,8 @@ interface ArticleClustersCardProps {
 
 export function ArticleClustersCard({ onSelect, selected }: ArticleClustersCardProps) {
   const [order, setOrder] = useState<"asc" | "desc">("desc")
-  const { data: clusters = [] } = useCurrentClusters(order)
+  const { data: _listData } = useCurrentClusters(order)
+  const clusters = _listData?.clusters ?? []
   const { data: run } = useLatestClusterRun()
 
   return (

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -32,16 +33,20 @@ async def run() -> None:
         return
 
     logger.info("loaded %d embeddings, reducing dimensions", len(embeddings))
-    reduced = umap_reduce(embeddings)
+    reduced = await asyncio.to_thread(umap_reduce, embeddings)
 
     logger.info("running HDBSCAN clustering")
-    labels, probs = hdbscan_cluster(reduced)
+    labels, probs = await asyncio.to_thread(hdbscan_cluster, reduced)
 
     unique_labels = set(labels.tolist())
     unique_labels.discard(-1)
     logger.info(
         "found %d clusters (%d noise points)", len(unique_labels), int((labels == -1).sum())
     )
+
+    if not unique_labels:
+        logger.warning("clustering produced only noise points, skipping persist")
+        return
 
     await _persist_clusters(started_at, labels, probs, embeddings, article_ids)
 

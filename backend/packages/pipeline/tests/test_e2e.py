@@ -3,7 +3,6 @@ import time
 import uuid
 from datetime import UTC, datetime
 
-import numpy as np
 import pytest
 from core.config import settings
 from core.db import get_session
@@ -15,32 +14,6 @@ GSC_FORBIDDEN_KEY_TOKENS = ("gsc", "impressions", "clicks", "position", "ctr")
 
 ARTICLES_PER_CLUSTER = 6
 NUM_CLUSTERS = 3
-EMBEDDING_DIM = 768
-
-
-def _build_fake_embedder() -> object:
-    """Returns a sentence-transformers-shaped stub.
-
-    Each input text starts with `<cluster_idx>|`; the stub emits an axis-aligned
-    one-hot vector for that cluster plus tiny gaussian noise, then L2-normalizes.
-    Three clusters land on three orthogonal axes — UMAP+HDBSCAN recovers them
-    deterministically.
-    """
-    rng = np.random.default_rng(seed=42)
-
-    class _Embedder:
-        def encode(self, texts, normalize_embeddings: bool = True, **_: object) -> np.ndarray:
-            vectors = np.zeros((len(texts), EMBEDDING_DIM), dtype=np.float32)
-            for i, raw in enumerate(texts):
-                cluster_idx = int(raw.split("|", 1)[0])
-                vectors[i, cluster_idx % NUM_CLUSTERS] = 1.0
-                vectors[i] += rng.normal(scale=0.005, size=EMBEDDING_DIM).astype(np.float32)
-            if normalize_embeddings:
-                norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-                vectors = vectors / norms
-            return vectors
-
-    return _Embedder()
 
 
 def _assert_no_gsc_keys(payload: object, where: str) -> None:
@@ -57,7 +30,10 @@ def _assert_no_gsc_keys(payload: object, where: str) -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_pipeline_and_api(
-    rss_source: ContentSource, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    rss_source: ContentSource,
+    fake_embedder: object,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     # 18 samples vs default umap_target_dimensions=30 — UMAP needs n_samples > n_components.
     # Drop to 5 for the test only; clustering shape isn't sensitive at this scale.
@@ -91,7 +67,7 @@ async def test_e2e_pipeline_and_api(
     monkeypatch.setattr("ingest.pipeline.ingest_rss", fake_ingest_rss)
     monkeypatch.setattr("ingest.pipeline.ingest_sitemap", fake_ingest_sitemap)
     monkeypatch.setattr("ingest.pipeline.ingest_trends", fake_ingest_trends)
-    monkeypatch.setattr("embedding.pipeline.get_embedder", _build_fake_embedder)
+    monkeypatch.setattr("embedding.pipeline.get_embedder", lambda: fake_embedder)
 
     async def fake_gsc_run(_session, _settings) -> None:
         return None
@@ -103,11 +79,18 @@ async def test_e2e_pipeline_and_api(
 
     label_counter = {"n": 0}
 
-    def fake_label(_articles: list[dict[str, str | None]]) -> str:
+    async def fake_label(_reps) -> dict[str, object]:
         label_counter["n"] += 1
-        return f"Topic {label_counter['n']}"
+        n = label_counter["n"]
+        return {
+            "label": f"Topic {n}",
+            "what_happened": f"Apa terjadi {n}",
+            "parties_involved": [f"Pihak {n}"],
+            "editorial_angle": f"Sudut {n}",
+            "summary": [f"Klaim {n}"],
+        }
 
-    monkeypatch.setattr("labeling.pipeline.generate_label", fake_label)
+    monkeypatch.setattr("labeling.pipeline.generate_cluster_insight", fake_label)
 
     from pipeline.cli import _run_daily
 
@@ -143,7 +126,8 @@ async def test_e2e_pipeline_and_api(
             assert took < 0.5, f"{path} took {took:.3f}s"
             _assert_no_gsc_keys(resp.json(), path)
 
-        morning = (await client.get("/api/v1/clusters/morning")).json()
+        morning_resp = (await client.get("/api/v1/clusters/morning")).json()
+        morning = morning_resp["clusters"]
         assert morning, "expected ≥1 cluster in /clusters/morning"
         cluster_id = morning[0]["id"]
 

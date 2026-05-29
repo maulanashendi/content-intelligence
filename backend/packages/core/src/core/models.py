@@ -354,6 +354,7 @@ class ClusterInsight(Base):
     trend_match_count: Mapped[int] = mapped_column(
         Integer, server_default=text("0"), nullable=False
     )
+    weighted_trend_score: Mapped[float | None] = mapped_column(Float)
     tempo_covered: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false"), nullable=False
     )
@@ -361,7 +362,17 @@ class ClusterInsight(Base):
     underperformed: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false"), nullable=False
     )
+    tempo_gsc_impressions: Mapped[int] = mapped_column(
+        Integer, server_default=text("0"), nullable=False
+    )
+    gsc_demand_gap: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), nullable=False
+    )
+    competitor_freshness_days: Mapped[int | None] = mapped_column(Integer)
     summary: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
+    what_happened: Mapped[str | None] = mapped_column(Text)
+    parties_involved: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
+    editorial_angle: Mapped[str | None] = mapped_column(Text)
     calculated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
@@ -373,7 +384,7 @@ class PipelineGroupLock(Base):
     __tablename__ = "pipeline_group_lock"
 
     # PK is the group name — INSERT uniqueness = race-free lock acquisition.
-    # Daemon DELETEs on completion. If the daemon crashes, the row persists
-    # and the API returns 409 until an operator clears it (D22).
+    # locked_at doubles as a lease heartbeat (D30): the daemon bumps it every 30s;
+    # rows older than the TTL (300s) are reaped on startup and API trigger.
     group_name: Mapped[str] = mapped_column(String, primary_key=True)
     locked_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)

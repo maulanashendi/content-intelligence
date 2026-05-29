@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     playwright_batch_size: int = 10
     timezone: str = "Asia/Jakarta"
 
+    pipeline_lock_lease_ttl_seconds: int = 300
+    pipeline_lock_heartbeat_seconds: int = 30
+    cluster_scheduler_poll_seconds: int = 60
+    source_error_backoff_seconds: int = 1800
+    source_blocked_backoff_seconds: int = 3600
+
     gsc_site_url: str = "sc-domain:tempo.co"
     gsc_credentials_path: str = "teco-analytics-2cea1d43461c.json"
     gsc_fetch_days: int = 7
@@ -47,6 +53,7 @@ class Settings(BaseSettings):
     scoring_recent_internal_days: int = 7
     scoring_morning_top_n: int = 10
     scoring_deferred_velocity_min: float = 0.4
+    cluster_staleness_max_age_hours: int = 36
 
 
 settings = Settings()

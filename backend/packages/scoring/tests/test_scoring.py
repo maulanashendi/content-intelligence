@@ -349,4 +349,6 @@ async def test_run_batches_three_queries(
             select_count["n"] += 1
 
     await score_run(now=NOW.replace(tzinfo=UTC))
-    assert select_count["n"] <= 4
+    # 7 batched SELECT calls: cluster_ids, article_facts, trend_match, weighted_trend_score,
+    # underperformed, gsc_signals, competitor_freshness_days — all O(1) not O(clusters).
+    assert select_count["n"] <= 7

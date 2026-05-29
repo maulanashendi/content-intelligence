@@ -67,6 +67,41 @@ def _run_migrations_on_test_db() -> None:
     command.upgrade(cfg, "head")
 
 
+_TRACKED_TABLES = (
+    "article",
+    "article_cluster",
+    "article_embedding",
+    "cluster_insight",
+    "content_source",
+    "trend_signal",
+)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _assert_test_db_clean_at_session_end(_isolate_test_database: None) -> None:
+    """Fail if any test leaked committed rows into the test DB after the session ends."""
+    yield
+
+    async def _count_rows() -> list[str]:
+        engine = create_async_engine(TEST_DATABASE_URL)
+        try:
+            async with engine.connect() as conn:
+                leaks = []
+                for table in _TRACKED_TABLES:
+                    count = (await conn.execute(text(f"SELECT COUNT(*) FROM {table}"))).scalar()
+                    if count:
+                        leaks.append(f"{table}={count}")
+                return leaks
+        finally:
+            await engine.dispose()
+
+    leaks = asyncio.run(_count_rows())
+    assert not leaks, (
+        "Test DB leaked committed rows after session — check fixture cleanup: "
+        + ", ".join(leaks)
+    )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _isolate_test_database() -> None:
     if settings.database_url == TEST_DATABASE_URL:

@@ -20,9 +20,13 @@ class ClusterFacts:
     count_7d: int = 0
     competitor_count: int = 0
     trend_match_count: int = 0
+    weighted_trend_score: float = 0.0
     tempo_covered: bool = False
     last_internal_days_ago: int | None = None
     underperformed: bool = False
+    tempo_gsc_impressions: int = 0
+    gsc_demand_gap: bool = False
+    competitor_freshness_days: int | None = None
 
 
 async def run(*, now: datetime | None = None) -> int:
@@ -35,7 +39,13 @@ async def run(*, now: datetime | None = None) -> int:
 
         await _load_article_facts(session, facts_by_cluster, t24h, t7d, current_time)
         await _load_trend_match(session, facts_by_cluster, t24h)
+        await _load_weighted_trend_score(session, facts_by_cluster, t24h)
         await _load_underperformed(session, facts_by_cluster)
+        await _load_gsc_signals(session, facts_by_cluster)
+        await _load_competitor_freshness_days(session, facts_by_cluster, current_time)
+
+        for f in facts_by_cluster.values():
+            f.gsc_demand_gap = f.trend_match_count > 0 and f.tempo_gsc_impressions == 0
 
         if not facts_by_cluster:
             return 0
@@ -46,9 +56,13 @@ async def run(*, now: datetime | None = None) -> int:
                 "trend_velocity": compute_trend_velocity(f.count_24h, f.count_7d),
                 "competitor_count": f.competitor_count,
                 "trend_match_count": f.trend_match_count,
+                "weighted_trend_score": f.weighted_trend_score,
                 "tempo_covered": f.tempo_covered,
                 "last_internal_days_ago": f.last_internal_days_ago,
                 "underperformed": f.underperformed,
+                "tempo_gsc_impressions": f.tempo_gsc_impressions,
+                "gsc_demand_gap": f.gsc_demand_gap,
+                "competitor_freshness_days": f.competitor_freshness_days,
                 "calculated_at": current_time,
             }
             for cid, f in facts_by_cluster.items()
@@ -62,9 +76,13 @@ async def run(*, now: datetime | None = None) -> int:
                     "trend_velocity": stmt.excluded.trend_velocity,
                     "competitor_count": stmt.excluded.competitor_count,
                     "trend_match_count": stmt.excluded.trend_match_count,
+                    "weighted_trend_score": stmt.excluded.weighted_trend_score,
                     "tempo_covered": stmt.excluded.tempo_covered,
                     "last_internal_days_ago": stmt.excluded.last_internal_days_ago,
                     "underperformed": stmt.excluded.underperformed,
+                    "tempo_gsc_impressions": stmt.excluded.tempo_gsc_impressions,
+                    "gsc_demand_gap": stmt.excluded.gsc_demand_gap,
+                    "competitor_freshness_days": stmt.excluded.competitor_freshness_days,
                     "calculated_at": stmt.excluded.calculated_at,
                 },
             )
@@ -184,6 +202,108 @@ async def _load_underperformed(
         cid = row["cluster_id"]
         f = facts.setdefault(cid, ClusterFacts())
         f.underperformed = bool(row["underperformed"])
+
+
+async def _load_weighted_trend_score(
+    session: AsyncSession,
+    facts: dict[UUID, ClusterFacts],
+    t24h: datetime,
+) -> None:
+    # Sum distinct trend signal interest_scores per cluster to capture actual
+    # search volume behind the topic, not just match count.
+    sql = text(
+        """
+        SELECT cluster_id, SUM(interest_score) AS weighted_trend_score
+        FROM (
+            SELECT DISTINCT ON (m.cluster_id, ts.id)
+                m.cluster_id,
+                ts.interest_score
+            FROM article_cluster_member m
+            JOIN trend_signal_article tsa ON tsa.article_id = m.article_id
+            JOIN trend_signal ts          ON ts.id = tsa.trend_signal_id
+            JOIN article_cluster c        ON c.id = m.cluster_id AND c.is_current = true
+            WHERE ts.captured_at >= :t24h
+              AND NOT EXISTS (
+                  SELECT 1 FROM article_cluster child WHERE child.parent_cluster_id = c.id
+              )
+        ) sub
+        GROUP BY cluster_id
+        """
+    )
+    rows = (await session.execute(sql, {"t24h": t24h})).mappings()
+    for row in rows:
+        cid = row["cluster_id"]
+        f = facts.setdefault(cid, ClusterFacts())
+        f.weighted_trend_score = float(row["weighted_trend_score"] or 0.0)
+
+
+async def _load_gsc_signals(
+    session: AsyncSession,
+    facts: dict[UUID, ClusterFacts],
+) -> None:
+    # Use LATERAL to take only the most recent GSC period per article,
+    # avoiding double-counting when multiple periods are stored.
+    sql = text(
+        """
+        SELECT
+            m.cluster_id,
+            COALESCE(SUM(latest_g.impressions), 0) AS tempo_gsc_impressions
+        FROM article_cluster_member m
+        JOIN article a         ON a.id = m.article_id
+        JOIN content_source cs ON cs.id = a.source_id AND cs.source_type = 'internal'
+        LEFT JOIN LATERAL (
+            SELECT impressions
+            FROM article_gsc_metric
+            WHERE article_id = a.id
+            ORDER BY period_end DESC
+            LIMIT 1
+        ) latest_g ON true
+        JOIN article_cluster c ON c.id = m.cluster_id AND c.is_current = true
+        WHERE NOT EXISTS (
+            SELECT 1 FROM article_cluster child WHERE child.parent_cluster_id = c.id
+        )
+        GROUP BY m.cluster_id
+        """
+    )
+    rows = (await session.execute(sql)).mappings()
+    for row in rows:
+        cid = row["cluster_id"]
+        f = facts.setdefault(cid, ClusterFacts())
+        f.tempo_gsc_impressions = int(row["tempo_gsc_impressions"] or 0)
+
+
+async def _load_competitor_freshness_days(
+    session: AsyncSession,
+    facts: dict[UUID, ClusterFacts],
+    now: datetime,
+) -> None:
+    # Median age of competitor (RSS) articles in the cluster.
+    # Lower = competitors published recently, topic still hot.
+    sql = text(
+        """
+        SELECT
+            m.cluster_id,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (
+                ORDER BY EXTRACT(EPOCH FROM (
+                    :now - COALESCE(a.published_at, a.created_at)
+                )) / 86400
+            )::int AS competitor_freshness_days
+        FROM article_cluster_member m
+        JOIN article a         ON a.id = m.article_id
+        JOIN content_source cs ON cs.id = a.source_id AND cs.source_type = 'rss'
+        JOIN article_cluster c ON c.id = m.cluster_id AND c.is_current = true
+        WHERE NOT EXISTS (
+            SELECT 1 FROM article_cluster child WHERE child.parent_cluster_id = c.id
+        )
+        GROUP BY m.cluster_id
+        """
+    )
+    rows = (await session.execute(sql, {"now": now})).mappings()
+    for row in rows:
+        cid = row["cluster_id"]
+        f = facts.setdefault(cid, ClusterFacts())
+        val = row["competitor_freshness_days"]
+        f.competitor_freshness_days = int(val) if val is not None else None
 
 
 def _normalize_now(value: datetime | None) -> datetime:

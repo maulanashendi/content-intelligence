@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw"
 import morningClusters from "../../../api/tests/mocks/fixtures/morning-clusters.json"
+import deferredClusters from "../../../api/tests/mocks/fixtures/deferred-clusters.json"
 import clusterDetail from "../../../api/tests/mocks/fixtures/cluster-detail.json"
 
 const BASE = "/api/v1"
@@ -129,6 +130,21 @@ export const handlers = [
     return HttpResponse.json(source)
   }),
   http.get(`${BASE}/clusters/morning`, () => HttpResponse.json(morningClusters)),
+  http.get(`${BASE}/clusters/deferred`, () => HttpResponse.json(deferredClusters)),
+  http.get(`${BASE}/clusters/current`, () => HttpResponse.json(morningClusters)),
+  http.get(`${BASE}/clusters/runs/latest`, () =>
+    HttpResponse.json({
+      id: "a1b2c3d4-run1-4000-8000-000000000001",
+      algorithm: "hdbscan",
+      algorithm_version: "0.8.33",
+      params: { min_cluster_size: 5, min_samples: 3, metric: "euclidean" },
+      started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      finished_at: new Date(Date.now() - 2_700_000).toISOString(),
+      notes: null,
+      cluster_count: morningClusters.clusters.length,
+      has_insights: true,
+    }),
+  ),
   http.get(`${BASE}/articles`, ({ request }) => {
     const url = new URL(request.url)
     const page = parseInt(url.searchParams.get("page") ?? "1", 10)
@@ -138,10 +154,10 @@ export const handlers = [
   http.get(`${BASE}/clusters/:id`, ({ params }) => {
     const { id } = params as { id: string }
     if (id === clusterDetail.id) return HttpResponse.json(clusterDetail)
-    const cluster = morningClusters.find((c) => c.id === id)
+    const cluster = morningClusters.clusters.find((c) => c.id === id)
     if (!cluster) return HttpResponse.json({ detail: "Not found" }, { status: 404 })
     const count = Math.min(cluster.member_count ?? 5, 8)
-    return HttpResponse.json({ ...cluster, members: generateMembers(cluster, count) })
+    return HttpResponse.json({ ...cluster, members: generateMembers(cluster, count), sub_clusters: null, is_stale: morningClusters.is_stale })
   }),
   http.get(`${BASE}/health`, () => HttpResponse.json({ status: "ok", db: true })),
   http.get(`${BASE}/trend-signals/latest`, ({ request }) => {
@@ -163,6 +179,6 @@ export const handlers = [
     return HttpResponse.json(signals)
   }),
   http.get(`${BASE}/pipeline/status`, () =>
-    HttpResponse.json({ ingest_embed: null, cluster_label_score: null }),
+    HttpResponse.json({ cluster_label_score: null, analysis: null }),
   ),
 ]

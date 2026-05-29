@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom"
 import { useMemo } from "react"
 import { useQueryClient, useQueries } from "@tanstack/react-query"
-import { useMorningClusters, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
+import { useMorningClusters, useLatestClusterRun, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
 import type { ClusterDetail } from "@ei-fe/api"
 import { LoadingState, ErrorState } from "@ei-fe/ui"
 import { ArticleClustersCard } from "./article-clusters-card.js"
@@ -40,13 +40,23 @@ function KpiRow({ clusters }: { clusters: { tempo_covered: boolean | null; under
   )
 }
 
+function fmtRunTime(iso: string): string {
+  const d = /Z|[+-]\d{2}:?\d{2}$/.test(iso) ? new Date(iso) : new Date(iso + "Z")
+  return d.toLocaleString("id-ID", {
+    day: "numeric", month: "short",
+    hour: "2-digit", minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }) + " WIB"
+}
+
 export function MorningView() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data, isLoading, isError, error, isFetching } = useMorningClusters()
+  const { data: run } = useLatestClusterRun()
 
   const detailQueries = useQueries({
-    queries: (data ?? []).map((c) => clusterDetailQueryOptions(c.id)),
+    queries: (data?.clusters ?? []).map((c) => clusterDetailQueryOptions(c.id)),
   })
 
   const loadedDetails = useMemo(
@@ -68,10 +78,36 @@ export function MorningView() {
     )
   }
 
-  const clusters = data ?? []
+  const clusters = data?.clusters ?? []
+
+  if (clusters.length === 0) {
+    return (
+      <div style={{ padding: "60px 28px", textAlign: "center" }}>
+        <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: 0 }}>
+          Belum ada topik — pipeline sedang berjalan atau scoring belum selesai.
+        </p>
+        <p style={{ color: "var(--fg-faint)", fontSize: 12, marginTop: 6 }}>
+          Halaman ini akan terisi setelah cluster run harian (06:00 WIB) selesai.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div style={{ opacity: isFetching ? 0.7 : 1, transition: "opacity 0.2s" }}>
+      {run && !run.has_insights && (
+        <div style={{
+          margin: "16px 28px 0",
+          padding: "8px 14px",
+          background: "var(--bg-sunken)",
+          borderLeft: "3px solid var(--fg-faint)",
+          borderRadius: "var(--radius)",
+          fontSize: 12.5,
+          color: "var(--fg-muted)",
+        }}>
+          Menampilkan data dari run sebelumnya — run {fmtRunTime(run.started_at)} sedang diproses (clustering atau scoring belum selesai).
+        </div>
+      )}
       <KpiRow clusters={clusters} />
 
       <div style={{ padding: "20px 28px 0" }}>

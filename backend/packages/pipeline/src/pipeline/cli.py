@@ -115,6 +115,14 @@ for _step_name in _STEP_RUNNERS:
     _make_command(_step_name)
 
 
+@cli.command("cluster-label-score")
+def cluster_label_score_cmd() -> None:
+    _configure()
+    from pipeline.cluster_label_score import run
+
+    asyncio.run(run())
+
+
 @cli.command("serve")
 def serve() -> None:
     _configure()

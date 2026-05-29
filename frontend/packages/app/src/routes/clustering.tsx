@@ -120,16 +120,40 @@ function ClusterInsightPanel({ cluster, run }: { cluster: ClusterSummary | undef
           </div>
         </div>
 
-        {cluster.summary && cluster.summary.length > 0 && (
+        {cluster.what_happened && (
+          <div>
+            <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--fg-muted)", fontWeight: 600, marginBottom: 4 }}>
+              Apa Terjadi
+            </div>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--fg)", fontFamily: "var(--font-serif)" }}>
+              {cluster.what_happened}
+            </p>
+          </div>
+        )}
+
+        {cluster.parties_involved && cluster.parties_involved.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--fg-muted)", fontWeight: 600, marginBottom: 6 }}>
+              Pihak Terlibat
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {cluster.parties_involved.map((party, i) => (
+                <span key={i} className="score-chip">
+                  <span className="v">{party}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {cluster.editorial_angle && (
           <div style={{ padding: "10px 12px", background: "var(--bg-sunken)", borderRadius: "var(--radius)", borderLeft: "3px solid var(--accent)" }}>
             <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--accent-fg)", fontWeight: 600, marginBottom: 4 }}>
-              AI Summary
+              Editorial Angle
             </div>
-            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, lineHeight: 1.6, color: "var(--fg-muted)", fontFamily: "var(--font-serif)" }}>
-              {cluster.summary.map((claim, i) => (
-                <li key={i}>{claim}</li>
-              ))}
-            </ul>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--fg)", fontFamily: "var(--font-serif)" }}>
+              {cluster.editorial_angle}
+            </p>
           </div>
         )}
 
@@ -156,10 +180,21 @@ function ClusterInsightPanel({ cluster, run }: { cluster: ClusterSummary | undef
 export function ClusteringRoute() {
   const navigate = useNavigate()
   const { data: run } = useLatestClusterRun()
-  const { data: clusters = [] } = useCurrentClusters("desc")
+  const { data: _listData } = useCurrentClusters("desc")
+  const clusters = _listData?.clusters ?? []
 
   const effectiveId = clusters[0]?.id ?? null
   const selectedCluster = clusters.find(c => c.id === effectiveId)
+
+  if (clusters.length === 0 && run == null) {
+    return (
+      <div style={{ padding: "60px 28px", textAlign: "center" }}>
+        <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: 0 }}>
+          Belum ada data clustering — pipeline belum pernah dijalankan atau scoring belum selesai.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -176,6 +211,20 @@ export function ClusteringRoute() {
           </span>
         </div>
       </div>
+
+      {run && !run.has_insights && (
+        <div style={{
+          margin: "0 28px",
+          padding: "8px 14px",
+          background: "var(--bg-sunken)",
+          borderLeft: "3px solid var(--fg-faint)",
+          borderRadius: "var(--radius)",
+          fontSize: 12.5,
+          color: "var(--fg-muted)",
+        }}>
+          Menampilkan data dari run sebelumnya — run {fmtTime(run.started_at)} sedang diproses (clustering atau scoring belum selesai).
+        </div>
+      )}
 
       <div
         style={{

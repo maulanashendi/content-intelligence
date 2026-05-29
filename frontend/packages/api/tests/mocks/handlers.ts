@@ -32,6 +32,6 @@ export const handlers500 = [
 ]
 
 export const handlersEmpty = [
-  http.get(`${BASE}/clusters/morning`, () => HttpResponse.json([])),
-  http.get(`${BASE}/clusters/deferred`, () => HttpResponse.json([])),
+  http.get(`${BASE}/clusters/morning`, () => HttpResponse.json({ clusters: [], served_at: null, is_stale: true, max_age_hours: 36 })),
+  http.get(`${BASE}/clusters/deferred`, () => HttpResponse.json({ clusters: [], served_at: null, is_stale: true, max_age_hours: 36 })),
 ]
