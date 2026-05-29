@@ -1,47 +1,14 @@
-import contextlib
 import logging
 from datetime import UTC, datetime
 
 import httpx
 from core.db import get_session
 from core.models import Article, ContentSource, ScrapeStatus, SourceStatus, SourceType
-from lxml import etree
+from ingest.parser import parse_feed
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 logger = logging.getLogger(__name__)
-
-
-async def _fetch_sitemap_xml(client: httpx.AsyncClient, source: ContentSource) -> bytes:
-    resp = await client.get(source.url)
-    resp.raise_for_status()
-    return resp.content
-
-
-def _parse_sitemap(xml_bytes: bytes) -> list[dict]:
-    tree = etree.fromstring(xml_bytes)
-    ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-    entries = []
-
-    for url_el in tree.findall("sm:url", ns):
-        loc = url_el.find("sm:loc", ns)
-        if loc is None or not (loc.text or "").strip():
-            continue
-
-        lastmod = url_el.find("sm:lastmod", ns)
-        published_at = None
-        if lastmod is not None and (lastmod.text or "").strip():
-            with contextlib.suppress(ValueError, TypeError):
-                published_at = datetime.fromisoformat(lastmod.text.strip().rstrip("Z"))
-
-        entries.append(
-            {
-                "url": loc.text.strip(),
-                "published_at": published_at,
-            }
-        )
-
-    return entries
 
 
 async def ingest_sitemap(client: httpx.AsyncClient) -> int:
@@ -62,7 +29,8 @@ async def ingest_sitemap(client: httpx.AsyncClient) -> int:
 
         for source in sources:
             try:
-                xml_bytes = await _fetch_sitemap_xml(client, source)
+                resp = await client.get(source.url)
+                resp.raise_for_status()
             except Exception:
                 logger.exception(
                     "failed to fetch sitemap source=%s url=%s", source.name, source.url
@@ -71,30 +39,27 @@ async def ingest_sitemap(client: httpx.AsyncClient) -> int:
                 source.updated_at = now
                 continue
 
-            entries = _parse_sitemap(xml_bytes)
+            entries, fmt = parse_feed(resp.content, source.name)
             inserted = 0
 
             for entry in entries:
-                title = entry["url"].rstrip("/").split("/")[-1].replace("-", " ").title()
-                if not title:
-                    continue
-
                 stmt = pg_insert(Article).values(
                     source_id=source.id,
-                    title=title,
+                    title=entry["title"],
                     url=entry["url"],
-                    published_at=entry["published_at"],
+                    published_at=entry.get("published_at"),
+                    first_paragraph=entry.get("first_paragraph"),
                     scrape_status=ScrapeStatus.pending,
                 )
                 stmt = stmt.on_conflict_do_nothing(index_elements=["url"])
-                await session.execute(stmt)
-                inserted += 1
+                result = await session.execute(stmt)
+                inserted += result.rowcount or 0
 
             source.status = SourceStatus.active
             source.last_fetched_at = now
             source.updated_at = now
             total_inserted += inserted
-            logger.info("sitemap source=%s entries=%d", source.name, inserted)
+            logger.info("internal source=%s format=%s entries=%d", source.name, fmt, inserted)
 
         await session.commit()
         return total_inserted

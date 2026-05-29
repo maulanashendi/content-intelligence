@@ -1,15 +1,13 @@
 import asyncio
-import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-import feedparser
 import httpx
 from core.config import settings
 from core.db import get_session
 from core.models import Article, ContentSource, ScrapeStatus, SourceStatus, SourceType
-from lxml import html as lxml_html
+from ingest.parser import parse_feed
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -35,44 +33,6 @@ def make_http_client() -> httpx.AsyncClient:
 
 class BlockedError(Exception):
     pass
-
-
-def _html_to_text(raw: str) -> str:
-    if not raw:
-        return ""
-    try:
-        return lxml_html.fromstring(raw).text_content().strip()
-    except Exception:
-        return raw.strip()
-
-
-def _parse_entry(entry: feedparser.FeedParserDict) -> dict:
-    title = entry.get("title", "").strip()
-    link = entry.get("link", "").strip()
-    if not title or not link:
-        return {}
-
-    published_at = None
-    for attr in ("published_parsed", "updated_parsed"):
-        time_struct = entry.get(attr)
-        if time_struct:
-            with contextlib.suppress(TypeError, ValueError):
-                published_at = datetime(*time_struct[:6])
-                break
-
-    summary = entry.get("summary", "").strip()
-
-    first_paragraph = None
-    if summary:
-        first_paragraph = _html_to_text(summary)[:2000] or None
-
-    return {
-        "title": title,
-        "url": link,
-        "published_at": published_at,
-        "first_paragraph": first_paragraph,
-        "scrape_status": ScrapeStatus.pending,
-    }
 
 
 async def _set_source_status(source_id: UUID, status: SourceStatus) -> None:
@@ -102,16 +62,20 @@ async def fetch_and_store_source(
     if resp.status_code in (403, 429):
         raise BlockedError(f"source={source_name} http_status={resp.status_code}")
     resp.raise_for_status()
-    feed = feedparser.parse(resp.text)
+    entries, fmt = parse_feed(resp.content, source_name)
 
     now = datetime.now(UTC).replace(tzinfo=None)
     inserted = 0
     async with get_session() as session:
-        for entry in feed.entries:
-            parsed = _parse_entry(entry)
-            if not parsed:
-                continue
-            stmt = pg_insert(Article).values(source_id=source_id, **parsed)
+        for entry in entries:
+            stmt = pg_insert(Article).values(
+                source_id=source_id,
+                title=entry["title"],
+                url=entry["url"],
+                published_at=entry.get("published_at"),
+                first_paragraph=entry.get("first_paragraph"),
+                scrape_status=ScrapeStatus.pending,
+            )
             stmt = stmt.on_conflict_do_nothing(index_elements=["url"])
             result = await session.execute(stmt)
             inserted += result.rowcount or 0
@@ -122,6 +86,7 @@ async def fetch_and_store_source(
             .values(status=SourceStatus.active, last_fetched_at=now, updated_at=now)
         )
         await session.commit()
+    logger.debug("rss source=%s format=%s entries=%d inserted=%d", source_name, fmt, len(entries), inserted)
     return inserted
 
 

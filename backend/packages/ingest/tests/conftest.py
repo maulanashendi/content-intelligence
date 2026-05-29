@@ -25,6 +25,10 @@ from sqlalchemy.pool import NullPool
 
 _INGEST_TABLES = ("trend_signal_article", "trend_signal", "article", "content_source")
 
+# ---------------------------------------------------------------------------
+# Feed XML fixtures — mirrors actual provider payloads used in regression tests
+# ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 async def null_pool_db(monkeypatch):
@@ -72,6 +76,48 @@ def rss_feed_xml() -> str:
 </rss>"""
 
 
+@pytest.fixture
+def google_news_sitemap_xml() -> bytes:
+    """Google News sitemap — mirrors Suara.com: CDATA-wrapped loc, +07:00 dates."""
+    return b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+  <url>
+    <loc><![CDATA[ https://www.suara.com/news/2026/05/29/150041/viral-pengantin-pria-pakai-selendang-bentuk-bunga ]]></loc>
+    <news:news>
+      <news:publication><news:name>Suara.com</news:name></news:publication>
+      <news:publication_date>2026-05-29T15:00:41+07:00</news:publication_date>
+      <news:title><![CDATA[Viral Pengantin Pria Pakai Selendang Bentuk Bunga Menjuntai]]></news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc><![CDATA[ https://www.suara.com/news/2026/05/29/140000/artikel-kedua-berita-penting ]]></loc>
+    <news:news>
+      <news:publication_date>2026-05-29T14:00:00+07:00</news:publication_date>
+      <news:title><![CDATA[Artikel Kedua Berita Penting]]></news:title>
+    </news:news>
+  </url>
+</urlset>"""
+
+
+@pytest.fixture
+def standard_sitemap_xml() -> bytes:
+    """Standard sitemap — <urlset><url><loc> + <lastmod>."""
+    return b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/berita/artikel-penting-satu</loc>
+    <lastmod>2026-05-28T10:00:00</lastmod>
+  </url>
+  <url>
+    <loc>https://example.com/berita/artikel-kedua-terbaru</loc>
+    <lastmod>2026-05-29T08:30:00Z</lastmod>
+  </url>
+</urlset>"""
+
+
 @pytest_asyncio.fixture
 async def rss_source() -> ContentSource:
     source = ContentSource(
@@ -79,6 +125,23 @@ async def rss_source() -> ContentSource:
         name="Test Feed",
         url="https://example.com/feed",
         source_type=SourceType.rss,
+        is_enabled=True,
+    )
+    async with get_session() as session:
+        session.add(source)
+        await session.commit()
+        await session.refresh(source)
+    return source
+
+
+@pytest_asyncio.fixture
+async def internal_source() -> ContentSource:
+    """source_type=internal — represents Tempo's own RSS feeds (rss.tempo.co)."""
+    source = ContentSource(
+        id=uuid.uuid4(),
+        name="Tempo – Bisnis",
+        url="https://rss.tempo.co/bisnis",
+        source_type=SourceType.internal,
         is_enabled=True,
     )
     async with get_session() as session:

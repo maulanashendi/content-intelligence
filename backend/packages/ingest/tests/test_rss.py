@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -8,8 +9,6 @@ from core.models import Article, ContentSource, SourceStatus, SourceType
 from ingest.rss import (
     DEFAULT_HEADERS,
     BlockedError,
-    _html_to_text,
-    _parse_entry,
     fetch_and_store_source,
     ingest_rss,
     make_http_client,
@@ -17,10 +16,20 @@ from ingest.rss import (
 from sqlalchemy import select
 
 
-def _mock_client(status: int, body: str = "") -> AsyncMock:
+def _mock_client(status: int, body: bytes | str = b"") -> AsyncMock:
+    """Return a mock httpx client whose .get() resolves to a canned response.
+
+    body is normalised to bytes because fetch_and_store_source reads resp.content
+    (bytes) which is passed to parse_feed().  Passing a str is accepted for
+    convenience and encoded as UTF-8.
+    """
+    if isinstance(body, str):
+        body = body.encode("utf-8")
+
     resp = MagicMock()
     resp.status_code = status
-    resp.text = body
+    resp.content = body
+    resp.text = body.decode("utf-8", errors="replace")
     if status >= 400:
         resp.raise_for_status.side_effect = httpx.HTTPStatusError(
             message=f"HTTP {status}", request=MagicMock(), response=resp
@@ -183,15 +192,19 @@ async def test_ingest_rss_continues_after_one_source_fails(rss_feed_xml: str) ->
         session.add_all([good, bad])
         await session.commit()
 
+    body_bytes = rss_feed_xml.encode("utf-8") if isinstance(rss_feed_xml, str) else rss_feed_xml
+
     async def _get(url: str, **_):
         resp = MagicMock()
         if "bad" in url:
             resp.status_code = 403
+            resp.content = b""
             resp.raise_for_status.side_effect = httpx.HTTPStatusError(
                 "403", request=MagicMock(), response=resp
             )
         else:
             resp.status_code = 200
+            resp.content = body_bytes
             resp.text = rss_feed_xml
             resp.raise_for_status = MagicMock()
         return resp
@@ -211,41 +224,85 @@ async def test_ingest_rss_continues_after_one_source_fails(rss_feed_xml: str) ->
 
 
 # ---------------------------------------------------------------------------
-# Pure parsers — defensive against bad input
+# Suara regression — source_type=rss serving Google News Sitemap
+#
+# Bug: feedparser returns 0 entries for <urlset> XML. The fix adds format
+# detection + fallback in parse_feed(), so news_sitemap parser is used.
 # ---------------------------------------------------------------------------
 
 
-def test_html_to_text_handles_empty_input() -> None:
-    assert _html_to_text("") == ""
+@pytest.mark.asyncio
+async def test_ingest_rss_google_news_sitemap_inserts_articles(
+    rss_source: ContentSource,
+    google_news_sitemap_xml: bytes,
+) -> None:
+    """A source_type=rss source that happens to serve Google News Sitemap XML
+    must insert articles, not silently return 0."""
+    count = await fetch_and_store_source(
+        _mock_client(200, google_news_sitemap_xml),
+        rss_source.id,
+        rss_source.url,
+        rss_source.name,
+    )
+    assert count == 2, (
+        "Google News Sitemap fallback not working: feedparser returns 0 for "
+        "<urlset> XML, but parse_feed() must fall back to news_sitemap parser"
+    )
 
 
-def test_html_to_text_strips_html_tags() -> None:
-    assert _html_to_text("<p>hello <b>world</b></p>") == "hello world"
+@pytest.mark.asyncio
+async def test_ingest_rss_google_news_sitemap_title_from_news_element(
+    rss_source: ContentSource,
+    google_news_sitemap_xml: bytes,
+) -> None:
+    """Title must come from <news:title>, not the URL slug.
+    URL slug = 'Viral Pengantin Pria Pakai Selendang Bentuk Bunga'
+    Full title = 'Viral Pengantin Pria Pakai Selendang Bentuk Bunga Menjuntai'
+    These differ — the slug truncates at the last path segment."""
+    await fetch_and_store_source(
+        _mock_client(200, google_news_sitemap_xml),
+        rss_source.id,
+        rss_source.url,
+        rss_source.name,
+    )
+    async with get_session() as session:
+        rows = (
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
+    titles = {a.title for a in rows}
+    assert "Viral Pengantin Pria Pakai Selendang Bentuk Bunga Menjuntai" in titles
 
 
-def test_html_to_text_handles_invalid_lxml_gracefully() -> None:
-    out = _html_to_text("\x00\x01\x02 garbage")
-    assert isinstance(out, str)
-
-
-def test_parse_entry_skips_when_title_missing() -> None:
-    assert _parse_entry({"link": "https://x.com/a"}) == {}
-
-
-def test_parse_entry_skips_when_link_missing() -> None:
-    assert _parse_entry({"title": "Headline"}) == {}
-
-
-def test_parse_entry_skips_when_both_blank() -> None:
-    assert _parse_entry({"title": "  ", "link": "  "}) == {}
-
-
-def test_parse_entry_returns_dict_when_minimal_fields_present() -> None:
-    parsed = _parse_entry({"title": "Title", "link": "https://x.com/a"})
-    assert parsed["title"] == "Title"
-    assert parsed["url"] == "https://x.com/a"
-    assert parsed["published_at"] is None
-    assert parsed["first_paragraph"] is None
+@pytest.mark.asyncio
+async def test_ingest_rss_google_news_sitemap_published_at_is_naive_utc(
+    rss_source: ContentSource,
+    google_news_sitemap_xml: bytes,
+) -> None:
+    """Regression: +07:00 in <news:publication_date> caused asyncpg
+    DataError on INSERT because DB column is TIMESTAMP WITHOUT TIME ZONE.
+    Fix: _to_naive_utc() strips tzinfo after converting to UTC."""
+    await fetch_and_store_source(
+        _mock_client(200, google_news_sitemap_xml),
+        rss_source.id,
+        rss_source.url,
+        rss_source.name,
+    )
+    async with get_session() as session:
+        rows = (
+            (await session.execute(select(Article).where(Article.source_id == rss_source.id)))
+            .scalars()
+            .all()
+        )
+    for article in rows:
+        if article.published_at is not None:
+            assert article.published_at.tzinfo is None
+            # 15:00:41 WIB (+07:00) → 08:00:41 UTC
+            assert article.published_at == datetime(2026, 5, 29, 8, 0, 41)
+            break
+    else:
+        pytest.fail("No article with published_at found")
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +315,7 @@ async def test_fetch_and_store_source_handles_garbage_body(
     rss_source: ContentSource,
 ) -> None:
     count = await fetch_and_store_source(
-        _mock_client(200, "<<not-xml-at-all>>"),
+        _mock_client(200, b"<<not-xml-at-all>>"),
         rss_source.id,
         rss_source.url,
         rss_source.name,
@@ -276,7 +333,7 @@ async def test_fetch_and_store_source_handles_empty_body(
     rss_source: ContentSource,
 ) -> None:
     count = await fetch_and_store_source(
-        _mock_client(200, ""),
+        _mock_client(200, b""),
         rss_source.id,
         rss_source.url,
         rss_source.name,
@@ -285,7 +342,7 @@ async def test_fetch_and_store_source_handles_empty_body(
 
 
 # ---------------------------------------------------------------------------
-# Idempotency: rerunning a feed never inserts duplicates and returns 0
+# Idempotency
 # ---------------------------------------------------------------------------
 
 
@@ -331,25 +388,17 @@ async def test_ingest_rss_idempotent_second_run_inserts_zero(
 
 
 # ---------------------------------------------------------------------------
-# make_http_client — anti-WAF defaults (regression: coconuts.co/jakarta/feed/
-# was returning 302 to a RunCloud block page because httpx default UA is
-# python-httpx/x.y and follow_redirects defaults to False)
+# make_http_client — anti-WAF defaults
 # ---------------------------------------------------------------------------
 
 
 def test_make_http_client_user_agent_is_not_default_python_httpx() -> None:
     client = make_http_client()
-    try:
-        ua = client.headers.get("User-Agent", "")
-        assert "python-httpx" not in ua.lower(), (
-            f"Default httpx UA is blocked by RunCloud/Cloudflare WAFs; got UA={ua!r}"
-        )
-        assert ua, "User-Agent must not be empty"
-    finally:
-        # AsyncClient.aclose is async; for a never-used client, sync close
-        # via the underlying transport is sufficient and avoids needing a
-        # running loop in this unit test.
-        pass
+    ua = client.headers.get("User-Agent", "")
+    assert "python-httpx" not in ua.lower(), (
+        f"Default httpx UA is blocked by RunCloud/Cloudflare WAFs; got UA={ua!r}"
+    )
+    assert ua, "User-Agent must not be empty"
 
 
 def test_make_http_client_advertises_rss_mime_types() -> None:
@@ -363,8 +412,7 @@ def test_make_http_client_follows_redirects() -> None:
     client = make_http_client()
     assert client.follow_redirects is True, (
         "Feeds commonly redirect to canonicalized URLs (e.g. /feed → /feed/); "
-        "follow_redirects must be True or every redirected feed silently "
-        "fails."
+        "follow_redirects must be True or every redirected feed silently fails."
     )
 
 
@@ -383,8 +431,7 @@ def test_default_headers_module_constant_includes_required_fields() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Redirect handling — coconuts.co regression. Use httpx.MockTransport to
-# simulate a 302 → 200 chain without hitting the network.
+# Redirect handling — coconuts.co regression
 # ---------------------------------------------------------------------------
 
 
@@ -393,6 +440,7 @@ async def test_fetch_and_store_source_follows_redirect_to_real_feed(
     rss_source: ContentSource, rss_feed_xml: str
 ) -> None:
     requests_seen: list[str] = []
+    body_bytes = rss_feed_xml.encode("utf-8") if isinstance(rss_feed_xml, str) else rss_feed_xml
 
     def _handler(request: httpx.Request) -> httpx.Response:
         requests_seen.append(str(request.url))
@@ -403,7 +451,7 @@ async def test_fetch_and_store_source_follows_redirect_to_real_feed(
             )
         return httpx.Response(
             200,
-            text=rss_feed_xml,
+            content=body_bytes,
             headers={"content-type": "application/rss+xml"},
         )
 
@@ -448,12 +496,13 @@ async def test_fetch_sends_configured_user_agent_to_origin(
     rss_source: ContentSource, rss_feed_xml: str
 ) -> None:
     captured_ua: list[str] = []
+    body_bytes = rss_feed_xml.encode("utf-8") if isinstance(rss_feed_xml, str) else rss_feed_xml
 
     def _handler(request: httpx.Request) -> httpx.Response:
         captured_ua.append(request.headers.get("user-agent", ""))
         return httpx.Response(
             200,
-            text=rss_feed_xml,
+            content=body_bytes,
             headers={"content-type": "application/rss+xml"},
         )
 
