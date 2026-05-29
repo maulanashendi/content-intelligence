@@ -64,7 +64,17 @@ def _run_migrations_on_test_db() -> None:
     cfg = Config(os.path.join(repo_root, "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
     cfg.set_main_option("script_location", os.path.join(repo_root, "alembic"))
-    command.upgrade(cfg, "head")
+    # alembic/env.py prefers $DATABASE_URL over the cfg url; pin it to the test DB
+    # for the upgrade so a set DATABASE_URL can never redirect migrations onto the dev DB.
+    prev = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+    try:
+        command.upgrade(cfg, "head")
+    finally:
+        if prev is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = prev
 
 
 _TRACKED_TABLES = (

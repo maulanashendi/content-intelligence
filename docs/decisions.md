@@ -737,3 +737,31 @@ The margin is safe: the longest blocked native call after the `asyncio.to_thread
 - `response_model=` updated for `morning`, `deferred`, `current`, and `{id}` routes (same commit, per API-contract rule).
 - Breaking change (pre-1.0, per constraints.md): `morning`, `deferred`, `current` responses change from bare arrays to envelopes. FE consumers updated to access `.clusters`.
 - FE banner UI deferred to FE team.
+
+---
+
+## D33. Cluster run retention + ON DELETE CASCADE
+
+**Context.** The API only ever serves the latest scored run (`is_current`), but every daily run appends a fresh generation of `article_cluster` (+members) and `cluster_insight` rows that are never read again and never pruned. After ~18 runs the dev DB held 8,092 clusters / 155k members / 5,185 insights — unbounded growth, larger backups, slower scans. Pruning was impossible anyway: the child FKs (`cluster_insight.cluster_id`, `article_cluster_member.cluster_id`, `article_cluster.run_id`, `article_cluster.parent_cluster_id`) were all `NO ACTION`, so deleting an old run/cluster raised a FK violation. (Note: there were 0 truly-dangling rows — "orphans" earlier meant rows of non-current runs, not broken FKs.)
+
+**Options considered.**
+- Leave it. Unbounded growth; eventually an operational problem.
+- Periodic prune of old `article_cluster` rows, keeping `cluster_run` shells. Keeps a clean run history but needs CASCADE on the cluster_id FKs anyway and leaves empty runs behind.
+- Prune whole `cluster_run` rows with `ON DELETE CASCADE` down the tree. One delete statement; the cascade removes clusters → members + insights.
+
+**Decision.** Option (c). Add `ON DELETE CASCADE` to the four child FKs above (DDL-only migration `e1f3a5c7b9d2`). Add `clustering.pipeline.prune_old_cluster_runs(keep)` — keeps the `cluster_run_retention_count` (=14) most-recent runs **plus** every run still owning `is_current` clusters, then deletes the rest. Called at the end of `cluster_label_score.run()` (after scoring) and exposed as `python -m pipeline.cli prune` for ad-hoc/one-time cleanup. `article_cluster_member.article_id` stays `NO ACTION` (articles are an immutable corpus, never deleted).
+
+**Rationale / safety.** Deleting by `cluster_run` is a single statement; the cascade handles the dependent tree, including the 4 self-referential sub-clusters via `parent_cluster_id` CASCADE. The prune is safe by construction: it builds an explicit keep-set, **aborts if that set is empty**, and only issues `DELETE ... WHERE id IN (<materialized old ids>)` — there is no `NOT IN (<subquery>)` that could escalate to a full-table wipe, and the served run is never eligible for deletion. Retention = 14 ≈ two weeks of daily runs (clustering window is 7 days).
+
+**Migration is DDL-only — it deletes no rows.** The one-time cleanup of accumulated old runs happens through the guarded runtime `prune_old_cluster_runs` on the next daily run (or a manual `prune`), not inside the migration. A destructive data migration against the live DB is the higher-risk path; keeping the migration pure DDL makes `alembic upgrade head` non-destructive and trivially reversible.
+
+**Test-isolation hardening (same change).** `alembic/env.py` prefers `$DATABASE_URL` over the cfg url, which meant a test run with `DATABASE_URL` set would redirect the conftest migration step onto the **dev** DB instead of the test DB. `conftest.py::_run_migrations_on_test_db` now pins `DATABASE_URL` to `TEST_DATABASE_URL` for the duration of the upgrade, so test runs can never migrate the dev DB.
+
+**Implication.**
+- `core/models.py`: `ondelete="CASCADE"` on the four FKs (parent FK keeps its explicit name `fk_article_cluster_parent_cluster_id`).
+- `core/config.py`: `cluster_run_retention_count: int = 14`.
+- `clustering/pipeline.py`: `prune_old_cluster_runs`.
+- `pipeline/cluster_label_score.py`: prune after scoring; `pipeline/cli.py`: `prune` step.
+- `alembic/versions/e1f3a5c7b9d2_*.py`: FK drop/recreate with CASCADE (down reverts to NO ACTION).
+- `conftest.py`: pin test DB during migration. `docs/schema.dbml`: `delete: cascade` annotations.
+- New `packages/pipeline/tests/test_prune_retention.py`: cascade, served-run protection, within-retention no-op, empty-DB guard.

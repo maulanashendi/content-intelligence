@@ -55,6 +55,12 @@ async def _gsc() -> None:
         await gsc.run(session, settings)
 
 
+async def _prune() -> int:
+    from clustering.pipeline import prune_old_cluster_runs
+
+    return await prune_old_cluster_runs()
+
+
 _STEP_RUNNERS: dict[str, Callable[[], Coroutine[Any, Any, Any]]] = {
     "ingest": _ingest,
     "embed": _embed,
@@ -63,6 +69,7 @@ _STEP_RUNNERS: dict[str, Callable[[], Coroutine[Any, Any, Any]]] = {
     "score": _score,
     "analysis": _analysis,
     "gsc": _gsc,
+    "prune": _prune,
 }
 
 

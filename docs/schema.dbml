@@ -186,8 +186,8 @@ Table cluster_run {
 
 Table article_cluster {
   id uuid [pk, default: `gen_random_uuid()`]
-  run_id uuid [ref: > cluster_run.id]
-  parent_cluster_id uuid [ref: > article_cluster.id]  // null = top-level; set when split from oversized cluster
+  run_id uuid [ref: > cluster_run.id, delete: cascade]                       // D33: deleting an old run prunes its clusters
+  parent_cluster_id uuid [ref: > article_cluster.id, delete: cascade]  // null = top-level; set when split from oversized cluster
   label varchar                                        // null on parent shells (too broad to label); set only on leaves
   centroid vector(768)
   member_count int
@@ -208,7 +208,7 @@ Table article_cluster {
 // information_claims IS NOT NULL — article content is stable so a prior run's
 // extraction is valid to copy into the new row without re-calling Gemma.
 Table article_cluster_member {
-  cluster_id uuid [ref: > article_cluster.id]
+  cluster_id uuid [ref: > article_cluster.id, delete: cascade]  // D33: cascades when the cluster's run is pruned
   article_id uuid [ref: > article.id]
   relevance_score float
   main_entity text    // primary entity Gemma identifies from the article; null until analysis runs
@@ -222,7 +222,7 @@ Table article_cluster_member {
 
 Table cluster_insight {
   id uuid [pk, default: `gen_random_uuid()`]
-  cluster_id uuid [ref: - article_cluster.id]
+  cluster_id uuid [ref: - article_cluster.id, delete: cascade]  // D33: cascades when the cluster's run is pruned
   trend_velocity float
   competitor_count int [not null, default: 0]
   trend_match_count int [not null, default: 0]

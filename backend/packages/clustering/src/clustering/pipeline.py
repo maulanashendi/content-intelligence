@@ -14,7 +14,7 @@ from core.models import (
     ClusterAlgorithm,
     ClusterRun,
 )
-from sqlalchemy import func, select, true, update
+from sqlalchemy import delete, func, select, true, update
 
 from clustering.clusterer import cluster as hdbscan_cluster
 from clustering.merge import run as merge_run
@@ -138,3 +138,64 @@ async def _persist_clusters(
                         relevance_score=float(prob),
                     )
                 )
+
+
+async def prune_old_cluster_runs(keep: int | None = None) -> int:
+    """Delete cluster runs beyond the `keep` most recent, cascading to their
+    clusters, members, and insights (requires the FK ON DELETE CASCADE migration).
+
+    Safe by construction: it builds an explicit keep-set (the N newest runs plus
+    every run that still owns `is_current` clusters), refuses to act if that set
+    is empty, and only ever issues `DELETE ... WHERE id IN (<materialized old ids>)`.
+    There is no `NOT IN (<subquery>)` against the table, so an empty or buggy keep
+    query can never escalate into a full-table wipe; the served run is never pruned.
+    """
+    keep = settings.cluster_run_retention_count if keep is None else keep
+    if keep < 1:
+        logger.warning("prune skipped: retention count %d < 1", keep)
+        return 0
+
+    async with get_session() as session, session.begin():
+        recent_ids = set(
+            (
+                await session.execute(
+                    select(ClusterRun.id)
+                    .order_by(
+                        func.coalesce(ClusterRun.finished_at, ClusterRun.started_at).desc(),
+                        ClusterRun.id.desc(),
+                    )
+                    .limit(keep)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        served_ids = set(
+            (
+                await session.execute(
+                    select(ArticleCluster.run_id).where(ArticleCluster.is_current == true()).distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        keep_ids = recent_ids | served_ids
+        if not keep_ids:
+            logger.warning("prune aborted: keep-set empty, refusing to delete any run")
+            return 0
+
+        old_ids = list(
+            (
+                await session.execute(select(ClusterRun.id).where(ClusterRun.id.notin_(keep_ids)))
+            )
+            .scalars()
+            .all()
+        )
+        if not old_ids:
+            logger.info("prune: nothing to delete (kept=%d runs)", len(keep_ids))
+            return 0
+
+        await session.execute(delete(ClusterRun).where(ClusterRun.id.in_(old_ids)))
+
+    logger.info("prune complete deleted_runs=%d kept_runs=%d", len(old_ids), len(keep_ids))
+    return len(old_ids)

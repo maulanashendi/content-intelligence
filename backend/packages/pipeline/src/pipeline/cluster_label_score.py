@@ -16,3 +16,8 @@ async def run() -> None:
 
     count = await score_run()
     logger.info("scoring complete cluster_count=%d", count)
+
+    from clustering.pipeline import prune_old_cluster_runs
+
+    pruned = await prune_old_cluster_runs()
+    logger.info("retention complete pruned_runs=%d", pruned)

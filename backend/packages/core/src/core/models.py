@@ -291,9 +291,17 @@ class ArticleCluster(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid
     )
-    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cluster_run.id"), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cluster_run.id", ondelete="CASCADE"), nullable=False
+    )
     parent_cluster_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("article_cluster.id"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey(
+            "article_cluster.id",
+            ondelete="CASCADE",
+            name="fk_article_cluster_parent_cluster_id",
+        ),
+        nullable=True,
     )
     label: Mapped[str | None] = mapped_column(String)
     centroid: Mapped[list[float] | None] = mapped_column(Vector(768))
@@ -327,7 +335,7 @@ class ArticleClusterMember(Base):
     __tablename__ = "article_cluster_member"
 
     cluster_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("article_cluster.id"), primary_key=True
+        ForeignKey("article_cluster.id", ondelete="CASCADE"), primary_key=True
     )
     article_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("article.id"), primary_key=True)
     relevance_score: Mapped[float | None] = mapped_column(Float)
@@ -345,7 +353,7 @@ class ClusterInsight(Base):
         UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid
     )
     cluster_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("article_cluster.id"), unique=True, nullable=False
+        ForeignKey("article_cluster.id", ondelete="CASCADE"), unique=True, nullable=False
     )
     trend_velocity: Mapped[float | None] = mapped_column(Float)
     competitor_count: Mapped[int] = mapped_column(

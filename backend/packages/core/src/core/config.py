@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     scoring_morning_top_n: int = 10
     scoring_deferred_velocity_min: float = 0.4
     cluster_staleness_max_age_hours: int = 36
+    cluster_run_retention_count: int = 14
 
 
 settings = Settings()
