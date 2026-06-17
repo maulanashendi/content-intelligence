@@ -11,12 +11,21 @@
   "last_internal_days_ago": null,
   "underperformed": false,
   "parent_cluster_id": null,
-  "what_happened": null,
-  "parties_involved": null,
-  "editorial_angle": null,
+  "weighted_trend_score": 0.91,
+  "competitor_freshness_days": 1,
+  "demand_score": 0.95,
+  "high_demand": true,
+  "performance_level": "low",
+  "editorial_quadrant": "opportunity",
+  "what_happened": "Pertamina menaikkan harga BBM non-subsidi Pertamax, Dexlite, dan Pertamina Dex mulai 1 Mei 2025, dipicu pelemahan rupiah dan lonjakan harga minyak dunia ke level $94/barel.",
+  "parties_involved": ["Pertamina", "DPR RI Komisi VII", "Asosiasi Pengusaha Logistik", "LPEM UI"],
+  "editorial_angle": "Investigasi: apakah Pertamina melakukan kajian dampak inflasi sebelum menaikkan harga? Minta dokumen RKAP 2025 dan bandingkan proyeksi dampak inflasi BI vs kenaikan aktual.",
+  "bullet_insights": ["8 kompetitor sudah menulis, Tempo belum hadir", "3 keyword trend aktif minggu ini", "Topik konsumsi publik luas — potensi trafik tinggi"],
   "insight_calculated_at": "2026-05-09T06:05:00Z",
-  "is_stale": true,
+  "is_stale": false,
   "sub_clusters": null,
+  "parent_cluster": null,
+  "sibling_clusters": null,
   "members": [
     {
       "id": "b1c2d3e4-0001-4000-8000-000000000001",
@@ -31,7 +40,7 @@
       "id": "b1c2d3e4-0001-4000-8000-000000000002",
       "title": "Harga Pertamax Tembus Rp 14.500, Masyarakat Keluhkan Beban",
       "url": "https://www.cnnindonesia.com/ekonomi/pertamax-14500",
-      "first_paragraph": "Harga Pertamax di SPBU Pertamina kini mencapai Rp 14.500 per liter, naik dari sebelumnya Rp 13.700. Kenaikan ini disambut keluhan dari masyarakat kelas menengah.",
+      "first_paragraph": "Harga Pertamax di SPBU Pertamina kini mencapai Rp 14.500 per liter, naik dari sebelumnya Rp 13.700. Kenaikan ini disambut keluhan dari masyarakat kelas menengah yang bergantung pada BBM non-subsidi.",
       "published_at": "2025-04-30T08:15:00Z",
       "source_name": "CNN Indonesia",
       "relevance_score": 0.92
@@ -40,7 +49,7 @@
       "id": "b1c2d3e4-0001-4000-8000-000000000003",
       "title": "DPR Minta Pemerintah Jelaskan Alasan Kenaikan BBM",
       "url": "https://www.detik.com/finance/berita/dpr-bbm-naik",
-      "first_paragraph": "Komisi VII DPR RI meminta pemerintah segera menjelaskan alasan di balik keputusan menaikkan harga BBM non-subsidi. Sejumlah anggota dewan khawatir kenaikan ini akan memicu inflasi.",
+      "first_paragraph": "Komisi VII DPR RI meminta pemerintah segera menjelaskan alasan di balik keputusan menaikkan harga BBM non-subsidi. Sejumlah anggota dewan khawatir kenaikan ini akan memicu inflasi yang membebani masyarakat.",
       "published_at": "2025-04-30T09:45:00Z",
       "source_name": "Detik Finance",
       "relevance_score": 0.88
@@ -49,7 +58,7 @@
       "id": "b1c2d3e4-0001-4000-8000-000000000004",
       "title": "Pengusaha Logistik Keberatan Harga BBM Naik, Ancam Naikkan Tarif",
       "url": "https://www.bisnis.com/ekonomi/logistik-bbm",
-      "first_paragraph": "Asosiasi Pengusaha Truk dan Logistik Indonesia menyatakan keberatan atas kenaikan harga BBM dan mengancam akan menaikkan tarif pengiriman barang hingga 15 persen.",
+      "first_paragraph": "Asosiasi Pengusaha Truk dan Logistik Indonesia menyatakan keberatan atas kenaikan harga BBM dan mengancam akan menaikkan tarif pengiriman barang hingga 15 persen, yang berpotensi mendorong harga barang konsumsi.",
       "published_at": "2025-04-30T11:00:00Z",
       "source_name": "Bisnis Indonesia",
       "relevance_score": 0.84
@@ -58,7 +67,7 @@
       "id": "b1c2d3e4-0001-4000-8000-000000000005",
       "title": "Ekonom: Kenaikan BBM Bisa Picu Inflasi 0,4 Persen",
       "url": "https://www.tempo.co/ekonomi/inflasi-bbm",
-      "first_paragraph": "Ekonom dari LPEM UI memperkirakan kenaikan harga BBM non-subsidi akan mendorong inflasi sebesar 0,4 persen pada bulan Mei 2025, terutama melalui transmisi ke harga transportasi.",
+      "first_paragraph": "Ekonom dari LPEM UI memperkirakan kenaikan harga BBM non-subsidi akan mendorong inflasi sebesar 0,4 persen pada Mei 2025, terutama melalui transmisi ke harga transportasi dan distribusi barang.",
       "published_at": "2025-04-30T13:20:00Z",
       "source_name": "Tempo",
       "relevance_score": 0.81
@@ -67,10 +76,64 @@
       "id": "b1c2d3e4-0001-4000-8000-000000000006",
       "title": "SPBU Swasta Ikut Naikkan Harga BBM Setelah Pertamina",
       "url": "https://www.republika.co.id/ekonomi/spbu-swasta-bbm",
-      "first_paragraph": "Menyusul kenaikan harga BBM oleh Pertamina, sejumlah SPBU swasta seperti Shell, BP-AKR, dan Vivo juga menaikkan harga produk mereka. Shell V-Power kini dibanderol Rp 16.100 per liter.",
+      "first_paragraph": "Menyusul kenaikan Pertamina, SPBU swasta seperti Shell, BP-AKR, dan Vivo juga menaikkan harga. Shell V-Power kini dibanderol Rp 16.100 per liter, naik Rp 400 dari sebelumnya.",
       "published_at": "2025-04-30T14:50:00Z",
       "source_name": "Republika",
       "relevance_score": 0.76
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000007",
+      "title": "Pertamina: Kenaikan Harga BBM Sudah Melalui Kajian Mendalam",
+      "url": "https://www.antara.co.id/berita/pertamina-bbm-kajian",
+      "first_paragraph": "SVP Corporate Communication Pertamina menyatakan kenaikan harga BBM non-subsidi telah melalui kajian mendalam terhadap kondisi pasar global dan nilai tukar rupiah, serta disetujui oleh pemegang saham.",
+      "published_at": "2025-04-30T16:10:00Z",
+      "source_name": "Antara",
+      "relevance_score": 0.72
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000008",
+      "title": "Analisis: Tiga Faktor Pendorong Kenaikan BBM Pertamina",
+      "url": "https://www.cnbcindonesia.com/market/analisis-bbm-pertamina",
+      "first_paragraph": "Tiga faktor utama mendorong Pertamina menaikkan harga BBM: dolar AS menguat ke Rp 16.200, harga minyak Brent naik 12% dalam sebulan, dan subsidi pemerintah yang tidak mencakup produk non-subsidi.",
+      "published_at": "2025-05-01T07:30:00Z",
+      "source_name": "CNBC Indonesia",
+      "relevance_score": 0.69
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000009",
+      "title": "Sopir Ojol Keluhkan Kenaikan BBM: Tarif Tidak Ikut Naik",
+      "url": "https://www.detik.com/finance/ojol-bbm-naik",
+      "first_paragraph": "Pengemudi ojek online yang mayoritas menggunakan Pertamax mengeluh kenaikan BBM membebani operasional, sementara tarif platform tidak ikut disesuaikan. Beberapa driver mengancam mogok.",
+      "published_at": "2025-05-01T09:00:00Z",
+      "source_name": "Detik Finance",
+      "relevance_score": 0.65
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000010",
+      "title": "BI: Dampak Kenaikan BBM ke Inflasi Masih Terkendali",
+      "url": "https://www.bisnis.com/ekonomi/bi-inflasi-bbm",
+      "first_paragraph": "Bank Indonesia menyatakan dampak kenaikan harga BBM non-subsidi terhadap inflasi masih terkendali dalam target 2,5±1 persen, dengan catatan tidak ada guncangan eksternal lebih lanjut.",
+      "published_at": "2025-05-01T11:15:00Z",
+      "source_name": "Bisnis Indonesia",
+      "relevance_score": 0.61
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000011",
+      "title": "Kemenkeu Pastikan Subsidi Pertalite dan Solar Tidak Berubah",
+      "url": "https://www.kompas.com/ekonomi/kemenkeu-subsidi-bbm",
+      "first_paragraph": "Kementerian Keuangan memastikan subsidi untuk Pertalite dan Solar tidak berubah meski Pertamax naik. Anggaran subsidi BBM 2025 tetap Rp 189 triliun sesuai APBN.",
+      "published_at": "2025-05-01T13:45:00Z",
+      "source_name": "Kompas",
+      "relevance_score": 0.57
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000012",
+      "title": "Pakar Energi: Indonesia Harus Percepat Transisi ke Kendaraan Listrik",
+      "url": "https://www.republika.co.id/ekonomi/transisi-ev-bbm",
+      "first_paragraph": "Kenaikan BBM Pertamina dinilai pakar energi sebagai momen yang tepat untuk mempercepat transisi ke kendaraan listrik. Pemerintah didorong memperluas subsidi untuk motor dan mobil listrik kalangan menengah.",
+      "published_at": "2025-05-01T15:00:00Z",
+      "source_name": "Republika",
+      "relevance_score": 0.52
     }
   ]
 }
