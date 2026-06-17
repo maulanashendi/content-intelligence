@@ -5,7 +5,7 @@ import { App } from "./app.js"
 import { Providers } from "./providers.js"
 
 async function bootstrap() {
-  if (import.meta.env.DEV && import.meta.env["VITE_ENABLE_MOCK"] !== "false") {
+  if (import.meta.env.DEV || import.meta.env["VITE_MOCK"] === "true") {
     const { worker } = await import("./mocks/browser.js")
     await worker.start({ onUnhandledRequest: "bypass" }).catch(console.warn)
   } else if ("serviceWorker" in navigator) {

@@ -5,6 +5,7 @@ import path from "path"
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  base: process.env["VITE_BASE"] ?? "/",
   resolve: {
     alias: {
       "@ei-fe/core": path.resolve(__dirname, "../core/src"),
