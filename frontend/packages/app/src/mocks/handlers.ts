@@ -4,7 +4,7 @@ import deferredClusters from "../../../api/tests/mocks/fixtures/deferred-cluster
 import clusterDetail from "../../../api/tests/mocks/fixtures/cluster-detail.json"
 import clusterDetailsMap from "../../../api/tests/mocks/fixtures/cluster-details-map.json"
 
-const BASE = "/api/v1"
+const BASE = `${(import.meta.env.BASE_URL ?? "/").replace(/\/$/, "")}/api/v1`
 
 type MockSource = {
   id: string; name: string; url: string; source_type: string; is_enabled: boolean
@@ -58,7 +58,7 @@ function generateMembers(cluster: { id: string; label: string | null; member_cou
     const source = SOURCES[i % SOURCES.length]!
     const angle = ANGLES[Math.floor(i * 1.618) % ANGLES.length]!
     return {
-      id: `article-${cluster.id.slice(-8)}-${i}`,
+      id: crypto.randomUUID(),
       title: `[${angle}] ${cluster.label ?? "Kluster"} — ${source}`,
       url: `https://example.com/${cluster.id.slice(-4)}/${i}`,
       first_paragraph: null,
@@ -135,7 +135,7 @@ export const handlers = [
   http.get(`${BASE}/clusters/current`, () => HttpResponse.json(morningClusters)),
   http.get(`${BASE}/clusters/runs/latest`, () =>
     HttpResponse.json({
-      id: "a1b2c3d4-run1-4000-8000-000000000001",
+      id: "a1b2c3d4-0099-4000-8000-000000000001",
       algorithm: "hdbscan",
       algorithm_version: "0.8.33",
       params: { min_cluster_size: 5, min_samples: 3, metric: "euclidean" },

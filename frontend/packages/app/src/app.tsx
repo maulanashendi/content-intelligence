@@ -20,22 +20,25 @@ function AppShell() {
   )
 }
 
-const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <AppShell />,
-    children: [
-      { index: true, element: <Navigate to="/morning" replace /> },
-      { path: "morning", element: <MorningRoute /> },
-      { path: "clusters/:id", element: <ClusterDetailRoute /> },
-      { path: "article", element: <ArticleRoute /> },
-      { path: "clustering", element: <ClusteringRoute /> },
-      { path: "sources", element: <SourcesRoute /> },
-      { path: "sources/rss", element: <InputRssRoute /> },
-      { path: "*", element: <NotFoundRoute /> },
-    ],
-  },
-])
+const router = createBrowserRouter(
+  [
+    {
+      path: "/",
+      element: <AppShell />,
+      children: [
+        { index: true, element: <Navigate to="/morning" replace /> },
+        { path: "morning", element: <MorningRoute /> },
+        { path: "clusters/:id", element: <ClusterDetailRoute /> },
+        { path: "article", element: <ArticleRoute /> },
+        { path: "clustering", element: <ClusteringRoute /> },
+        { path: "sources", element: <SourcesRoute /> },
+        { path: "sources/rss", element: <InputRssRoute /> },
+        { path: "*", element: <NotFoundRoute /> },
+      ],
+    },
+  ],
+  { basename: import.meta.env.BASE_URL.replace(/\/$/, "") || "/" },
+)
 
 export function App() {
   return <RouterProvider router={router} />
