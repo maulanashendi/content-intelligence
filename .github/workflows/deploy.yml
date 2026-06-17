@@ -1,0 +1,36 @@
+name: Deploy Demo to GitHub Pages
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch: # Supaya tombol "Run workflow" manual muncul
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
+
+      - name: Setup Bun 🍞
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies 📦
+        run: bun install
+
+      - name: Build Frontend 🏗️
+        run: |
+          cd frontend/packages/app
+          VITE_MOCK=true bun run build
+
+      - name: Deploy to GitHub Pages 🚀
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: frontend/packages/app/dist # Folder hasil build Vite
+          branch: gh-pages # Branch tujuan untuk GitHub Pages
