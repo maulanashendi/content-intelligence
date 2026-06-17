@@ -1,5 +1,8 @@
 import { describe, test, expect } from "bun:test"
-import { ContentSourceSchema, ContentSourceListSchema, ArticleSchema, PaginatedArticlesSchema } from "../src/schemas.js"
+import { ContentSourceSchema, ContentSourceListSchema, ArticleSchema, PaginatedArticlesSchema, ClusterListResponseSchema, ClusterDetailSchema } from "../src/schemas.js"
+import morningClusters from "./mocks/fixtures/morning-clusters.json"
+import clusterDetail from "./mocks/fixtures/cluster-detail.json"
+import clusterDetailsMap from "./mocks/fixtures/cluster-details-map.json"
 
 // Minimal valid payload matching what the backend SourceResponse returns.
 const VALID_SOURCE = {
@@ -170,5 +173,72 @@ describe("PaginatedArticlesSchema", () => {
       items: [{ ...VALID_ARTICLE, id: "mock-article-0000" }],
     })
     expect(result.success).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Fixture validation — morning-clusters + cluster details
+// ---------------------------------------------------------------------------
+
+describe("ClusterListResponseSchema — morning-clusters fixture", () => {
+  test("validates enriched morning-clusters.json", () => {
+    const result = ClusterListResponseSchema.safeParse(morningClusters)
+    expect(result.success).toBe(true)
+  })
+
+  test("all 10 clusters have editorial_quadrant set", () => {
+    const result = ClusterListResponseSchema.safeParse(morningClusters)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    for (const c of result.data.clusters) {
+      expect(c.editorial_quadrant).not.toBeNull()
+    }
+  })
+
+  test("quadrant distribution matches expected demo counts", () => {
+    const result = ClusterListResponseSchema.safeParse(morningClusters)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    const counts = { opportunity: 0, winning: 0, evergreen: 0, ignore: 0, too_early: 0 }
+    for (const c of result.data.clusters) {
+      const q = c.editorial_quadrant as keyof typeof counts | null
+      if (q && q in counts) counts[q]++
+    }
+    expect(counts.opportunity).toBe(3)
+    expect(counts.winning).toBe(2)
+    expect(counts.too_early).toBe(1)
+    expect(counts.evergreen).toBe(1)
+    expect(counts.ignore).toBe(3)
+  })
+})
+
+describe("ClusterDetailSchema — fixture validation", () => {
+  test("cluster-detail.json (BBM) validates", () => {
+    expect(ClusterDetailSchema.safeParse(clusterDetail).success).toBe(true)
+  })
+
+  test("all entries in cluster-details-map.json validate", () => {
+    for (const detail of Object.values(clusterDetailsMap)) {
+      const result = ClusterDetailSchema.safeParse(detail)
+      expect(result.success).toBe(true)
+    }
+  })
+
+  test("BBM cluster has non-null insight fields", () => {
+    const result = ClusterDetailSchema.safeParse(clusterDetail)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.what_happened).not.toBeNull()
+    expect(result.data.editorial_angle).not.toBeNull()
+    expect(result.data.parties_involved).not.toBeNull()
+  })
+
+  test("map entries each have at least 4 members", () => {
+    for (const detail of Object.values(clusterDetailsMap)) {
+      const result = ClusterDetailSchema.safeParse(detail)
+      expect(result.success).toBe(true)
+      if (!result.success) continue
+      expect(result.data.members.length).toBeGreaterThanOrEqual(4)
+    }
   })
 })
