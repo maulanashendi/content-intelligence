@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw"
 import morningClusters from "../../../api/tests/mocks/fixtures/morning-clusters.json"
 import deferredClusters from "../../../api/tests/mocks/fixtures/deferred-clusters.json"
 import clusterDetail from "../../../api/tests/mocks/fixtures/cluster-detail.json"
+import clusterDetailsMap from "../../../api/tests/mocks/fixtures/cluster-details-map.json"
 
 const BASE = "/api/v1"
 
@@ -179,11 +180,21 @@ export const handlers = [
   }),
   http.get(`${BASE}/clusters/:id`, ({ params }) => {
     const { id } = params as { id: string }
+    if (id in clusterDetailsMap) {
+      return HttpResponse.json(clusterDetailsMap[id as keyof typeof clusterDetailsMap])
+    }
     if (id === clusterDetail.id) return HttpResponse.json(clusterDetail)
     const cluster = morningClusters.clusters.find((c) => c.id === id)
     if (!cluster) return HttpResponse.json({ detail: "Not found" }, { status: 404 })
     const count = Math.min(cluster.member_count ?? 5, 8)
-    return HttpResponse.json({ ...cluster, members: generateMembers(cluster, count), sub_clusters: null, is_stale: morningClusters.is_stale })
+    return HttpResponse.json({
+      ...cluster,
+      members: generateMembers(cluster, count),
+      sub_clusters: null,
+      parent_cluster: null,
+      sibling_clusters: null,
+      is_stale: morningClusters.is_stale,
+    })
   }),
   http.get(`${BASE}/health`, () => HttpResponse.json({ status: "ok", db: true })),
   http.get(`${BASE}/trend-signals/latest`, ({ request }) => {
