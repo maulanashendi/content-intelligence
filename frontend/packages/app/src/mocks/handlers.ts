@@ -143,8 +143,34 @@ export const handlers = [
       notes: null,
       cluster_count: morningClusters.clusters.length,
       has_insights: true,
+      stages: [],
     }),
   ),
+  http.get(`${BASE}/clusters/quadrant-summary`, () => {
+    const counts = { opportunity: 0, winning: 0, evergreen: 0, ignore: 0, too_early: 0, total: 0 }
+    for (const c of morningClusters.clusters) {
+      const q = c.editorial_quadrant as keyof typeof counts | null
+      if (q && q in counts && q !== "total") {
+        counts[q]++
+        counts.total++
+      }
+    }
+    return HttpResponse.json(counts)
+  }),
+  http.get(`${BASE}/clusters/quadrant/:quadrant`, ({ params, request }) => {
+    const { quadrant } = params as { quadrant: string }
+    const url = new URL(request.url)
+    const limit = parseInt(url.searchParams.get("limit") ?? "8", 10)
+    const filtered = morningClusters.clusters
+      .filter((c) => c.editorial_quadrant === quadrant)
+      .slice(0, limit)
+    return HttpResponse.json({
+      clusters: filtered,
+      served_at: morningClusters.served_at,
+      is_stale: morningClusters.is_stale,
+      max_age_hours: morningClusters.max_age_hours,
+    })
+  }),
   http.get(`${BASE}/articles`, ({ request }) => {
     const url = new URL(request.url)
     const page = parseInt(url.searchParams.get("page") ?? "1", 10)
