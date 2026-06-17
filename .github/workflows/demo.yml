@@ -1,0 +1,38 @@
+name: Deploy Demo to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: cd frontend && bun install --frozen-lockfile
+
+      - name: Build with mock mode
+        run: cd frontend/packages/app && bun run build
+        env:
+          VITE_MOCK: "true"
+          VITE_BASE: "/content-intelligence/"
+
+      - name: Copy index.html as 404.html (React Router fix)
+        run: cp frontend/packages/app/dist/index.html frontend/packages/app/dist/404.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./frontend/packages/app/dist
+          force_orphan: true
