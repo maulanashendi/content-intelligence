@@ -70,7 +70,14 @@ SYSTEM_PROMPT = """
     2. "feedback": { ... sesuai schema EditorialFeedback ... }
     """
 
-_BATCH_CONCURRENCY = asyncio.Semaphore(3)
+_batch_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_batch_semaphore() -> asyncio.Semaphore:
+    global _batch_semaphore
+    if _batch_semaphore is None:
+        _batch_semaphore = asyncio.Semaphore(3)
+    return _batch_semaphore
 
 
 async def run_analysis(title: str, content: str) -> AnalyzeResult:
@@ -91,7 +98,7 @@ async def run_analysis(title: str, content: str) -> AnalyzeResult:
 
 
 async def _run_one(article: ArticleRequest) -> AnalyzeResult:
-    async with _BATCH_CONCURRENCY:
+    async with _get_batch_semaphore():
         return await run_analysis(article.title, article.content)
 
 

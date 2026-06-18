@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_VALID_TASKS = frozenset({"analyze", "recommend"})
+
 
 class AnalystSettings(BaseSettings):
     """Config for the Editorial AI Analyst.
@@ -22,9 +24,13 @@ class AnalystSettings(BaseSettings):
     analyst_recommend_base_url: str = ""
 
     def model_for(self, task: str) -> str:
+        if task not in _VALID_TASKS:
+            raise ValueError(f"Unknown analyst task: {task!r}. Expected one of {sorted(_VALID_TASKS)}")
         return getattr(self, f"analyst_{task}_model")
 
     def base_url_for(self, task: str) -> str:
+        if task not in _VALID_TASKS:
+            raise ValueError(f"Unknown analyst task: {task!r}. Expected one of {sorted(_VALID_TASKS)}")
         override: str = getattr(self, f"analyst_{task}_base_url")
         return override or self.analyst_llm_base_url
 

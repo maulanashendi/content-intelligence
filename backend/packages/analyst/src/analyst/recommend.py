@@ -88,7 +88,7 @@ def _apply_filters(data: list[dict], filters: DataFilterParameters) -> list[dict
                     if delta.days > filters.days_lookback:
                         continue
             except Exception:
-                pass
+                logger.debug("skipping days_lookback filter for row with unparseable date")
 
         filtered.append(row)
 
@@ -134,7 +134,7 @@ async def run_recommendation(request: RecommendationRequest) -> RecommendationOu
 
     return RecommendationOutput(
         filters_applied=filters_dict,
-        sample_data=rows,
+        sample_data=rows[:20],
         insights=insights.insights,
         summary=insights.summary,
         data_source="airflow_json",

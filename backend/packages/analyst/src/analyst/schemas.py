@@ -1,4 +1,4 @@
-from typing import List, Optional, Any, Union
+from typing import Any
 from pydantic import BaseModel, Field
 from pydantic import ConfigDict
 
@@ -34,17 +34,17 @@ class ArticleFeatures(BaseModel):
 
 
 class ArticleRequest(BaseModel):
-    title: str
-    content: str
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=20000)
 
 class BatchArticleRequest(BaseModel):
-    articles: List[ArticleRequest]
+    articles: list[ArticleRequest] = Field(..., min_length=1, max_length=20)
 
 class EditorialFeedback(BaseModel):
-    recommendation_judul: List[str] = Field(default_factory=list, description="Saran untuk rekomendasi judul berdasarkan fitur artikel.")
-    missing_info: List[str] = Field(default_factory=list, description="Analisis kesenjangan informasi atau data yang hilang.")
-    bias_check: List[str] = Field(default_factory=list, description="Saran terkait potensi bias atau objektivitas penulisan.")
-    next_angle: List[str] = Field(default_factory=list, description="Ide untuk artikel lanjutan berdasarkan siklus berita.")
+    recommendation_judul: list[str] = Field(default_factory=list, description="Saran untuk rekomendasi judul berdasarkan fitur artikel.")
+    missing_info: list[str] = Field(default_factory=list, description="Analisis kesenjangan informasi atau data yang hilang.")
+    bias_check: list[str] = Field(default_factory=list, description="Saran terkait potensi bias atau objektivitas penulisan.")
+    next_angle: list[str] = Field(default_factory=list, description="Ide untuk artikel lanjutan berdasarkan siklus berita.")
 
 class ArticleAnalysisResult(BaseModel):
     features: ArticleFeatures
@@ -63,9 +63,9 @@ class RecommendationRequest(BaseModel):
         min_length=3,
         max_length=500,
     )
-    dataset: Optional[str] = Field(
+    dataset: str | None = Field(
         default=None,
-        description="Optional BigQuery dataset override. Defaults to 'editorial_analytics'.",
+        description="Reserved for future BigQuery dataset selection (deferred per D37)",
     )
 
 
@@ -73,24 +73,24 @@ class DataFilterParameters(BaseModel):
     """Structured output from the LLM based on user intent."""
     model_config = ConfigDict(extra='forbid')
 
-    category: Optional[str] = Field(
-        None, 
+    category: str | None = Field(
+        None,
         description="Filter by article category (e.g., 'Politik', 'Ekonomi', 'Olahraga', 'Teknologi', 'Lifestyle', 'Budaya'). Keep null if not specified."
     )
-    user_need_category: Optional[str] = Field(
-        None, 
+    user_need_category: str | None = Field(
+        None,
         description="Filter by user need category (e.g., 'Update me', 'Educate me', 'Help me', 'Inspire me', 'Divert me', 'Give me perspective'). Keep null if not specified."
     )
-    min_page_views: Optional[int] = Field(
-        None, 
+    min_page_views: int | None = Field(
+        None,
         description="Filter articles that have at least this many page views. Keep null if not specified."
     )
-    author: Optional[str] = Field(
-        None, 
+    author: str | None = Field(
+        None,
         description="Filter by specific author name. Keep null if not specified."
     )
-    days_lookback: Optional[int] = Field(
-        default=None, 
+    days_lookback: int | None = Field(
+        default=None,
         description="How many past days to analyze. If the user mentions 'minggu ini' (this week), use 7. Defaults to None (all time)."
     )
 
@@ -108,11 +108,11 @@ class RecommendationInsight(BaseModel):
 class RecommendationOutput(BaseModel):
     """Full structured response sent to the frontend for /recommendation."""
     filters_applied: dict = Field(..., description="The filters extracted from user intent that were applied to the data.")
-    sample_data: List[Any] = Field(
+    sample_data: list[Any] = Field(
         default_factory=list,
         description="List of result rows (dicts) from BigQuery or mock.",
     )
-    insights: List[RecommendationInsight] = Field(
+    insights: list[RecommendationInsight] = Field(
         default_factory=list,
         description="LLM-generated actionable insights from the data.",
     )
@@ -122,7 +122,7 @@ class RecommendationOutput(BaseModel):
     )
     data_source: str = Field(
         default="mock",
-        description="'mock' or 'bigquery' — indicates whether real data was queried.",
+        description="Source of recommendation data: 'airflow_json' (ported dataset) or 'bigquery' (deferred)",
     )
 
 

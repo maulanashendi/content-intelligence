@@ -10,10 +10,6 @@ def _feature(status: int) -> dict:
     return {"status": status, "reasoning": "x"}
 
 
-def _all_features(status: int = 0) -> dict:
-    return {f"f{n:02d}_x": _feature(status) for n in range(1, 17)}
-
-
 def test_analysis_result_parses_16_features() -> None:
     payload = {
         "features": {
