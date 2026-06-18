@@ -24,6 +24,7 @@ def test_analysis_result_parses_16_features() -> None:
                     "f16_social_buzz",
                 ],
                 [_feature(0)] * 16,
+                strict=False,
             )
         },
         "feedback": {
@@ -84,5 +85,5 @@ def test_analyze_result_round_trip() -> None:
 
 def test_recommendation_output_defaults() -> None:
     out = RecommendationOutput(filters_applied={}, summary="s")
-    assert out.data_source == "mock"
+    assert out.data_source == "airflow_json"
     assert out.insights == []

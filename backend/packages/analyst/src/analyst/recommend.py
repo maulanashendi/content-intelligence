@@ -74,9 +74,8 @@ def _apply_filters(data: list[dict], filters: DataFilterParameters) -> list[dict
                 continue
 
         # Filter by author
-        if filters.author and "author" in row:
-            if filters.author.lower() not in str(row.get("author", "")).lower():
-                continue
+        if filters.author and "author" in row and filters.author.lower() not in str(row.get("author", "")).lower():
+            continue
 
         # Filter by days_lookback
         if filters.days_lookback:

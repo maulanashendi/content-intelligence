@@ -70,7 +70,7 @@ Switching the embedding model requires a schema migration (vector dimension) and
 
 | Library | Used for | Rationale |
 |---------|----------|-----------|
-| `openai` 1.x | OpenAI-compatible HTTP client for the `analyst` package | Local vs API = base-URL swap, no torch. Stateless analyze + recommendation endpoints. |
+| `openai` >=1.40 (currently 2.43.x) | OpenAI-compatible HTTP client for the `analyst` package | Local vs API = base-URL swap, no torch. Stateless analyze + recommendation endpoints. |
 
 ## Operational
 

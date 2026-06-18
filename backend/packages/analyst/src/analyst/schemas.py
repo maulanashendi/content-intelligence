@@ -1,6 +1,6 @@
 from typing import Any
-from pydantic import BaseModel, Field
-from pydantic import ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FeatureData(BaseModel):
@@ -121,7 +121,7 @@ class RecommendationOutput(BaseModel):
         description="One-paragraph executive summary of the recommendation.",
     )
     data_source: str = Field(
-        default="mock",
+        default="airflow_json",
         description="Source of recommendation data: 'airflow_json' (ported dataset) or 'bigquery' (deferred)",
     )
 

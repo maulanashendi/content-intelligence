@@ -80,7 +80,7 @@ def rank_user_needs(features: ArticleFeatures) -> list[UserNeedScore]:
     scores: list[UserNeedScore] = []
     for category, rules in LOGIC_RULES.items():
         ref_vector = TEMPO_REFERENCE_VECTORS[category]
-        matches = sum(1 for a, b in zip(vector, ref_vector) if a == b)
+        matches = sum(1 for a, b in zip(vector, ref_vector, strict=False) if a == b)
         base_score = (matches / 16) * 100
 
         rejected = False
