@@ -786,3 +786,93 @@ The margin is safe: the longest blocked native call after the `asyncio.to_thread
 - `labeling/pipeline.py`: `_select_cluster_ids_for_labeling` (replaces `_load_current_clusters`); `run()` iterates capped ids and reports `capped`.
 - No schema change, no API change.
 - New `packages/pipeline/tests/test_labeling_cap.py`: cap honors trend-then-member priority; stale (>24h) trend signals excluded; full order when under cap.
+
+---
+
+## D35. Demand × performance 2×2 editorial matrix (supersedes D27 scoring signals)
+
+**Context.** After D27 and D34 shipped, two defects made the scoring signals effectively dead:
+
+1. **`trend_match_count ≈ 0` everywhere.** `_load_trend_match` filtered `ts.captured_at >= now − 24h`. The daily cluster build ingests articles from the past 7–30 days; their trending signals are days old, not hours. The 24 h window produced ~5 matching clusters out of 2,000+. Compounding this, the scoring counted `trend_signal` rows (one per 10-minute daemon poll) instead of distinct keywords, inflating the rare non-zero values ~23×.
+2. **`article_gsc_metric` permanently empty.** `ingest.gsc` fetched `gsc_page` (~56 k rows) but no code ever wrote `article_gsc_metric`. Every GSC-dependent score (`underperformed`, `tempo_gsc_impressions`, `gsc_demand_gap`) was always the default value.
+
+**Goal.** Give the editorial team one clear question per cluster: *does external demand exist, and is Tempo capturing it?* Two orthogonal axes produce a 2×2 matrix surfaced through `editorial_quadrant`.
+
+**Decision.**
+
+1. **Align all analysis windows to `analysis_window_days = 7`** (cluster build, trend match, GSC). `scoring_trend_window_days` controls the trend window (defaults to `analysis_window_days`). The `.env` override `CLUSTERING_WINDOW_DAYS=30` is removed; D27's mandated value of 7 is now enforced.
+
+2. **Fix trend match semantics.** `_load_trend_match` counts `COUNT(DISTINCT ts.keyword)` not `COUNT(DISTINCT tsa.trend_signal_id)`. `_load_weighted_trend_score` uses `SUM(MAX(interest_score) per keyword)` — peak interest per keyword, not a sum over all poll captures.
+
+3. **Populate `article_gsc_metric` daily.** `ingest.gsc.link_articles()` runs immediately after `gsc.run()` in the cluster worker. It matches `gsc_page.page_url` to internal `article.url` via (a) exact normalized URL match and (b) trailing numeric ID fallback for Tempo slug variants, then upserts aggregated GSC signals into `article_gsc_metric`.
+
+4. **Demand scoring (new `scoring/demand.py`).** Per-cluster `demand_score` is a weighted combination of normalised trend_match_count (40%), weighted_trend_score (30%), and trend_velocity (30%), all min-max normalised within the run. `high_demand = demand_score > 0 AND demand_score ≥ demand_high_percentile rank`. Default `demand_high_percentile = 0.66` (top ~34% of run).
+
+5. **Performance scoring (new `scoring/performance.py`).** `performance_level` per cluster: `none` (no Tempo coverage), `too_early` (covered but no GSC data yet — article too new), `high` (covered + impressions ≥ `performance_high_percentile` rank + not underperformed), `low` (everything else). Default `performance_high_percentile = 0.66`.
+
+6. **`editorial_quadrant` (derived).** `opportunity` (high demand + none/low performance), `winning` (high demand + high performance), `evergreen` (low demand + high performance), `ignore` (low demand + low/no performance), `too_early` (covered but no data yet).
+
+7. **`/morning` ranks opportunity first.** `ORDER BY (editorial_quadrant = 'opportunity') DESC, demand_score DESC, trend_match_count DESC, member_count DESC`. **`/deferred` uses `high_demand = true`** as the filter (replaces `trend_velocity > threshold`).
+
+8. **D35 API governance.** Raw GSC numbers (`gsc_impressions`, `gsc_clicks`, `gsc_ctr`, `gsc_avg_position`) are stored in `cluster_insight` as internal scoring inputs but **never returned via the API** (consistent with D7 / constraints.md §GSC). Derived editorial levels (`demand_score`, `high_demand`, `performance_level`, `editorial_quadrant`) are signals, not raw metrics, and are returned — same category as the existing `underperformed` and `tempo_covered` booleans. Fields `gsc_demand_gap` and `tempo_gsc_impressions` are removed from both the schema and API (they were always zero since `article_gsc_metric` was never populated).
+
+**Schema changes.** `cluster_insight` gains `demand_score FLOAT`, `high_demand BOOLEAN`, `performance_level VARCHAR`, `editorial_quadrant VARCHAR`, `gsc_impressions INTEGER`, `gsc_clicks INTEGER`, `gsc_ctr FLOAT`, `gsc_avg_position FLOAT`; drops `gsc_demand_gap`, `tempo_gsc_impressions` (Alembic: `6e62c85f88ee`).
+
+**Config additions.** `analysis_window_days`, `scoring_trend_window_days`, `demand_high_percentile`, `performance_high_percentile`.
+
+**Implication.**
+- D27's "scoring inputs only" rule for GSC is refined: internal aggregate columns stay internal; derived editorial labels are surfaced.
+- D34's labeling cap join updated to use 7-day window + distinct keyword count (consistent with D35 trend match).
+- `constraints.md §73` updated: see that section for the revised wording.
+- `docs/plan/pr1…pr5.md` documents the implementation sequence.
+
+## D36 — Cross-process single-flight lock for ML steps + thread caps + deferred `finished_at`
+
+**Context.** The pipeline (labeling in particular) kept crashing, stalling for hours, or appearing "stuck" even after earlier hardening (D30). Root-cause analysis on 2026-06-03 found three compounding defects:
+
+1. `pipeline_group_lock` was only checked by the daemon's in-process `_held_groups` set. One-shot CLI steps (`pipeline label`, `pipeline cluster`, `pipeline cluster-label-score`) never acquired the DB lock, so a manual run could collide with the daemon or another manual run — two Gemma/sentence-transformers runtimes on CPU in the same thread pool → native crash (no Python traceback).
+2. No BLAS/OpenMP/llama thread caps anywhere. A single inference job claimed all 12 host cores; two concurrent jobs caused CPU starvation (throughput collapse showing as "stuck") and native BLAS assertions.
+3. `ClusterRun.finished_at` was written by `_persist_clusters()` — *before* merge, split, score, and label. The scheduler's `max(finished_at)` boundary check treated a mid-labeling crash as "done", so the next scheduled retry was silently skipped until the following 06:00.
+
+**Options.** (a) Prevent concurrent runs via DB lock (chosen). (b) Move to a separate queue or external coordinator (ruled out — no message broker). (c) Serialise via file lock (no cross-container guarantee in Docker without a shared bind-mount).
+
+**Decision.**
+
+1. **`pipeline/locks.py` — shared lock primitives.** Extracted `acquire_lock`, `release_lock`, `reap_expired_lock`, `bump_lock`, `is_lock_held` from `runner.py` into a standalone module so both the daemon and CLI steps import the same code. Added `hold_lock(group)` async context-manager with its own background heartbeat — wraps any ML block with acquire/heartbeat/release.
+
+2. **CLI ML steps are single-flight.** `pipeline cluster`, `pipeline label`, `pipeline score`, `pipeline cluster-label-score` all acquire `GROUP_CLUSTER_LABEL_SCORE` before running. If the lock is held (daemon or another manual run is active), the step logs an error and exits with code 1 immediately instead of running concurrently.
+
+3. **Thread caps.** `OMP_NUM_THREADS=4`, `OPENBLAS_NUM_THREADS=4`, `MKL_NUM_THREADS=4`, `NUMEXPR_NUM_THREADS=4`, `TOKENIZERS_PARALLELISM=false` set in the `pipeline` and `pipeline-dev` Dockerfile stages. `llm.py` passes `n_threads=4` to llama_cpp. On a 12-core host this gives each inference job predictable headroom without saturating the machine.
+
+4. **`ClusterRun.finished_at` deferred to pipeline end.** `clustering/pipeline.py:_persist_clusters` no longer sets `finished_at`. `cluster_label_score.run()` sets it via `UPDATE` after score → label → prune all succeed. Consequence: the API's `_resolve_cluster_filter` (`finished_at IS NOT NULL`) only serves fully-processed runs; a crash mid-label leaves `finished_at=NULL` so the scheduler fires again on the next boundary.
+
+**Rationale.** The three defects are independent but each one caused recurring "pipeline stuck/failed" incidents. Fix 1 prevents the concurrent-crash mode that was the most common recent symptom. Fix 2 prevents CPU starvation on the GPU-less host (all inference on CPU via BLAS). Fix 3 closes the scheduler-blind-spot that turned every mid-labeling crash into a silent 24-hour gap.
+
+**Implication.**
+- `runner.py` re-exports `_acquire_lock`/`_release_lock` from `locks.py` for backward compat with `test_lock_lease.py`.
+- Existing `ClusterRun` rows with `finished_at=NULL` (runs that started before this fix) will never get `finished_at` set — they will be invisible to the API's cluster filter and to `prune_old_cluster_runs`'s recency sort (it falls back to `started_at`). No migration needed; normal behaviour.
+- The `memswap_limit: 7g` on pipeline-daemon (equal to `mem_limit`) disables swap for the container. This is intentional — an OOM-kill is recoverable (restart + reap stale lock); swap thrashing at 12 GB/s is not.
+
+---
+
+## D37. Embed the Editorial AI Analyst as a separate, API-backed package
+
+**Context.** A standalone "Editorial AI Analyst" app (OpenAI-backed FastAPI + Next.js)
+must merge into content-intelligence as one app, without entangling its existing
+local-ML pipeline.
+
+**Options considered.**
+- Weave analyze/recommendation into existing modules + the pipeline daemon
+- New self-contained `analyst` package, API-backed, separate from the daemon
+- Keep two apps behind a reverse proxy
+
+**Decision.** New self-contained `analyst` package. Interactive analyze/recommendation
+are served via an OpenAI-compatible client (local = local-server base URL, API = hosted).
+No in-process model, no daemon involvement. Frontend ported into the Vite app as a new
+`@ei-fe/*` feature. LangChain/BigQuery/Lambda/slowapi dropped.
+
+**Rationale.** Preserves "`api` never imports ML", keeps the daemon a singleton owning
+only the clustering pipeline, and reduces the local/API switch to a base-URL swap.
+
+**Implication.** The analyst has its own config block and no DB tables initially.
+Unifying `labeling` onto the same client, persistence, and live BigQuery are future work.

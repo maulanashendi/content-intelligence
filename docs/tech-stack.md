@@ -66,6 +66,12 @@ Switching the embedding model requires a schema migration (vector dimension) and
 | `google-api-python-client` 2.0+ | Google Search Console API client | Official Google client for Search Analytics API v1 |
 | `google-auth` 2.0+ | GSC service account credentials | Handles service account JWT auth for Google APIs |
 
+## AI Analyst
+
+| Library | Used for | Rationale |
+|---------|----------|-----------|
+| `openai` 1.x | OpenAI-compatible HTTP client for the `analyst` package | Local vs API = base-URL swap, no torch. Stateless analyze + recommendation endpoints. |
+
 ## Operational
 
 | Library | Used for | Rationale |

@@ -28,6 +28,7 @@ All backend commands run from `backend/`.
 | `scoring`    | velocity, novelty, coverage        | sklearn, numpy                             |
 | `api`        | FastAPI read-only                  | NO torch, NO ML imports                    |
 | `pipeline`   | Long-running daemon (D24)          | reactive ingest+embed, scheduled cluster+label; imports all batch modules |
+| `analyst`    | Editorial AI Analyst: article scoring + recommendation | openai SDK; OpenAI-compatible; no ML import |
 
 Rule: `api` never imports ML modules. Batch modules never import each other — share via `core`. Cross-module imports must be declared in `pyproject.toml`.
 
@@ -52,7 +53,7 @@ MVP is shipped. Post-MVP work is hardening, governed by four SOPs. Read the rele
 
 ## API endpoints
 
-Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/{id}`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream.
+Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/{id}`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream. Stateless analyst endpoints (no DB writes): `POST /api/v1/analyst/analyze`, `POST /api/v1/analyst/analyze/batch`, `POST /api/v1/analyst/recommendation`.
 
 ## Schema
 

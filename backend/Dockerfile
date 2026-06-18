@@ -23,12 +23,14 @@ COPY packages/clustering/pyproject.toml  packages/clustering/pyproject.toml
 COPY packages/labeling/pyproject.toml    packages/labeling/pyproject.toml
 COPY packages/scoring/pyproject.toml     packages/scoring/pyproject.toml
 COPY packages/pipeline/pyproject.toml    packages/pipeline/pyproject.toml
+COPY packages/analyst/pyproject.toml     packages/analyst/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-workspace --no-dev --frozen
 
 # ============ API build — add source, install workspace packages ============
 FROM deps AS api-build
 COPY packages/core/src    packages/core/src
+COPY packages/analyst/src packages/analyst/src
 COPY packages/api/src     packages/api/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --package api --no-dev --frozen
@@ -58,7 +60,8 @@ CMD ["uvicorn", "api.main:app", \
      "--port", "8000", \
      "--reload", \
      "--reload-dir", "/app/packages/core/src", \
-     "--reload-dir", "/app/packages/api/src"]
+     "--reload-dir", "/app/packages/api/src", \
+     "--reload-dir", "/app/packages/analyst/src"]
 
 # ============ Ingest build — add source, install workspace packages ============
 FROM deps AS ingest-build
@@ -117,10 +120,18 @@ WORKDIR /app
 COPY --from=pipeline-build /app/.venv              /app/.venv
 COPY --from=pipeline-build /app/packages           /app/packages
 COPY --from=pipeline-build /app/playwright-browsers /app/playwright-browsers
+# Cap all CPU-BLAS/OpenMP thread pools to 4 so that two sequential ML jobs
+# (embedder + Gemma GGUF) each get predictable headroom on a 12-core host
+# without thrashing. Llama n_threads is set in llm.py via the same constant.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/models \
-    PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
+    PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers \
+    OMP_NUM_THREADS=4 \
+    OPENBLAS_NUM_THREADS=4 \
+    MKL_NUM_THREADS=4 \
+    NUMEXPR_NUM_THREADS=4 \
+    TOKENIZERS_PARALLELISM=false
 ENTRYPOINT ["python", "-m", "pipeline.cli"]
 CMD ["run-daily"]
 
@@ -137,6 +148,11 @@ COPY --from=pipeline-build /app/playwright-browsers  /app/playwright-browsers
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/models \
-    PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
+    PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers \
+    OMP_NUM_THREADS=4 \
+    OPENBLAS_NUM_THREADS=4 \
+    MKL_NUM_THREADS=4 \
+    NUMEXPR_NUM_THREADS=4 \
+    TOKENIZERS_PARALLELISM=false
 ENTRYPOINT ["python", "-m", "pipeline.cli"]
 CMD ["run-daily"]
