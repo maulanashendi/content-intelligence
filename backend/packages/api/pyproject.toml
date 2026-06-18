@@ -5,6 +5,7 @@ description = "FastAPI HTTP layer — read-only endpoints serving the dashboard"
 requires-python = ">=3.11"
 dependencies = [
   "core",
+  "analyst",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.32",
   "python-json-logger>=2.0",
@@ -14,6 +15,7 @@ dependencies = [
 
 [tool.uv.sources]
 core = { workspace = true }
+analyst = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

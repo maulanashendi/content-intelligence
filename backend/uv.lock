@@ -93,6 +93,7 @@ name = "api"
 version = "0.1.0"
 source = { editable = "packages/api" }
 dependencies = [
+    { name = "analyst" },
     { name = "core" },
     { name = "fastapi" },
     { name = "pydantic" },
@@ -103,6 +104,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "analyst", editable = "packages/analyst" },
     { name = "core", editable = "packages/core" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic", specifier = ">=2" },
