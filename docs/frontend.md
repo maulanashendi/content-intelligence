@@ -205,6 +205,7 @@ URL is the source of truth for navigation state.
 | `/clustering` | `app/routes/clustering.tsx` | inline (dummy data) | — (proposed: `useLatestClusterRun`) | `GET /api/v1/cluster-runs/latest` (PROPOSED) |
 | `/sources` | `app/routes/sources.tsx` | inline | `useSources`, `useToggleSource`, `useDeleteSource` | `GET/PATCH/DELETE /api/v1/sources` |
 | `/sources/rss` | `app/routes/input-rss.tsx` | inline | `useCreateSource` | `POST /api/v1/sources` |
+| `/analyst` | `app/routes/analyst.tsx` | `@ei-fe/features/analyst` | `useAnalyzeArticle`, `useRecommendation` | `POST /api/v1/analyst/analyze`, `POST /api/v1/analyst/recommendation` |
 | `*` | `app/routes/not-found.tsx` | — | — | — |
 
 Route files are intentionally thin: read URL params, call the hook, render the feature view, handle URL-derived state. Routes with more complex UI (`/clustering`, `/sources`, `/sources/rss`) are self-contained inline — they do not have a dedicated feature package because they fall below the threshold warranting one. Composition-heavy views (`/morning`, `/clusters/:id`, `/article`) live in `@ei-fe/features/*`.
