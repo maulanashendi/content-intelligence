@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
 import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys, clusterRunKeys } from "./keys.js"
-import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema } from "./schemas.js"
+import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema, QuadrantSummarySchema, AnalyzeResultSchema, RecommendationOutputSchema } from "./schemas.js"
 import type { SourceUpdate } from "./schemas.js"
 
 export function useMorningClusters() {
@@ -11,10 +11,11 @@ export function useMorningClusters() {
   })
 }
 
-export function useCurrentClusters(order: "asc" | "desc" = "desc") {
+export function useCurrentClusters(order: "asc" | "desc" = "desc", enabled: boolean = true) {
   return useQuery({
     queryKey: clusterKeys.current(order),
     queryFn: () => apiGet(`/clusters/current?order=${order}`, ClusterListResponseSchema),
+    enabled,
   })
 }
 
@@ -92,6 +93,23 @@ export function useTrendSignals(limit: number = 10) {
   })
 }
 
+export function useQuadrantSummary() {
+  return useQuery({
+    queryKey: clusterKeys.quadrantSummary(),
+    queryFn: () => apiGet("/clusters/quadrant-summary", QuadrantSummarySchema),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useClustersByQuadrant(quadrant: string | null, limit = 8) {
+  return useQuery({
+    queryKey: clusterKeys.byQuadrant(quadrant ?? ""),
+    queryFn: () => apiGet(`/clusters/quadrant/${quadrant}?limit=${limit}`, ClusterListResponseSchema),
+    enabled: !!quadrant,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 export function useLatestClusterRun() {
   return useQuery({
     queryKey: clusterRunKeys.latest(),
@@ -128,5 +146,19 @@ export function useToggleSource() {
       if (ctx?.prev !== undefined) qc.setQueryData(sourceKeys.list(), ctx.prev)
     },
     onSettled: () => qc.invalidateQueries({ queryKey: sourceKeys.list() }),
+  })
+}
+
+export function useAnalyzeArticle() {
+  return useMutation({
+    mutationFn: (body: { title: string; content: string }) =>
+      apiPost("/analyst/analyze", body, AnalyzeResultSchema),
+  })
+}
+
+export function useRecommendation() {
+  return useMutation({
+    mutationFn: (intent: string) =>
+      apiPost("/analyst/recommendation", { intent }, RecommendationOutputSchema),
   })
 }
