@@ -9,4 +9,11 @@ export {
   TrendingUp,
   Loader2,
   ArrowLeft,
+  Sparkles,
+  Send,
+  Bot,
+  User,
+  BarChart3,
+  Plus,
+  ArrowUp,
 } from "lucide-react"
