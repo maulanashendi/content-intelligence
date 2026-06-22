@@ -6,13 +6,14 @@ export type SubmitPayload =
   | { kind: "analyze"; title: string; content: string }
   | { kind: "recommendation"; intent: string }
 
-export function Composer({ mode, onModeChange, onSubmit, disabled }: {
+export function Composer({ mode, onModeChange, onSubmit, disabled, initialText }: {
   mode: Mode
   onModeChange: (m: Mode) => void
   onSubmit: (p: SubmitPayload) => void
   disabled: boolean
+  initialText?: string
 }) {
-  const [text, setText] = useState("")
+  const [text, setText] = useState(initialText ?? "")
   const [error, setError] = useState<string | null>(null)
 
   function submit() {

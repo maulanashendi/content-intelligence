@@ -112,7 +112,7 @@ export function AnalystView({ initialTitle, initialMode }: { initialTitle?: stri
 
       <div style={{ borderTop: "1px solid var(--line)", background: "var(--bg-elev)" }}>
         <div className="mx-auto max-w-[860px] px-6 py-3.5">
-          <Composer mode={mode} onModeChange={setMode} onSubmit={handleSubmit} disabled={busy} />
+          <Composer mode={mode} onModeChange={setMode} onSubmit={handleSubmit} disabled={busy} initialText={initialTitle} />
         </div>
       </div>
     </div>
