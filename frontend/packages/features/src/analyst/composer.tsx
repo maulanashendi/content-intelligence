@@ -63,6 +63,7 @@ export function Composer({ mode, onModeChange, onSubmit, disabled, initialText }
           onKeyDown={onKeyDown}
           rows={1}
           placeholder={mode === "analyze" ? "Tempel judul + isi draf untuk dianalisis…" : "Mis. artikel ekonomi paling banyak dibaca minggu ini…"}
+          aria-label={mode === "analyze" ? "Tempel judul dan isi draf untuk dianalisis" : "Tulis permintaan rekomendasi"}
           className="flex-1 resize-none bg-transparent border-0 outline-none text-[13px] leading-normal max-h-40"
           style={{ color: "var(--fg)" }}
         />

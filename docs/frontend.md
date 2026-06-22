@@ -212,7 +212,7 @@ Route files are intentionally thin: read URL params, call the hook, render the f
 
 There are no nested layouts, route loaders, or route-level data fetching. TanStack Query handles fetching at component mount.
 
-The only query params in v1 are `page` and `page_size` on `/article`. Other routes have no filter params.
+Query params in v1: `page` and `page_size` on `/article`; `title` on `/analyst` (pre-fills the analyze composer with a draft title). Other routes have no filter params.
 
 ## Data layer
 

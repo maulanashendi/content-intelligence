@@ -9,7 +9,7 @@ import { AnalyzeResultCard } from "./analyze-result.js"
 import { RecommendationResultCard } from "./recommendation-result.js"
 
 type Msg =
-  | { id: string; role: "user"; command: string; text: string }
+  | { id: string; role: "user"; command: string; text: string; payload: SubmitPayload }
   | { id: string; role: "analyze"; title: string; data: AnalyzeResult }
   | { id: string; role: "reco"; data: RecommendationOutput }
   | { id: string; role: "error"; text: string }
@@ -42,7 +42,7 @@ export function AnalystView({ initialTitle, initialMode }: { initialTitle?: stri
 
   async function handleSubmit(p: SubmitPayload) {
     if (p.kind === "analyze") {
-      push({ role: "user", command: "/analyze · draf artikel", text: p.title })
+      push({ role: "user", command: "/analyze · draf artikel", text: p.title, payload: p })
       push({ role: "loading" })
       try {
         const data = await analyze.mutateAsync({ title: p.title, content: p.content })
@@ -51,7 +51,7 @@ export function AnalystView({ initialTitle, initialMode }: { initialTitle?: stri
         replaceLoading({ role: "error", text: isApiError(e) ? e.message : "Analisis gagal. Coba lagi." })
       }
     } else {
-      push({ role: "user", command: "/recommendation", text: p.intent })
+      push({ role: "user", command: "/recommendation", text: p.intent, payload: p })
       push({ role: "loading" })
       try {
         const data = await reco.mutateAsync(p.intent)
@@ -102,7 +102,24 @@ export function AnalystView({ initialTitle, initialMode }: { initialTitle?: stri
             messages.map((m) => {
               if (m.role === "user") return <UserBubble key={m.id} command={m.command} text={m.text} />
               if (m.role === "loading") return <BotRow key={m.id}><LoadingDots /></BotRow>
-              if (m.role === "error") return <BotRow key={m.id}><div className="text-[13px] px-3.5 py-2.5 rounded-[10px]" style={{ background: "var(--bad-soft)", color: "var(--bad)", border: "1px solid oklch(0.58 0.18 25 / 0.25)" }}>{m.text}</div></BotRow>
+              if (m.role === "error") {
+                const idx = messages.indexOf(m)
+                const prevUser = messages.slice(0, idx).reverse().find((x) => x.role === "user")
+                return (
+                  <BotRow key={m.id}>
+                    <div role="alert" className="rounded-[10px] p-3.5" style={{ background: "var(--bad-soft)", border: "1px solid oklch(0.58 0.18 25 / 0.25)" }}>
+                      <p className="text-[13px] m-0" style={{ color: "var(--bad)" }}>{m.text}</p>
+                      {prevUser && prevUser.role === "user" && (
+                        <button onClick={() => handleSubmit(prevUser.payload)} disabled={busy}
+                          className="mt-2 text-[12px] px-2.5 py-1 rounded-[6px]"
+                          style={{ color: "var(--bad)", border: "1px solid oklch(0.58 0.18 25 / 0.35)" }}>
+                          Coba lagi
+                        </button>
+                      )}
+                    </div>
+                  </BotRow>
+                )
+              }
               if (m.role === "analyze") return <BotRow key={m.id}><AnalyzeResultCard title={m.title} result={m.data} /></BotRow>
               return <BotRow key={m.id}><RecommendationResultCard result={m.data} /></BotRow>
             })
