@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom"
 const EDITORIAL_NAV = [
   { to: "/morning", label: "Morning Brief" },
   { to: "/article", label: "Artikel" },
+  { to: "/analyst", label: "AI Analyst" },
 ]
 
 const PIPELINE_NAV = [

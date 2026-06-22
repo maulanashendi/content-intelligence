@@ -1,0 +1,29 @@
+{
+  "filters_applied": { "category": "Ekonomi", "days_lookback": 7, "user_need_category": null },
+  "sample_data": [
+    { "judul": "Kurs Rupiah Melemah, BI Siapkan Intervensi", "page_views": 142300, "user_need": "Update me" },
+    { "judul": "Proyeksi Pertumbuhan GDP 2026: Optimisme Terjaga", "page_views": 98700, "user_need": "Educate me" },
+    { "judul": "UMKM Kreatif Bertahan di Tengah Tekanan Inflasi", "page_views": 87400, "user_need": "Inspire me" },
+    { "judul": "Panduan Investasi Reksa Dana untuk Pemula", "page_views": 76200, "user_need": "Help me" },
+    { "judul": "Ekspor Nonmigas Naik 12%: Sektor Mana yang Unggul?", "page_views": 61800, "user_need": "Give me perspective" }
+  ],
+  "insights": [
+    {
+      "title": "Konten 'Update me' mendominasi performa",
+      "insight": "4 dari 5 artikel dengan views tertinggi minggu ini berfokus pada perkembangan terkini. Pembaca ekonomi Tempo lebih responsif terhadap berita yang langsung relevan dengan kondisi saat ini.",
+      "action": "Prioritaskan artikel reaktif terhadap pergerakan pasar dan kebijakan BI dalam 48 jam ke depan"
+    },
+    {
+      "title": "Gap coverage: perspektif UMKM",
+      "insight": "Artikel tentang dampak kebijakan ekonomi pada UMKM mendapat engagement 23% lebih tinggi dari rata-rata, tapi hanya 2 artikel diterbitkan minggu ini.",
+      "action": "Tambah 1–2 artikel sudut pandang pelaku usaha kecil setiap minggu"
+    },
+    {
+      "title": "Peluang: artikel edukasi investasi",
+      "insight": "Panduan investasi konsisten masuk 10 besar views meski bukan berita terkini, menunjukkan demand evergreen yang belum sepenuhnya dilayani.",
+      "action": "Buat seri 'Investasi Cerdas' dengan jadwal terbit mingguan setiap Selasa"
+    }
+  ],
+  "summary": "Minggu ini, konten ekonomi Tempo dikuasai oleh berita reaktif seputar kebijakan moneter. Meskipun performa solid, ada celah nyata di coverage perspektif pelaku UMKM dan konten edukasi investasi yang terbukti memiliki daya tahan tinggi. Redaksi dapat mengoptimalkan mix konten dengan mempertahankan kecepatan breaking news sambil memperkuat lapisan analitik dan panduan praktis.",
+  "data_source": "airflow_json"
+}

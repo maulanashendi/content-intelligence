@@ -1,0 +1,47 @@
+{
+  "features": {
+    "f01_breaking": { "status": 0, "reasoning": "Bukan berita terkini atau spot news." },
+    "f02_live_developing": { "status": 0, "reasoning": "Tidak ada pembaruan real-time." },
+    "f03_timeless": { "status": 1, "reasoning": "Topik relevan jangka panjang tentang kebijakan ekonomi." },
+    "f04_explanatory": { "status": 1, "reasoning": "Artikel menjelaskan mekanisme kebijakan secara mendalam." },
+    "f05_data_investigative": { "status": 1, "reasoning": "Menggunakan data BPS dan Bank Indonesia." },
+    "f06_author_voice": { "status": 0, "reasoning": "Netral, tidak ada opini personal penulis." },
+    "f07_depth_analysis": { "status": 1, "reasoning": "Menganalisis dampak jangka pendek dan panjang kebijakan." },
+    "f08_expert_quotes": { "status": 1, "reasoning": "Mengutip ekonom dari UI dan INDEF." },
+    "f09_emotional_positive": { "status": 0, "reasoning": "Tidak ada nada emosional positif yang menonjol." },
+    "f10_conflict_tragedy": { "status": 0, "reasoning": "Tidak ada konflik atau tragedi." },
+    "f11_light_humor": { "status": 0, "reasoning": "Artikel serius dan formal." },
+    "f12_actionable_steps": { "status": 1, "reasoning": "Memberikan saran konkret bagi investor dan pelaku usaha." },
+    "f13_collective_call": { "status": 0, "reasoning": "Tidak ada ajakan kolektif." },
+    "f14_community_identity": { "status": 0, "reasoning": "Tidak ada identitas komunitas spesifik." },
+    "f15_listicle_format": { "status": 0, "reasoning": "Format narasi, bukan listicle." },
+    "f16_social_buzz": { "status": 0, "reasoning": "Topik serius, bukan konten viral." }
+  },
+  "editorial_feedback": {
+    "recommendation_judul": [
+      "Pertimbangkan judul yang menyebutkan angka spesifik, mis. 'Inflasi 3,2%: Dampak Nyata bagi Dompet Anda'",
+      "Gunakan kata kunci 'kebijakan BI' agar lebih mudah ditemukan di pencarian"
+    ],
+    "missing_info": [
+      "Belum ada proyeksi dampak terhadap kelompok rentan (pekerja informal, petani)",
+      "Perbandingan dengan kebijakan serupa di negara ASEAN lain belum disertakan"
+    ],
+    "bias_check": [
+      "Semua narasumber dari kalangan akademisi dan lembaga pemerintah — pertimbangkan perspektif pengusaha kecil",
+      "Framing 'kebijakan positif' di paragraf 3 perlu didukung data yang lebih kuat"
+    ],
+    "next_angle": [
+      "Wawancara langsung dengan pelaku UMKM yang terdampak",
+      "Tracking kebijakan ini 6 bulan ke depan untuk laporan follow-up",
+      "Komparasi respon pasar saham sebelum dan sesudah pengumuman"
+    ]
+  },
+  "user_needs": [
+    { "category": "Educate me", "score": 88 },
+    { "category": "Give me perspective", "score": 72 },
+    { "category": "Update me", "score": 45 },
+    { "category": "Help me", "score": 38 },
+    { "category": "Inspire me", "score": 12 },
+    { "category": "Divert me", "score": 5 }
+  ]
+}

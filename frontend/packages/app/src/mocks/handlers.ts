@@ -3,6 +3,8 @@ import morningClusters from "../../../api/tests/mocks/fixtures/morning-clusters.
 import deferredClusters from "../../../api/tests/mocks/fixtures/deferred-clusters.json"
 import clusterDetail from "../../../api/tests/mocks/fixtures/cluster-detail.json"
 import clusterDetailsMap from "../../../api/tests/mocks/fixtures/cluster-details-map.json"
+import analystAnalyze from "./fixtures/analyst-analyze.json"
+import analystRecommendation from "./fixtures/analyst-recommendation.json"
 
 const BASE = `${(import.meta.env.BASE_URL ?? "/").replace(/\/$/, "")}/api/v1`
 
@@ -218,4 +220,6 @@ export const handlers = [
   http.get(`${BASE}/pipeline/status`, () =>
     HttpResponse.json({ cluster_label_score: null, analysis: null }),
   ),
+  http.post(`${BASE}/analyst/analyze`, () => HttpResponse.json(analystAnalyze)),
+  http.post(`${BASE}/analyst/recommendation`, () => HttpResponse.json(analystRecommendation)),
 ]

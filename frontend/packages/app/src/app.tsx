@@ -7,6 +7,7 @@ import { NotFoundRoute } from "./routes/not-found.js"
 import { ClusteringRoute } from "./routes/clustering.js"
 import { SourcesRoute } from "./routes/sources.js"
 import { InputRssRoute } from "./routes/input-rss.js"
+import { AnalystRoute } from "./routes/analyst.js"
 
 function AppShell() {
   return (
@@ -33,6 +34,7 @@ const router = createBrowserRouter(
         { path: "clustering", element: <ClusteringRoute /> },
         { path: "sources", element: <SourcesRoute /> },
         { path: "sources/rss", element: <InputRssRoute /> },
+        { path: "analyst", element: <AnalystRoute /> },
         { path: "*", element: <NotFoundRoute /> },
       ],
     },
