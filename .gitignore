@@ -43,3 +43,6 @@ hf_cache/
 # Logs
 *.log
 backend/logs/
+
+# Temporary docs (local only)
+docs/tmp/
