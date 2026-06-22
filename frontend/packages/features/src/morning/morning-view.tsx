@@ -3,10 +3,11 @@ import { useMemo } from "react"
 import { useQueryClient, useQueries } from "@tanstack/react-query"
 import { useMorningClusters, useLatestClusterRun, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
 import type { ClusterDetail } from "@ei-fe/api"
-import { LoadingState, ErrorState } from "@ei-fe/ui"
+import { Kpi, LoadingState, ErrorState } from "@ei-fe/ui"
 import { ArticleClustersCard } from "./article-clusters-card.js"
 import { ClusterForceGraph } from "./cluster-force-graph.js"
 import { EditorialBriefing } from "./editorial-briefing.js"
+import { OpportunityMatrixCard } from "./opportunity-matrix-card.js"
 import { TrendSignalCard } from "./trend-signal-card.js"
 
 function KpiRow({ clusters }: { clusters: { tempo_covered: boolean | null; underperformed: boolean | null; member_count: number | null; trend_velocity: number | null }[] }) {
@@ -19,23 +20,11 @@ function KpiRow({ clusters }: { clusters: { tempo_covered: boolean | null; under
       : 0
 
   return (
-    <div className="grid grid-4" style={{ padding: "20px 28px 0" }}>
-      <div className="kpi">
-        <div className="kpi-label">Belum Ditulis</div>
-        <div className="kpi-value">{uncovered}</div>
-      </div>
-      <div className="kpi">
-        <div className="kpi-label">Underperformed</div>
-        <div className="kpi-value">{underperformed}</div>
-      </div>
-      <div className="kpi">
-        <div className="kpi-label">Total Artikel</div>
-        <div className="kpi-value">{totalArticles.toLocaleString("id-ID")}</div>
-      </div>
-      <div className="kpi">
-        <div className="kpi-label">Avg Velocity</div>
-        <div className="kpi-value">{avgVelocity.toFixed(2)}</div>
-      </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, padding: "20px 28px 0" }}>
+      <Kpi label="Belum Ditulis" value={uncovered} />
+      <Kpi label="Underperformed" value={underperformed} />
+      <Kpi label="Total Artikel" value={totalArticles.toLocaleString("id-ID")} />
+      <Kpi label="Avg Velocity" value={avgVelocity.toFixed(2)} />
     </div>
   )
 }
@@ -111,6 +100,10 @@ export function MorningView() {
       <KpiRow clusters={clusters} />
 
       <div style={{ padding: "20px 28px 0" }}>
+        <OpportunityMatrixCard clusters={clusters} />
+      </div>
+
+      <div style={{ padding: "20px 28px 0" }}>
         <ClusterForceGraph
           details={loadedDetails}
           onClusterClick={(id) => navigate(`/clusters/${id}`)}
@@ -128,7 +121,11 @@ export function MorningView() {
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <EditorialBriefing clusters={clusters} />
-          <ArticleClustersCard onSelect={(id) => navigate(`/clusters/${id}`)} />
+          <ArticleClustersCard
+            clusters={clusters}
+            runAlgorithm={run?.algorithm}
+            onSelect={(id) => navigate(`/clusters/${id}`)}
+          />
         </div>
         <TrendSignalCard />
       </div>
