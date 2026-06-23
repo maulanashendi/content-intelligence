@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
 import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys, clusterRunKeys } from "./keys.js"
-import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema, QuadrantSummarySchema, AnalyzeResultSchema, RecommendationOutputSchema, VolumeTrendResponseSchema } from "./schemas.js"
+import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema, QuadrantSummarySchema, AnalyzeResultSchema, RecommendationOutputSchema, VolumeTrendResponseSchema, BentoListResponseSchema } from "./schemas.js"
 import type { SourceUpdate } from "./schemas.js"
 
 export function useMorningClusters() {
@@ -167,6 +167,24 @@ export function useVolumeTrend(bucket: "hour" | "day") {
   return useQuery({
     queryKey: articleKeys.volumeTrend(bucket),
     queryFn: () => apiGet(`/articles/volume-trend?bucket=${bucket}`, VolumeTrendResponseSchema),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useClusterBento(limit: number) {
+  return useQuery({
+    queryKey: clusterKeys.bento(limit),
+    queryFn: () => apiGet(`/clusters/bento?limit=${limit}&offset=0`, BentoListResponseSchema),
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useClusterVolumeTrend(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: clusterKeys.volumeTrend(id),
+    queryFn: () => apiGet(`/clusters/${id}/volume-trend?bucket=hour`, VolumeTrendResponseSchema),
+    enabled,
     staleTime: 5 * 60 * 1000,
   })
 }

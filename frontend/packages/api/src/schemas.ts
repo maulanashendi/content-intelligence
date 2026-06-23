@@ -70,6 +70,30 @@ export const ClusterListResponseSchema = z.object({
 })
 export type ClusterListResponse = z.infer<typeof ClusterListResponseSchema>
 
+export const BentoCardSchema = z.object({
+  id: z.string().uuid(),
+  label: z.string().nullable(),
+  editorial_quadrant: z.string().nullable(),
+  trend_velocity: z.number().nullable(),
+  competitor_count: z.number().int().nullable(),
+  trend_match_count: z.number().int().nullable(),
+  member_count: z.number().int().nullable(),
+  views: z.number().int(),
+  internal_article_count: z.number().int(),
+  last_competitor_at: z.string().nullable(),
+  last_internal_at: z.string().nullable(),
+})
+export type BentoCard = z.infer<typeof BentoCardSchema>
+
+export const BentoListResponseSchema = z.object({
+  cards: z.array(BentoCardSchema),
+  total: z.number().int(),
+  served_at: z.string().datetime().nullable(),
+  is_stale: z.boolean(),
+  max_age_hours: z.number().int(),
+})
+export type BentoListResponse = z.infer<typeof BentoListResponseSchema>
+
 export const ArticleMemberSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),

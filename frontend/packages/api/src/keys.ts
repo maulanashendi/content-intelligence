@@ -5,6 +5,8 @@ export const clusterKeys = {
   detail: (id: string) => [...clusterKeys.all, "detail", id] as const,
   quadrantSummary: () => [...clusterKeys.all, "quadrant-summary"] as const,
   byQuadrant: (quadrant: string) => [...clusterKeys.all, "by-quadrant", quadrant] as const,
+  bento: (limit: number) => [...clusterKeys.all, "bento", limit] as const,
+  volumeTrend: (id: string) => [...clusterKeys.all, "volume-trend", id] as const,
 }
 
 export const articleKeys = {
