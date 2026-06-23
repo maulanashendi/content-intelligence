@@ -35,7 +35,9 @@ async def run() -> int:
                 f"{title}\n{body}" if (body := (content or first_paragraph)) else title
                 for _, title, first_paragraph, content in rows
             ]
-            vectors = await asyncio.to_thread(embedder.encode, texts, normalize_embeddings=True)
+            vectors = await asyncio.to_thread(
+                embedder.encode, texts, normalize_embeddings=True, show_progress_bar=False
+            )
             if vectors.shape[1] != 768:
                 raise ValueError(f"embedding dim mismatch: got {vectors.shape[1]}, expected 768")
 

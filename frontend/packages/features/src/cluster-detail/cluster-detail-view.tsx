@@ -8,6 +8,7 @@ import { ArticleList } from "./article-list.js"
 import { FirstReportCard } from "./first-report-card.js"
 import { AuditTrailCard } from "./audit-trail-card.js"
 import { GeneratedAnglesCard } from "./generated-angles-card.js"
+import { RelatedClustersCard } from "./related-clusters-card.js"
 
 interface ClusterDetailViewProps {
   id: string
@@ -62,8 +63,9 @@ export function ClusterDetailView({ id }: ClusterDetailViewProps) {
           <ArticleList members={data.members} />
         </div>
 
-        {/* Right: first report + audit trail */}
+        {/* Right: related clusters + first report + audit trail */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <RelatedClustersCard cluster={data} />
           <FirstReportCard members={data.members} clusterLabel={data.label} />
           <AuditTrailCard cluster={data} />
         </div>

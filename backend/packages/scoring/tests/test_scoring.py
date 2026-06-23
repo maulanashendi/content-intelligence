@@ -147,6 +147,10 @@ async def test_run_persists_all_six_fields(
     assert insight.tempo_covered is True
     assert insight.last_internal_days_ago == 2
     assert insight.underperformed is False
+    assert insight.demand_score is not None
+    assert insight.high_demand is not None
+    assert insight.performance_level is not None
+    assert insight.editorial_quadrant is not None
 
 
 async def test_tempo_covered_when_internal_member(
@@ -204,11 +208,12 @@ async def test_trend_match_count_excludes_stale_signals(
         interest_score=70.0,
         captured_at=NOW - timedelta(hours=12),
     )
+    # stale = older than scoring_trend_window_days (7d)
     stale_signal = TrendSignal(
         id=uuid.uuid4(),
         keyword="stale",
         interest_score=70.0,
-        captured_at=NOW - timedelta(hours=48),
+        captured_at=NOW - timedelta(days=8),
     )
     session.add_all([source, run_row, cluster, article, fresh_signal, stale_signal])
     await session.flush()
@@ -227,6 +232,97 @@ async def test_trend_match_count_excludes_stale_signals(
         await session.execute(select(ClusterInsight).where(ClusterInsight.cluster_id == cluster.id))
     ).scalar_one()
     assert insight.trend_match_count == 1
+
+
+async def test_trend_match_deduplicates_keyword_captures(
+    session: AsyncSession, _session_patcher
+) -> None:
+    """Multiple trend_signal rows for the same keyword (from 10-min poll cadence)
+    must count as 1 match, not N."""
+    source = ContentSource(
+        id=uuid.uuid4(),
+        name="Detik",
+        url=f"https://detik-{uuid.uuid4()}.test",
+        source_type=SourceType.rss,
+    )
+    run_row = ClusterRun(id=uuid.uuid4())
+    cluster = ArticleCluster(id=uuid.uuid4(), run_id=run_row.id, is_current=True)
+    article = Article(
+        id=uuid.uuid4(),
+        source_id=source.id,
+        title="Article",
+        url=f"https://detik.test/a-{uuid.uuid4()}",
+        published_at=NOW - timedelta(hours=1),
+    )
+    # Same keyword captured 3 times at different intervals (simulates 10-min poll)
+    captures = [
+        TrendSignal(
+            id=uuid.uuid4(),
+            keyword="trending topic",
+            interest_score=50.0 + i * 10,
+            captured_at=NOW - timedelta(hours=i + 1),
+        )
+        for i in range(3)
+    ]
+    session.add_all([source, run_row, cluster, article, *captures])
+    await session.flush()
+    session.add(ArticleClusterMember(cluster_id=cluster.id, article_id=article.id))
+    for cap in captures:
+        session.add(TrendSignalArticle(trend_signal_id=cap.id, article_id=article.id))
+    await session.commit()
+
+    await score_run(now=NOW.replace(tzinfo=UTC))
+
+    insight = (
+        await session.execute(select(ClusterInsight).where(ClusterInsight.cluster_id == cluster.id))
+    ).scalar_one()
+    # 3 captures of the same keyword → counts as 1 trending topic
+    assert insight.trend_match_count == 1
+    # weighted score uses peak interest (70.0), not sum (150.0)
+    assert insight.weighted_trend_score == pytest.approx(70.0)
+
+
+async def test_weighted_trend_score_sums_peak_per_keyword(
+    session: AsyncSession, _session_patcher
+) -> None:
+    """weighted_trend_score = sum of per-keyword MAX(interest_score), not sum of all captures."""
+    source = ContentSource(
+        id=uuid.uuid4(),
+        name="Detik",
+        url=f"https://detik-{uuid.uuid4()}.test",
+        source_type=SourceType.rss,
+    )
+    run_row = ClusterRun(id=uuid.uuid4())
+    cluster = ArticleCluster(id=uuid.uuid4(), run_id=run_row.id, is_current=True)
+    article = Article(
+        id=uuid.uuid4(),
+        source_id=source.id,
+        title="Article",
+        url=f"https://detik.test/a-{uuid.uuid4()}",
+        published_at=NOW - timedelta(hours=1),
+    )
+    # keyword A: captures at 30 and 80 → peak = 80
+    # keyword B: single capture at 50 → peak = 50
+    # expected weighted_trend_score = 80 + 50 = 130 (not 30+80+50=160)
+    signals = [
+        TrendSignal(id=uuid.uuid4(), keyword="kw-a", interest_score=30.0, captured_at=NOW - timedelta(hours=3)),
+        TrendSignal(id=uuid.uuid4(), keyword="kw-a", interest_score=80.0, captured_at=NOW - timedelta(hours=1)),
+        TrendSignal(id=uuid.uuid4(), keyword="kw-b", interest_score=50.0, captured_at=NOW - timedelta(hours=2)),
+    ]
+    session.add_all([source, run_row, cluster, article, *signals])
+    await session.flush()
+    session.add(ArticleClusterMember(cluster_id=cluster.id, article_id=article.id))
+    for sig in signals:
+        session.add(TrendSignalArticle(trend_signal_id=sig.id, article_id=article.id))
+    await session.commit()
+
+    await score_run(now=NOW.replace(tzinfo=UTC))
+
+    insight = (
+        await session.execute(select(ClusterInsight).where(ClusterInsight.cluster_id == cluster.id))
+    ).scalar_one()
+    assert insight.trend_match_count == 2
+    assert insight.weighted_trend_score == pytest.approx(130.0)
 
 
 async def test_underperformed_requires_all_three_thresholds(

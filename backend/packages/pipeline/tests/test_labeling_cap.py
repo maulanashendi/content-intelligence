@@ -44,7 +44,8 @@ async def _make_cluster(
     session.add_all([cluster, article])
     await session.flush()
     session.add(ArticleClusterMember(cluster_id=cluster.id, article_id=article.id))
-    for offset, n in ((timedelta(hours=1), fresh_trends), (timedelta(hours=48), stale_trends)):
+    # stale = older than scoring_trend_window_days (7d)
+    for offset, n in ((timedelta(hours=1), fresh_trends), (timedelta(days=8), stale_trends)):
         for _ in range(n):
             ts = TrendSignal(
                 id=uuid.uuid4(),
@@ -87,7 +88,7 @@ async def test_caps_to_top_trend_then_member(monkeypatch) -> None:
         selected, total = await _select_cluster_ids_for_labeling(session)
 
     assert total == 4
-    # Capped at 2: the two trend-matching clusters win; stale trends on c don't count.
+    # Capped at 2: the two fresh-trending clusters win; signals >7d on c don't count.
     assert selected == [ids["a"], ids["b"]]
 
 

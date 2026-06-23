@@ -9,6 +9,7 @@ from core.models import (
     ArticleClusterMember,
     ClusterInsight,
     ClusterRun,
+    ClusterRunStage,
     ContentSource,
 )
 from fastapi import APIRouter, HTTPException, Query
@@ -37,9 +38,14 @@ class ClusterSummary(BaseModel):
     last_internal_days_ago: int | None
     underperformed: bool | None
     competitor_freshness_days: int | None
+    demand_score: float | None
+    high_demand: bool | None
+    performance_level: str | None
+    editorial_quadrant: str | None
     what_happened: str | None
     parties_involved: list[str] | None
     editorial_angle: str | None
+    bullet_insights: list[str] | None
     insight_calculated_at: UtcDateTime | None
 
 
@@ -63,7 +69,17 @@ class ArticleSummary(BaseModel):
 class ClusterDetail(ClusterSummary):
     members: list[ArticleSummary]
     sub_clusters: list[ClusterSummary] | None
+    parent_cluster: ClusterSummary | None
+    sibling_clusters: list[ClusterSummary] | None
     is_stale: bool
+
+
+class ClusterRunStageResponse(BaseModel):
+    stage: str
+    status: str
+    started_at: UtcDateTime
+    finished_at: UtcDateTime | None
+    details: dict | None
 
 
 class ClusterRunResponse(BaseModel):
@@ -76,6 +92,13 @@ class ClusterRunResponse(BaseModel):
     notes: str | None
     cluster_count: int
     has_insights: bool
+    stages: list[ClusterRunStageResponse] = []
+
+
+def _distinct(items: list[str] | None) -> list[str] | None:
+    if not items:
+        return items
+    return list(dict.fromkeys(items))
 
 
 def _to_summary(
@@ -96,9 +119,14 @@ def _to_summary(
         last_internal_days_ago=insight.last_internal_days_ago if insight else None,
         underperformed=insight.underperformed if insight else None,
         competitor_freshness_days=insight.competitor_freshness_days if insight else None,
+        demand_score=insight.demand_score if insight else None,
+        high_demand=insight.high_demand if insight else None,
+        performance_level=insight.performance_level if insight else None,
+        editorial_quadrant=insight.editorial_quadrant if insight else None,
         what_happened=insight.what_happened if insight else None,
-        parties_involved=insight.parties_involved if insight else None,
+        parties_involved=_distinct(insight.parties_involved if insight else None),
         editorial_angle=insight.editorial_angle if insight else None,
+        bullet_insights=_distinct(insight.summary if insight else None),
         insight_calculated_at=insight.calculated_at if insight else None,
     )
 
@@ -154,7 +182,80 @@ def _compute_is_stale(served_at: datetime | None) -> bool:
     return (now - served_at) > timedelta(hours=settings.cluster_staleness_max_age_hours)
 
 
-@router.get("/morning", response_model=ClusterListResponse, summary="Morning briefing — top uncovered clusters")
+class QuadrantSummary(BaseModel):
+    opportunity: int
+    winning: int
+    evergreen: int
+    ignore: int
+    too_early: int
+    total: int
+
+
+@router.get("/quadrant-summary", response_model=QuadrantSummary, summary="Quadrant distribution across all current clusters")
+async def quadrant_summary(session: SessionDep) -> QuadrantSummary:
+    run_filter = _resolve_cluster_filter()
+    stmt = (
+        select(
+            ClusterInsight.editorial_quadrant,
+            func.count().label("n"),
+        )
+        .select_from(ArticleCluster)
+        .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
+        .where(run_filter, _leaf_guard())
+        .group_by(ClusterInsight.editorial_quadrant)
+    )
+    rows = (await session.execute(stmt)).all()
+    counts: dict[str, int] = {}
+    for quadrant, n in rows:
+        counts[quadrant or "ignore"] = n
+    return QuadrantSummary(
+        opportunity=counts.get("opportunity", 0),
+        winning=counts.get("winning", 0),
+        evergreen=counts.get("evergreen", 0),
+        ignore=counts.get("ignore", 0),
+        too_early=counts.get("too_early", 0),
+        total=sum(counts.values()),
+    )
+
+
+_VALID_QUADRANTS = {"opportunity", "winning", "evergreen", "ignore", "too_early"}
+
+
+@router.get("/quadrant/{quadrant}", response_model=ClusterListResponse, summary="Top clusters for a given editorial quadrant")
+async def clusters_by_quadrant(
+    quadrant: str,
+    session: SessionDep,
+    limit: int = Query(default=8, ge=1, le=50),
+) -> ClusterListResponse:
+    if quadrant not in _VALID_QUADRANTS:
+        raise HTTPException(status_code=422, detail=f"quadrant must be one of {sorted(_VALID_QUADRANTS)}")
+    run_filter = _resolve_cluster_filter()
+    stmt = (
+        select(ArticleCluster, ClusterInsight)
+        .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
+        .where(
+            run_filter,
+            ClusterInsight.editorial_quadrant == quadrant,
+            _leaf_guard(),
+        )
+        .order_by(
+            ClusterInsight.demand_score.desc().nullslast(),
+            ArticleCluster.member_count.desc().nullslast(),
+        )
+        .limit(limit)
+    )
+    rows = (await session.execute(stmt)).all()
+    clusters = [_to_summary(cluster, insight) for cluster, insight in rows]
+    served_at = await _get_served_at(session, run_filter)
+    return ClusterListResponse(
+        clusters=clusters,
+        served_at=served_at,
+        is_stale=_compute_is_stale(served_at),
+        max_age_hours=settings.cluster_staleness_max_age_hours,
+    )
+
+
+@router.get("/morning", response_model=ClusterListResponse, summary="Morning briefing — opportunity clusters ranked by demand × performance")
 async def morning_clusters(session: SessionDep) -> ClusterListResponse:
     run_filter = _resolve_cluster_filter()
     stmt = (
@@ -165,7 +266,13 @@ async def morning_clusters(session: SessionDep) -> ClusterListResponse:
             ClusterInsight.tempo_covered.is_(False),
             _leaf_guard(),
         )
-        .order_by(ClusterInsight.trend_velocity.desc().nullslast())
+        .order_by(
+            # Opportunity quadrant first, then by demand strength, then size.
+            (ClusterInsight.editorial_quadrant == "opportunity").desc(),
+            ClusterInsight.demand_score.desc().nullslast(),
+            ClusterInsight.trend_match_count.desc(),
+            ArticleCluster.member_count.desc().nullslast(),
+        )
         .limit(settings.scoring_morning_top_n)
     )
     rows = (await session.execute(stmt)).all()
@@ -179,7 +286,7 @@ async def morning_clusters(session: SessionDep) -> ClusterListResponse:
     )
 
 
-@router.get("/deferred", response_model=ClusterListResponse, summary="Deferred clusters — high velocity, uncovered, stale internal coverage")
+@router.get("/deferred", response_model=ClusterListResponse, summary="Deferred clusters — high demand, uncovered, stale internal coverage")
 async def deferred_clusters(session: SessionDep) -> ClusterListResponse:
     run_filter = _resolve_cluster_filter()
     stmt = (
@@ -187,7 +294,7 @@ async def deferred_clusters(session: SessionDep) -> ClusterListResponse:
         .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
         .where(
             run_filter,
-            ClusterInsight.trend_velocity > settings.scoring_deferred_velocity_min,
+            ClusterInsight.high_demand.is_(True),
             ClusterInsight.tempo_covered.is_(False),
             or_(
                 ClusterInsight.last_internal_days_ago.is_(None),
@@ -196,7 +303,10 @@ async def deferred_clusters(session: SessionDep) -> ClusterListResponse:
             ),
             _leaf_guard(),
         )
-        .order_by(ClusterInsight.trend_velocity.desc().nullslast())
+        .order_by(
+            ClusterInsight.demand_score.desc().nullslast(),
+            ClusterInsight.trend_velocity.desc().nullslast(),
+        )
     )
     rows = (await session.execute(stmt)).all()
     clusters = [_to_summary(cluster, insight) for cluster, insight in rows]
@@ -236,6 +346,25 @@ async def latest_cluster_run(session: SessionDep) -> ClusterRunResponse:
     if row is None:
         raise HTTPException(status_code=404, detail="No cluster run found")
     run, cluster_count, has_insights = row
+
+    stage_rows = (
+        await session.execute(
+            select(ClusterRunStage)
+            .where(ClusterRunStage.run_id == run.id)
+            .order_by(ClusterRunStage.started_at)
+        )
+    ).scalars().all()
+    stages = [
+        ClusterRunStageResponse(
+            stage=s.stage.value,
+            status=s.status.value,
+            started_at=s.started_at,
+            finished_at=s.finished_at,
+            details=s.details,
+        )
+        for s in stage_rows
+    ]
+
     return ClusterRunResponse(
         id=run.id,
         algorithm=run.algorithm.value if run.algorithm else None,
@@ -246,6 +375,7 @@ async def latest_cluster_run(session: SessionDep) -> ClusterRunResponse:
         notes=run.notes,
         cluster_count=cluster_count,
         has_insights=bool(has_insights),
+        stages=stages,
     )
 
 
@@ -330,26 +460,37 @@ async def cluster_detail(cluster_id: uuid.UUID, session: SessionDep) -> ClusterD
     sub_rows = (await session.execute(sub_clusters_stmt)).all()
     sub_clusters = [_to_summary(c, i) for c, i in sub_rows] or None
 
+    parent_cluster_summary = None
+    sibling_clusters = None
+    if cluster.parent_cluster_id is not None:
+        parent_stmt = (
+            select(ArticleCluster, ClusterInsight)
+            .outerjoin(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
+            .where(ArticleCluster.id == cluster.parent_cluster_id)
+        )
+        parent_row = (await session.execute(parent_stmt)).one_or_none()
+        if parent_row:
+            parent_cluster_summary = _to_summary(*parent_row)
+
+        sibling_stmt = (
+            select(ArticleCluster, ClusterInsight)
+            .outerjoin(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
+            .where(
+                ArticleCluster.parent_cluster_id == cluster.parent_cluster_id,
+                ArticleCluster.id != cluster_id,
+            )
+            .order_by(ArticleCluster.member_count.desc().nullslast())
+            .limit(10)
+        )
+        sibling_rows = (await session.execute(sibling_stmt)).all()
+        sibling_clusters = [_to_summary(c, i) for c, i in sibling_rows] or None
+
+    base = _to_summary(cluster, insight)
     return ClusterDetail(
-        id=cluster.id,
-        parent_cluster_id=cluster.parent_cluster_id,
-        label=cluster.label,
-        member_count=cluster.member_count,
-        is_current=cluster.is_current,
-        created_at=cluster.created_at,
-        trend_velocity=insight.trend_velocity if insight else None,
-        competitor_count=insight.competitor_count if insight else None,
-        trend_match_count=insight.trend_match_count if insight else None,
-        weighted_trend_score=insight.weighted_trend_score if insight else None,
-        tempo_covered=insight.tempo_covered if insight else None,
-        last_internal_days_ago=insight.last_internal_days_ago if insight else None,
-        underperformed=insight.underperformed if insight else None,
-        competitor_freshness_days=insight.competitor_freshness_days if insight else None,
-        what_happened=insight.what_happened if insight else None,
-        parties_involved=insight.parties_involved if insight else None,
-        editorial_angle=insight.editorial_angle if insight else None,
-        insight_calculated_at=insight.calculated_at if insight else None,
-        is_stale=_compute_is_stale(insight.calculated_at if insight else None),
+        **base.model_dump(),
         members=members,
         sub_clusters=sub_clusters,
+        parent_cluster=parent_cluster_summary,
+        sibling_clusters=sibling_clusters,
+        is_stale=_compute_is_stale(insight.calculated_at if insight else None),
     )

@@ -43,6 +43,7 @@ E2E_TABLES = (
     "cluster_insight",
     "article_cluster_member",
     "article_cluster",
+    "cluster_run_stage",
     "cluster_run",
     "article_embedding",
     "article_gsc_metric",

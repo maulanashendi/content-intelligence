@@ -7,11 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 _NOW = datetime.now(UTC).replace(tzinfo=None)
 
-_GSC_FIELDS = ("tempo_gsc_impressions", "gsc_demand_gap")
+_RAW_GSC_FIELDS = ("tempo_gsc_impressions", "gsc_demand_gap", "gsc_impressions", "gsc_clicks", "gsc_ctr", "gsc_avg_position")
+_EDITORIAL_FIELDS = ("demand_score", "high_demand", "performance_level", "editorial_quadrant")
 
 
 def _cluster_with_gsc(run_id: uuid.UUID) -> tuple[ArticleCluster, ClusterInsight]:
-    """An uncovered cluster whose insight carries non-zero raw GSC values in the DB."""
+    """Uncovered cluster with demand/performance insight values set."""
     cluster = ArticleCluster(id=uuid.uuid4(), run_id=run_id, label="Test", is_current=True)
     insight = ClusterInsight(
         id=uuid.uuid4(),
@@ -22,19 +23,19 @@ def _cluster_with_gsc(run_id: uuid.UUID) -> tuple[ArticleCluster, ClusterInsight
         tempo_covered=False,
         last_internal_days_ago=40,
         underperformed=True,
-        tempo_gsc_impressions=12345,
-        gsc_demand_gap=True,
+        demand_score=0.8,
+        high_demand=True,
+        performance_level="none",
+        editorial_quadrant="opportunity",
     )
     return cluster, insight
 
 
-async def test_gsc_fields_never_returned_by_any_cluster_endpoint(
+async def test_raw_gsc_never_returned_editorial_levels_are(
     session: AsyncSession, client: AsyncClient, monkeypatch
 ) -> None:
-    """D7: raw GSC metrics are scoring inputs only — never serialized to the API.
-
-    Populates the insight with non-zero GSC values, then asserts none of the read
-    endpoints leak them. Fails if either field is reintroduced to the response model.
+    """D35: raw GSC numbers never appear in API responses; derived editorial
+    levels (demand_score, high_demand, performance_level, editorial_quadrant) do.
     """
     from core.config import settings as cfg
 
@@ -54,12 +55,13 @@ async def test_gsc_fields_never_returned_by_any_cluster_endpoint(
     for path in list_paths:
         response = await client.get(path)
         assert response.status_code == 200, path
-        for field in _GSC_FIELDS:
-            assert field not in response.text, f"{field} leaked by {path}"
+        for field in _RAW_GSC_FIELDS:
+            assert field not in response.text, f"raw GSC field {field} leaked by {path}"
 
     detail = await client.get(f"/api/v1/clusters/{cluster.id}")
     assert detail.status_code == 200
     body = detail.json()
-    for field in _GSC_FIELDS:
-        assert field not in body, f"{field} leaked by cluster detail"
-        assert field not in detail.text
+    for field in _RAW_GSC_FIELDS:
+        assert field not in body, f"raw GSC field {field} leaked by cluster detail"
+    for field in _EDITORIAL_FIELDS:
+        assert field in body, f"editorial field {field} missing from cluster detail"
