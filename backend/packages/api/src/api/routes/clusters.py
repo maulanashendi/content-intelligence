@@ -20,6 +20,7 @@ from sqlalchemy.orm import aliased
 
 from api.deps import SessionDep
 from api.types import UtcDateTime
+from api.volume import VolumeBucket, VolumeTrendResponse, dense_bucket_starts
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 
@@ -519,6 +520,58 @@ async def current_clusters(
         is_stale=_compute_is_stale(served_at),
         max_age_hours=settings.cluster_staleness_max_age_hours,
     )
+
+
+@router.get(
+    "/{cluster_id}/volume-trend",
+    response_model=VolumeTrendResponse,
+    summary="Competitor vs internal article volume per WIB bucket, scoped to one cluster",
+)
+async def cluster_volume_trend(
+    cluster_id: uuid.UUID,
+    session: SessionDep,
+    bucket: Literal["hour", "day"] = Query("hour"),
+) -> VolumeTrendResponse:
+    exists_row = (
+        await session.execute(select(ArticleCluster.id).where(ArticleCluster.id == cluster_id))
+    ).scalar_one_or_none()
+    if exists_row is None:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    now_utc = datetime.now(UTC)
+    starts_wib = dense_bucket_starts(bucket, now_utc)
+    cutoff_utc = starts_wib[0] - timedelta(hours=7)
+
+    effective = func.coalesce(Article.published_at, Article.created_at)
+    wib_local = func.timezone("Asia/Jakarta", func.timezone("UTC", effective))
+    wib_bucket = func.date_trunc(bucket, wib_local)
+
+    stmt = (
+        select(
+            wib_bucket.label("wib_bucket"),
+            ContentSource.source_type.label("source_type"),
+            func.count(Article.id).label("cnt"),
+        )
+        .select_from(ArticleClusterMember)
+        .join(Article, Article.id == ArticleClusterMember.article_id)
+        .join(ContentSource, ContentSource.id == Article.source_id)
+        .where(ArticleClusterMember.cluster_id == cluster_id, effective >= cutoff_utc)
+        .group_by(wib_bucket, ContentSource.source_type)
+    )
+    rows = (await session.execute(stmt)).all()
+    counts: dict[tuple[datetime, SourceType], int] = {
+        (r.wib_bucket, r.source_type): r.cnt for r in rows
+    }
+
+    buckets = [
+        VolumeBucket(
+            bucket_start=start - timedelta(hours=7),
+            competitor_count=counts.get((start, SourceType.rss), 0),
+            internal_count=counts.get((start, SourceType.internal), 0),
+        )
+        for start in starts_wib
+    ]
+    return VolumeTrendResponse(bucket=bucket, buckets=buckets, generated_at=now_utc)
 
 
 @router.get("/{cluster_id}", response_model=ClusterDetail, summary="Full detail for a single cluster")
