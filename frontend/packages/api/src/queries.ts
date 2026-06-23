@@ -171,6 +171,9 @@ export function useVolumeTrend(bucket: "hour" | "day") {
   })
 }
 
+// Growing-limit pagination by design: "Show more" increments limit (8→16→24…) and re-fetches the
+// full window from offset=0. offset is hardcoded and NOT in the query key; add it there before
+// converting to true offset paging.
 export function useClusterBento(limit: number) {
   return useQuery({
     queryKey: clusterKeys.bento(limit),
