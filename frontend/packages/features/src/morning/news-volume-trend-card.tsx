@@ -83,12 +83,13 @@ function Toggle({
   )
 }
 
-function Tooltip({ bar, bucket: _bucket }: { bar: Bar; bucket: "hour" | "day" }) {
+function Tooltip({ bar, containerWidth }: { bar: Bar; containerWidth: number }) {
+  const left = Math.min(Math.max(bar.x + bar.width / 2, 80), containerWidth - 80)
   return (
     <div
       style={{
         position: "absolute",
-        left: bar.x + bar.width / 2,
+        left,
         top: bar.internalY,
         transform: "translate(-50%, calc(-100% - 8px))",
         background: "var(--fg)",
@@ -204,7 +205,7 @@ function Chart({
         )}
       </svg>
 
-      {hover !== null && bars[hover] && <Tooltip bar={bars[hover]} bucket={bucket} />}
+      {hover !== null && bars[hover] && <Tooltip bar={bars[hover]} containerWidth={width} />}
     </div>
   )
 }
