@@ -21,6 +21,20 @@ export const PaginatedArticlesSchema = z.object({
 })
 export type PaginatedArticles = z.infer<typeof PaginatedArticlesSchema>
 
+export const VolumeBucketSchema = z.object({
+  bucket_start: z.string(),
+  competitor_count: z.number().int(),
+  internal_count: z.number().int(),
+})
+export type VolumeBucket = z.infer<typeof VolumeBucketSchema>
+
+export const VolumeTrendResponseSchema = z.object({
+  bucket: z.enum(["hour", "day"]),
+  buckets: z.array(VolumeBucketSchema),
+  generated_at: z.string(),
+})
+export type VolumeTrendResponse = z.infer<typeof VolumeTrendResponseSchema>
+
 export const ClusterSummarySchema = z.object({
   id: z.string().uuid(),
   parent_cluster_id: z.string().uuid().nullable(),

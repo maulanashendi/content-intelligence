@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client.js"
 import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys, clusterRunKeys } from "./keys.js"
-import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema, QuadrantSummarySchema, AnalyzeResultSchema, RecommendationOutputSchema } from "./schemas.js"
+import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema, QuadrantSummarySchema, AnalyzeResultSchema, RecommendationOutputSchema, VolumeTrendResponseSchema } from "./schemas.js"
 import type { SourceUpdate } from "./schemas.js"
 
 export function useMorningClusters() {
@@ -160,5 +160,13 @@ export function useRecommendation() {
   return useMutation({
     mutationFn: (intent: string) =>
       apiPost("/analyst/recommendation", { intent }, RecommendationOutputSchema),
+  })
+}
+
+export function useVolumeTrend(bucket: "hour" | "day") {
+  return useQuery({
+    queryKey: articleKeys.volumeTrend(bucket),
+    queryFn: () => apiGet(`/articles/volume-trend?bucket=${bucket}`, VolumeTrendResponseSchema),
+    staleTime: 5 * 60 * 1000,
   })
 }
