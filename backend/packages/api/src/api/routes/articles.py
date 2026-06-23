@@ -115,6 +115,7 @@ async def list_articles(
 @router.get(
     "/volume-trend",
     response_model=VolumeTrendResponse,
+    status_code=200,
     summary="Article volume per WIB time bucket, split by source type",
 )
 async def volume_trend(
