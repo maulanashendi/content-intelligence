@@ -51,12 +51,18 @@ async def test_raw_gsc_never_returned_editorial_levels_are(
         "/api/v1/clusters/morning",
         "/api/v1/clusters/current",
         "/api/v1/clusters/deferred",
+        "/api/v1/clusters/bento",
     ]
     for path in list_paths:
         response = await client.get(path)
         assert response.status_code == 200, path
         for field in _RAW_GSC_FIELDS:
             assert field not in response.text, f"raw GSC field {field} leaked by {path}"
+
+    # D38: bento exposes aggregated clicks as `views` (never the raw `gsc_clicks` name).
+    bento = (await client.get("/api/v1/clusters/bento")).json()
+    assert bento["cards"], "expected the seeded cluster as a bento card"
+    assert "views" in bento["cards"][0]
 
     detail = await client.get(f"/api/v1/clusters/{cluster.id}")
     assert detail.status_code == 200

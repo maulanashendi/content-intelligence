@@ -53,7 +53,7 @@ MVP is shipped. Post-MVP work is hardening, governed by four SOPs. Read the rele
 
 ## API endpoints
 
-Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/{id}`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/articles/volume-trend`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream. Stateless analyst endpoints (no DB writes): `POST /api/v1/analyst/analyze`, `POST /api/v1/analyst/analyze/batch`, `POST /api/v1/analyst/recommendation`.
+Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/bento`, `/api/v1/clusters/{id}`, `/api/v1/clusters/{id}/volume-trend`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/articles/volume-trend`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream. Stateless analyst endpoints (no DB writes): `POST /api/v1/analyst/analyze`, `POST /api/v1/analyst/analyze/batch`, `POST /api/v1/analyst/recommendation`.
 
 ## Schema
 
@@ -64,7 +64,7 @@ Source of truth: `backend/packages/core/src/core/models.py` (SQLAlchemy ORM). Do
 - No microservices, message queue, Redis cache, separate vector DB, HNSW index, GraphQL, WebSockets, auth code. No standalone scheduler library (APScheduler, Prefect, Dagster) and no host `cron` — scheduling lives inside `pipeline-daemon` as plain `asyncio` tasks (D24). Writes are restricted to `content_source` CRUD (D19) and the manual cluster trigger (D24); every other table is read-only via the API.
 - `vector(768)` is fixed; changing embedding model = migration + full re-embed.
 - One embedding per article (`article_embedding.article_id` unique).
-- GSC metrics are scoring inputs only — never returned via API.
+- GSC metrics are scoring inputs only — never returned via API, **except** aggregated per-cluster clicks exposed as `views` on `/clusters/bento` (D38). Impressions/CTR/position stay internal.
 - Trend keywords live in `trend_signal`, never in `article` columns.
 - `source_type` enum: only `rss` and `internal` (no `trends`).
 - src layout per package; no flat layouts.

@@ -876,3 +876,16 @@ only the clustering pipeline, and reduces the local/API switch to a base-URL swa
 
 **Implication.** The analyst has its own config block and no DB tables initially.
 Unifying `labeling` onto the same client, persistence, and live BigQuery are future work.
+
+---
+
+## D38. Expose aggregated per-cluster GSC clicks as `views` on the bento (scoped reversal of D35)
+
+The cluster bento card surfaces editorial pull-through with a `views` tile. The
+only traffic signal in the system is GSC, which D35 keeps internal. We reverse
+D35 **narrowly**: `cluster_insight.gsc_clicks` (already de-duplicated to one GSC
+period per article during scoring) is returned as an aggregated per-cluster
+`views` integer on `GET /clusters/bento` only. Impressions, CTR, and average
+position remain internal scoring inputs and are still asserted absent from every
+response by `test_clusters_no_gsc_leak.py`. No new column, no migration — the
+existing aggregate is un-hidden under a non-raw field name.

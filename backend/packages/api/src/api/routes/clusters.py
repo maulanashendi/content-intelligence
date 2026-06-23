@@ -11,6 +11,7 @@ from core.models import (
     ClusterRun,
     ClusterRunStage,
     ContentSource,
+    SourceType,
 )
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -51,6 +52,28 @@ class ClusterSummary(BaseModel):
 
 class ClusterListResponse(BaseModel):
     clusters: list[ClusterSummary]
+    served_at: UtcDateTime | None
+    is_stale: bool
+    max_age_hours: int
+
+
+class BentoCard(BaseModel):
+    id: uuid.UUID
+    label: str | None
+    editorial_quadrant: str | None
+    trend_velocity: float | None
+    competitor_count: int | None
+    trend_match_count: int | None
+    member_count: int | None
+    views: int
+    internal_article_count: int
+    last_competitor_at: UtcDateTime | None
+    last_internal_at: UtcDateTime | None
+
+
+class BentoListResponse(BaseModel):
+    cards: list[BentoCard]
+    total: int
     served_at: UtcDateTime | None
     is_stale: bool
     max_age_hours: int
@@ -138,6 +161,21 @@ def _leaf_guard() -> object:
         .where(child.parent_cluster_id == ArticleCluster.id)
         .correlate(ArticleCluster)
     )
+
+
+def _ranking_order() -> list:
+    """Shared ORDER BY for morning + bento so the two ranking surfaces cannot drift.
+
+    The trailing ArticleCluster.id is a stable tiebreaker required for correct
+    offset pagination on /bento.
+    """
+    return [
+        (ClusterInsight.editorial_quadrant == "opportunity").desc(),
+        ClusterInsight.demand_score.desc().nullslast(),
+        ClusterInsight.trend_match_count.desc().nullslast(),
+        ArticleCluster.member_count.desc().nullslast(),
+        ArticleCluster.id,
+    ]
 
 
 def _resolve_cluster_filter() -> Any:
@@ -266,13 +304,7 @@ async def morning_clusters(session: SessionDep) -> ClusterListResponse:
             ClusterInsight.tempo_covered.is_(False),
             _leaf_guard(),
         )
-        .order_by(
-            # Opportunity quadrant first, then by demand strength, then size.
-            (ClusterInsight.editorial_quadrant == "opportunity").desc(),
-            ClusterInsight.demand_score.desc().nullslast(),
-            ClusterInsight.trend_match_count.desc(),
-            ArticleCluster.member_count.desc().nullslast(),
-        )
+        .order_by(*_ranking_order())
         .limit(settings.scoring_morning_top_n)
     )
     rows = (await session.execute(stmt)).all()
@@ -280,6 +312,88 @@ async def morning_clusters(session: SessionDep) -> ClusterListResponse:
     served_at = await _get_served_at(session, run_filter)
     return ClusterListResponse(
         clusters=clusters,
+        served_at=served_at,
+        is_stale=_compute_is_stale(served_at),
+        max_age_hours=settings.cluster_staleness_max_age_hours,
+    )
+
+
+@router.get("/bento", response_model=BentoListResponse, summary="All current clusters ranked, paginated, for the bento card grid")
+async def bento_clusters(
+    session: SessionDep,
+    limit: int = Query(default=8, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> BentoListResponse:
+    run_filter = _resolve_cluster_filter()
+    base_where = (run_filter, _leaf_guard())
+
+    total: int = (
+        await session.execute(
+            select(func.count())
+            .select_from(ArticleCluster)
+            .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
+            .where(*base_where)
+        )
+    ).scalar_one()
+
+    rows = (
+        await session.execute(
+            select(ArticleCluster, ClusterInsight)
+            .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
+            .where(*base_where)
+            .order_by(*_ranking_order())
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+
+    page_ids = [cluster.id for cluster, _ in rows]
+    enrich: dict[uuid.UUID, Any] = {}
+    if page_ids:
+        effective = func.coalesce(Article.published_at, Article.created_at)
+        enrich_rows = (
+            await session.execute(
+                select(
+                    ArticleClusterMember.cluster_id.label("cid"),
+                    func.count()
+                    .filter(ContentSource.source_type == SourceType.internal)
+                    .label("internal_count"),
+                    func.max(effective)
+                    .filter(ContentSource.source_type == SourceType.rss)
+                    .label("last_competitor_at"),
+                    func.max(effective)
+                    .filter(ContentSource.source_type == SourceType.internal)
+                    .label("last_internal_at"),
+                )
+                .select_from(ArticleClusterMember)
+                .join(Article, Article.id == ArticleClusterMember.article_id)
+                .join(ContentSource, ContentSource.id == Article.source_id)
+                .where(ArticleClusterMember.cluster_id.in_(page_ids))
+                .group_by(ArticleClusterMember.cluster_id)
+            )
+        ).all()
+        enrich = {r.cid: r for r in enrich_rows}
+
+    cards = [
+        BentoCard(
+            id=cluster.id,
+            label=cluster.label,
+            editorial_quadrant=insight.editorial_quadrant,
+            trend_velocity=insight.trend_velocity,
+            competitor_count=insight.competitor_count,
+            trend_match_count=insight.trend_match_count,
+            member_count=cluster.member_count,
+            views=insight.gsc_clicks,
+            internal_article_count=(enrich[cluster.id].internal_count if cluster.id in enrich else 0),
+            last_competitor_at=(enrich[cluster.id].last_competitor_at if cluster.id in enrich else None),
+            last_internal_at=(enrich[cluster.id].last_internal_at if cluster.id in enrich else None),
+        )
+        for cluster, insight in rows
+    ]
+    served_at = await _get_served_at(session, run_filter)
+    return BentoListResponse(
+        cards=cards,
+        total=total,
         served_at=served_at,
         is_stale=_compute_is_stale(served_at),
         max_age_hours=settings.cluster_staleness_max_age_hours,
