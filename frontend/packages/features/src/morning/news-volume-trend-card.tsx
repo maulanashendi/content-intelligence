@@ -1,29 +1,14 @@
-import { useLayoutEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useVolumeTrend, articleKeys } from "@ei-fe/api"
 import { Skeleton, ErrorState, EmptyState } from "@ei-fe/ui"
 import { buildVolumeChart, formatBucketLabel, formatBucketTooltip, type Bar } from "./volume-chart.js"
+import { useElementWidth } from "./use-element-width.js"
 
 const HEIGHT = 260
 const PAD = { padTop: 12, padRight: 14, padBottom: 28, padLeft: 36 }
 const COMPETITOR_COLOR = "var(--fg-faint)"
 const INTERNAL_COLOR = "var(--accent)"
-
-function useElementWidth<T extends HTMLElement>() {
-  const ref = useRef<T>(null)
-  const [width, setWidth] = useState(0)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    setWidth(el.getBoundingClientRect().width)
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) setWidth(e.contentRect.width)
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-  return [ref, width] as const
-}
 
 function LegendDot({ color }: { color: string }) {
   return (
