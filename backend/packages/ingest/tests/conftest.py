@@ -23,7 +23,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-_INGEST_TABLES = ("trend_signal_article", "trend_signal", "article", "content_source")
+_INGEST_TABLES = (
+    "article_gsc_metric",
+    "gsc_page_query",
+    "gsc_query",
+    "gsc_page",
+    "trend_signal_article",
+    "trend_signal",
+    "article",
+    "content_source",
+)
 
 # ---------------------------------------------------------------------------
 # Feed XML fixtures — mirrors actual provider payloads used in regression tests

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 import time
 from collections.abc import Callable, Coroutine
 from typing import Any
@@ -7,8 +8,14 @@ from typing import Any
 import click
 from core.config import settings
 from core.logging import configure_logging
+from pipeline.locks import GROUP_ANALYSIS, GROUP_CLUSTER_LABEL_SCORE, LockHeld, hold_lock
 
 logger = logging.getLogger(__name__)
+
+# ML-heavy steps that must not run concurrently with each other or with the daemon.
+# Each step acquires the cluster_label_score group lock so the daemon's embed-defer
+# guard also sees the lock (prevents embedder + Gemma collisions at the OS level).
+_ML_STEPS = frozenset({"cluster", "label", "score", "cluster-label-score"})
 
 
 async def _ingest() -> dict[str, Any]:
@@ -74,7 +81,19 @@ _STEP_RUNNERS: dict[str, Callable[[], Coroutine[Any, Any, Any]]] = {
 
 
 async def _run_step(step: str) -> None:
-    result = await _STEP_RUNNERS[step]()
+    if step in _ML_STEPS:
+        try:
+            async with hold_lock(GROUP_CLUSTER_LABEL_SCORE):
+                result = await _STEP_RUNNERS[step]()
+        except LockHeld as exc:
+            logger.error(
+                "ML step blocked: %s",
+                exc,
+                extra={"step": step},
+            )
+            sys.exit(1)
+    else:
+        result = await _STEP_RUNNERS[step]()
     logger.info("%s complete", step, extra={"counts": result})
 
 
@@ -127,7 +146,15 @@ def cluster_label_score_cmd() -> None:
     _configure()
     from pipeline.cluster_label_score import run
 
-    asyncio.run(run())
+    async def _run_locked() -> None:
+        try:
+            async with hold_lock(GROUP_CLUSTER_LABEL_SCORE):
+                await run()
+        except LockHeld as exc:
+            logger.error("cluster-label-score blocked: %s", exc)
+            sys.exit(1)
+
+    asyncio.run(_run_locked())
 
 
 @cli.command("serve")

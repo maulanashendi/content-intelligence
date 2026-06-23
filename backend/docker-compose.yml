@@ -26,7 +26,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO
     ports:
-      - "8000:8000"
+      - "8002:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,7 +44,7 @@ services:
       VITE_BACKEND_URL: http://api:8000
       VITE_ENABLE_MOCK: "false"
     ports:
-      - "5173:5173"
+      - "5174:5173"
     working_dir: /app/packages/app
     command: ["./node_modules/.bin/vite", "--host"]
     depends_on:
@@ -63,7 +63,7 @@ services:
       TIMEZONE: Asia/Jakarta
       CLUSTER_SCHEDULE_HOUR: "6"
       CLUSTER_SCHEDULE_MINUTE: "0"
-      CLUSTERING_WINDOW_DAYS: "7"
+      CLUSTERING_WINDOW_DAYS: "${CLUSTERING_WINDOW_DAYS:-7}"
       INGEST_TIMEOUT_SECONDS: "30"
       GSC_SITE_URL: ${GSC_SITE_URL:-sc-domain:tempo.co}
       GSC_CREDENTIALS_PATH: /app/gsc-credentials.json
@@ -79,7 +79,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 30s
-    mem_limit: 3g
+    mem_limit: 7g
+    memswap_limit: 7g
     command: ["serve"]
 
   pipeline:

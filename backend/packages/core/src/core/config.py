@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_dir: Path = Path("logs")
 
+    analysis_window_days: int = 7
     clustering_window_days: int = 7
+    scoring_trend_window_days: int = 7
 
     cluster_schedule_hour: int = 6
     cluster_schedule_minute: int = 0
@@ -46,7 +48,7 @@ class Settings(BaseSettings):
     gsc_credentials_path: str = "teco-analytics-2cea1d43461c.json"
     gsc_fetch_days: int = 7
 
-    # cluster_insight scoring (D27)
+    # cluster_insight scoring (D27/D35)
     gsc_underperform_impressions_min: int = 100
     gsc_underperform_position_min: float = 10.0
     gsc_underperform_ctr_max: float = 0.02
@@ -55,6 +57,10 @@ class Settings(BaseSettings):
     scoring_deferred_velocity_min: float = 0.4
     cluster_staleness_max_age_hours: int = 36
     cluster_run_retention_count: int = 14
+    # Demand and performance classification thresholds (percentile within current run).
+    # Top (1 - percentile) fraction of clusters in the run are classified high.
+    demand_high_percentile: float = 0.66
+    performance_high_percentile: float = 0.66
     # When a run has more current clusters than this, label only the top N by
     # trend match (fresh signals, 24h) then member_count — cap the Gemma budget.
     labeling_max_clusters: int = 100

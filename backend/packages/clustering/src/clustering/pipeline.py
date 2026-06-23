@@ -24,13 +24,13 @@ from clustering.split import run as split_run
 logger = logging.getLogger(__name__)
 
 
-async def run() -> None:
+async def run() -> uuid.UUID | None:
     started_at = datetime.now(UTC).replace(tzinfo=None)
     embeddings, article_ids = await _load_recent_embeddings()
 
     if len(embeddings) == 0:
         logger.info("no embeddings found in the last %d days", settings.clustering_window_days)
-        return
+        return None
 
     logger.info("loaded %d embeddings, reducing dimensions", len(embeddings))
     reduced = await asyncio.to_thread(umap_reduce, embeddings)
@@ -46,9 +46,9 @@ async def run() -> None:
 
     if not unique_labels:
         logger.warning("clustering produced only noise points, skipping persist")
-        return
+        return None
 
-    await _persist_clusters(started_at, labels, probs, embeddings, article_ids)
+    run_id = await _persist_clusters(started_at, labels, probs, embeddings, article_ids)
 
     merged = await merge_run()
     logger.info("merge complete merged=%d", merged)
@@ -57,6 +57,7 @@ async def run() -> None:
     logger.info("split complete split=%d", split)
 
     logger.info("clustering run complete")
+    return run_id
 
 
 async def _load_recent_embeddings() -> tuple[np.ndarray, list[uuid.UUID]]:
@@ -87,7 +88,7 @@ async def _persist_clusters(
     probs: np.ndarray,
     embeddings: np.ndarray,
     article_ids: list[uuid.UUID],
-) -> None:
+) -> uuid.UUID:
     params = {
         "umap_n_components": settings.umap_target_dimensions,
         "umap_random_state": settings.umap_random_state,
@@ -102,11 +103,15 @@ async def _persist_clusters(
             .values(is_current=False)
         )
 
+        # finished_at is intentionally NULL here: it is set by cluster_label_score.run()
+        # after scoring and labeling complete (D36). The API's _resolve_cluster_filter
+        # requires finished_at IS NOT NULL so it only serves fully-processed runs.
+        # The scheduler reads max(finished_at) — keeping it NULL prevents a mid-labeling
+        # crash from being counted as "done" and skipping the next scheduled retry.
         cluster_run = ClusterRun(
             algorithm=ClusterAlgorithm.hdbscan,
             params=params,
             started_at=started_at,
-            finished_at=datetime.now(UTC).replace(tzinfo=None),
         )
         session.add(cluster_run)
         await session.flush()
@@ -138,6 +143,10 @@ async def _persist_clusters(
                         relevance_score=float(prob),
                     )
                 )
+
+        run_id = cluster_run.id
+
+    return run_id
 
 
 async def prune_old_cluster_runs(keep: int | None = None) -> int:

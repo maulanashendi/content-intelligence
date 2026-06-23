@@ -51,10 +51,14 @@ def get_llm() -> Any:
             "loading labeling llm",
             extra={"model_path": model_path},
         )
+        # n_threads=4: matches OMP_NUM_THREADS in the Docker image so all BLAS/OpenMP
+        # pools are capped at the same value — prevents a single Gemma inference from
+        # saturating all 12 host cores when the embedder is also running.
         _llm = llama_cls(
             model_path=model_path,
             n_ctx=4096,
-            n_gpu_layers=-1,
+            n_gpu_layers=0,
+            n_threads=4,
             verbose=False,
         )
     return _llm

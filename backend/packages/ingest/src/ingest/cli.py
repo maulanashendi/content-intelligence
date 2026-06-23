@@ -28,5 +28,19 @@ def seed():
     click.echo(f"seeded {inserted} new sources")
 
 
+@cli.command("gsc-link")
+def gsc_link():
+    """Map gsc_page rows to internal articles and populate article_gsc_metric."""
+    from core.db import get_session
+    from ingest.gsc import link_articles
+
+    async def _run():
+        async with get_session() as session:
+            return await link_articles(session)
+
+    count = asyncio.run(_run())
+    click.echo(f"gsc-link complete: {count} article_gsc_metric rows upserted")
+
+
 if __name__ == "__main__":
     cli()

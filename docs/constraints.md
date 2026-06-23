@@ -11,13 +11,13 @@ The following systems exist for the product but are owned by other teams. Do not
 - **Authentication and authorization.** Identity is established by an upstream gateway. The API trusts incoming requests.
 - **Deployment infrastructure beyond local Docker dev.** Production orchestration, scaling, secrets management, and CI/CD pipelines are owned by the deploy team.
 - **Production monitoring, alerting, dashboards.** The application logs to stdout in JSON per `docs/logging-sop.md`. Aggregation, retention, and alerting are operational concerns owned externally.
-- **Internal article performance metrics for end-user display.** A separate Tempo internal dashboard already shows clicks, impressions, and Google position. This app does not display them under any circumstance.
+- **Raw internal article performance metrics for end-user display.** A separate Tempo internal dashboard already shows clicks, impressions, and Google position. This app does not display raw GSC numbers (clicks, impressions, position, CTR). Derived editorial *levels* (`high_demand`, `performance_level`, `editorial_quadrant`) are permitted — see D35.
 
 ## Deferred features (PRD Section 6 — authoritative)
 
 The following features were explicitly deferred during PRD review. They must not be re-introduced unless the user removes them from the deferred list:
 
-- Internal article performance metrics displayed in the UI
+- Raw internal article performance metrics (clicks, impressions, position, CTR) displayed in the UI — derived editorial levels are permitted per D35
 - Dedicated desk-head dashboard with team metrics
 - Cluster lineage / cross-time topic tracking
 - Manual claim or dismiss-cluster actions in the UI
@@ -70,7 +70,7 @@ These invariants are enforced by `schema.dbml` and must be preserved:
 
 - **`article_embedding.embedding` is `vector(768)`.** Changing dimension requires a schema migration AND a full re-embed of all articles. Do not introduce parallel dimension columns.
 - **One embedding per article.** `article_embedding.article_id` is unique. Changing the embedding model means re-embedding into the same row.
-- **GSC metrics are reference-only.** `article_gsc_metric` rows are read by scoring jobs only. They must never be returned in API responses. The frontend has no GSC concept.
+- **GSC metrics are reference-only (D35).** `article_gsc_metric` rows and the raw GSC aggregate columns in `cluster_insight` (`gsc_impressions`, `gsc_clicks`, `gsc_ctr`, `gsc_avg_position`) are internal scoring inputs only — never returned in API responses. Derived editorial levels (`demand_score`, `high_demand`, `performance_level`, `editorial_quadrant`) are signals, not raw metrics, and may be returned — same category as the existing `underperformed` and `tempo_covered` booleans. The frontend has no concept of raw GSC numbers.
 - **Trends are not articles.** Trend keywords live in `trend_signal`. Articles surfaced via Trends RSS go in `article` and link via `trend_signal_article`. Do not put trend keywords in `article` columns.
 - **`is_current` flag on `article_cluster` is the marker of the latest run's clusters.** Flipping it must happen atomically when a new `cluster_run` finishes.
 - **`source_type` enum has exactly two values: `rss` and `internal`.** Do not re-add `trends`.

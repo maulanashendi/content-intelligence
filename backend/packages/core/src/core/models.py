@@ -53,6 +53,19 @@ class ClusterAlgorithm(enum.Enum):
     kmeans = "kmeans"
 
 
+class PipelineStage(enum.Enum):
+    cluster = "cluster"
+    score = "score"
+    label = "label"
+    prune = "prune"
+
+
+class StageStatus(enum.Enum):
+    running = "running"
+    done = "done"
+    failed = "failed"
+
+
 class ContentSource(Base):
     __tablename__ = "content_source"
 
@@ -283,6 +296,32 @@ class ClusterRun(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     clusters: Mapped[list["ArticleCluster"]] = relationship(back_populates="run")
+    stages: Mapped[list["ClusterRunStage"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+
+
+class ClusterRunStage(Base):
+    __tablename__ = "cluster_run_stage"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=_gen_uuid
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cluster_run.id", ondelete="CASCADE"), nullable=False
+    )
+    stage: Mapped[PipelineStage] = mapped_column(Enum(PipelineStage), nullable=False)
+    status: Mapped[StageStatus] = mapped_column(Enum(StageStatus), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    details: Mapped[dict | None] = mapped_column(JSONB)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "stage", name="uq_cluster_run_stage_run_stage"),
+        Index("ix_cluster_run_stage_run_id", "run_id"),
+    )
+
+    run: Mapped["ClusterRun"] = relationship(back_populates="stages")
 
 
 class ArticleCluster(Base):
@@ -370,20 +409,25 @@ class ClusterInsight(Base):
     underperformed: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false"), nullable=False
     )
-    tempo_gsc_impressions: Mapped[int] = mapped_column(
+    gsc_impressions: Mapped[int] = mapped_column(
         Integer, server_default=text("0"), nullable=False
     )
-    gsc_demand_gap: Mapped[bool] = mapped_column(
-        Boolean, server_default=text("false"), nullable=False
+    gsc_clicks: Mapped[int] = mapped_column(
+        Integer, server_default=text("0"), nullable=False
     )
+    gsc_ctr: Mapped[float | None] = mapped_column(Float)
+    gsc_avg_position: Mapped[float | None] = mapped_column(Float)
     competitor_freshness_days: Mapped[int | None] = mapped_column(Integer)
+    # Demand × performance classification (D35)
+    demand_score: Mapped[float | None] = mapped_column(Float)
+    high_demand: Mapped[bool | None] = mapped_column(Boolean)
+    performance_level: Mapped[str | None] = mapped_column(String)
+    editorial_quadrant: Mapped[str | None] = mapped_column(String)
     summary: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
     what_happened: Mapped[str | None] = mapped_column(Text)
     parties_involved: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
     editorial_angle: Mapped[str | None] = mapped_column(Text)
-    calculated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
-    )
+    calculated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     cluster: Mapped["ArticleCluster"] = relationship(back_populates="insight")
 

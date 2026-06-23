@@ -21,6 +21,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clusters/quadrant-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quadrant distribution across all current clusters */
+        get: operations["quadrant_summary_api_v1_clusters_quadrant_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clusters/quadrant/{quadrant}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Top clusters for a given editorial quadrant */
+        get: operations["clusters_by_quadrant_api_v1_clusters_quadrant__quadrant__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clusters/morning": {
         parameters: {
             query?: never;
@@ -28,7 +62,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Morning briefing — top uncovered clusters */
+        /** Morning briefing — opportunity clusters ranked by demand × performance */
         get: operations["morning_clusters_api_v1_clusters_morning_get"];
         put?: never;
         post?: never;
@@ -45,7 +79,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deferred clusters — high velocity, uncovered, stale internal coverage */
+        /** Deferred clusters — high demand, uncovered, stale internal coverage */
         get: operations["deferred_clusters_api_v1_clusters_deferred_get"];
         put?: never;
         post?: never;
@@ -306,18 +340,31 @@ export interface components {
             underperformed: boolean | null;
             /** Competitor Freshness Days */
             competitor_freshness_days: number | null;
+            /** Demand Score */
+            demand_score: number | null;
+            /** High Demand */
+            high_demand: boolean | null;
+            /** Performance Level */
+            performance_level: string | null;
+            /** Editorial Quadrant */
+            editorial_quadrant: string | null;
             /** What Happened */
             what_happened: string | null;
             /** Parties Involved */
             parties_involved: string[] | null;
             /** Editorial Angle */
             editorial_angle: string | null;
+            /** Bullet Insights */
+            bullet_insights: string[] | null;
             /** Insight Calculated At */
             insight_calculated_at: string | null;
             /** Members */
             members: components["schemas"]["ArticleSummary"][];
             /** Sub Clusters */
             sub_clusters: components["schemas"]["ClusterSummary"][] | null;
+            parent_cluster: components["schemas"]["ClusterSummary"] | null;
+            /** Sibling Clusters */
+            sibling_clusters: components["schemas"]["ClusterSummary"][] | null;
             /** Is Stale */
             is_stale: boolean;
         };
@@ -357,6 +404,26 @@ export interface components {
             cluster_count: number;
             /** Has Insights */
             has_insights: boolean;
+            /**
+             * Stages
+             * @default []
+             */
+            stages: components["schemas"]["ClusterRunStageResponse"][];
+        };
+        /** ClusterRunStageResponse */
+        ClusterRunStageResponse: {
+            /** Stage */
+            stage: string;
+            /** Status */
+            status: string;
+            /** Started At */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ClusterSummary */
         ClusterSummary: {
@@ -391,12 +458,22 @@ export interface components {
             underperformed: boolean | null;
             /** Competitor Freshness Days */
             competitor_freshness_days: number | null;
+            /** Demand Score */
+            demand_score: number | null;
+            /** High Demand */
+            high_demand: boolean | null;
+            /** Performance Level */
+            performance_level: string | null;
+            /** Editorial Quadrant */
+            editorial_quadrant: string | null;
             /** What Happened */
             what_happened: string | null;
             /** Parties Involved */
             parties_involved: string[] | null;
             /** Editorial Angle */
             editorial_angle: string | null;
+            /** Bullet Insights */
+            bullet_insights: string[] | null;
             /** Insight Calculated At */
             insight_calculated_at: string | null;
         };
@@ -433,6 +510,21 @@ export interface components {
             channel: string;
             /** Notified */
             notified: boolean;
+        };
+        /** QuadrantSummary */
+        QuadrantSummary: {
+            /** Opportunity */
+            opportunity: number;
+            /** Winning */
+            winning: number;
+            /** Evergreen */
+            evergreen: number;
+            /** Ignore */
+            ignore: number;
+            /** Too Early */
+            too_early: number;
+            /** Total */
+            total: number;
         };
         /** SourceCreate */
         SourceCreate: {
@@ -550,6 +642,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedArticles"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quadrant_summary_api_v1_clusters_quadrant_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuadrantSummary"];
+                };
+            };
+        };
+    };
+    clusters_by_quadrant_api_v1_clusters_quadrant__quadrant__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                quadrant: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterListResponse"];
                 };
             };
             /** @description Validation Error */

@@ -46,19 +46,44 @@ def _cluster_with_insight(
     trend_velocity: float = 0.5,
     competitor_count: int = 2,
     trend_match_count: int = 1,
+    weighted_trend_score: float | None = None,
     last_internal_days_ago: int | None = None,
     underperformed: bool = False,
+    demand_score: float | None = None,
+    high_demand: bool | None = None,
+    performance_level: str | None = None,
+    editorial_quadrant: str | None = None,
+    what_happened: str | None = None,
+    parties_involved: list[str] | None = None,
+    editorial_angle: str | None = None,
+    summary: list[str] | None = None,
+    parent_cluster_id: uuid.UUID | None = None,
 ) -> tuple[ArticleCluster, ClusterInsight]:
-    cluster = ArticleCluster(id=uuid.uuid4(), run_id=run_id, label="Test", is_current=True)
+    cluster = ArticleCluster(
+        id=uuid.uuid4(),
+        run_id=run_id,
+        label="Test",
+        is_current=True,
+        parent_cluster_id=parent_cluster_id,
+    )
     insight = ClusterInsight(
         id=uuid.uuid4(),
         cluster_id=cluster.id,
         trend_velocity=trend_velocity,
         competitor_count=competitor_count,
         trend_match_count=trend_match_count,
+        weighted_trend_score=weighted_trend_score,
         tempo_covered=tempo_covered,
         last_internal_days_ago=last_internal_days_ago,
         underperformed=underperformed,
+        demand_score=demand_score,
+        high_demand=high_demand,
+        performance_level=performance_level,
+        editorial_quadrant=editorial_quadrant,
+        what_happened=what_happened,
+        parties_involved=parties_involved,
+        editorial_angle=editorial_angle,
+        summary=summary,
     )
     return cluster, insight
 
@@ -91,23 +116,43 @@ async def test_morning_includes_uncovered_cluster(
     assert str(cluster.id) in ids
 
 
-async def test_morning_ordered_by_trend_velocity_desc(
+async def test_morning_prioritizes_opportunity_quadrant_then_demand_score(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
-    c1, i1 = _cluster_with_insight(run.id, trend_velocity=0.9)
-    c2, i2 = _cluster_with_insight(run.id, trend_velocity=0.2)
-    c3, i3 = _cluster_with_insight(run.id, trend_velocity=0.6)
+    # opportunity with high demand_score — should rank first
+    c1, i1 = _cluster_with_insight(
+        run.id,
+        editorial_quadrant="opportunity",
+        demand_score=0.9,
+        high_demand=True,
+        performance_level="none",
+    )
+    # opportunity with lower demand_score
+    c2, i2 = _cluster_with_insight(
+        run.id,
+        editorial_quadrant="opportunity",
+        demand_score=0.5,
+        high_demand=True,
+        performance_level="none",
+    )
+    # ignore quadrant — sinks to bottom even with high trend_match_count
+    c3, i3 = _cluster_with_insight(
+        run.id,
+        editorial_quadrant="ignore",
+        demand_score=0.0,
+        high_demand=False,
+        performance_level="none",
+        trend_match_count=5,
+    )
     session.add_all([run, c1, i1, c2, i2, c3, i3])
     await session.flush()
 
     response = await client.get("/api/v1/clusters/morning")
     assert response.status_code == 200
-    data = response.json()["clusters"]
-    ids = [r["id"] for r in data]
-    # c1 (0.9) should come before c3 (0.6) which before c2 (0.2)
-    assert ids.index(str(c1.id)) < ids.index(str(c3.id))
-    assert ids.index(str(c3.id)) < ids.index(str(c2.id))
+    ids = [r["id"] for r in response.json()["clusters"]]
+    assert ids.index(str(c1.id)) < ids.index(str(c2.id))
+    assert ids.index(str(c2.id)) < ids.index(str(c3.id))
 
 
 async def test_morning_respects_top_n(
@@ -129,26 +174,25 @@ async def test_morning_respects_top_n(
     assert len(response.json()["clusters"]) <= 2
 
 
-async def test_deferred_returns_high_velocity_uncovered_stale(
+async def test_deferred_returns_high_demand_uncovered_stale(
     session: AsyncSession, client: AsyncClient, monkeypatch
 ) -> None:
     from core.config import settings as cfg
 
-    monkeypatch.setattr(cfg, "scoring_deferred_velocity_min", 0.4)
     monkeypatch.setattr(cfg, "scoring_recent_internal_days", 7)
 
     run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
-    # qualifies: high velocity, uncovered, stale (14 days ago)
+    # qualifies: high_demand, uncovered, stale (14 days ago)
     c_yes, i_yes = _cluster_with_insight(
-        run.id, trend_velocity=0.8, tempo_covered=False, last_internal_days_ago=14
+        run.id, high_demand=True, tempo_covered=False, last_internal_days_ago=14
     )
     # disqualified: covered
     c_covered, i_covered = _cluster_with_insight(
-        run.id, trend_velocity=0.8, tempo_covered=True
+        run.id, high_demand=True, tempo_covered=True
     )
-    # disqualified: low velocity
+    # disqualified: not high_demand
     c_slow, i_slow = _cluster_with_insight(
-        run.id, trend_velocity=0.1, tempo_covered=False, last_internal_days_ago=14
+        run.id, high_demand=False, tempo_covered=False, last_internal_days_ago=14
     )
     session.add_all([run, c_yes, i_yes, c_covered, i_covered, c_slow, i_slow])
     await session.flush()
@@ -189,6 +233,64 @@ async def test_cluster_detail_returns_new_schema(
     assert "recommendation" not in data
     assert "novelty_score" not in data
     assert "coverage_score" not in data
+
+
+async def test_cluster_detail_exposes_insight_fields(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster, insight = _cluster_with_insight(
+        run.id,
+        demand_score=0.75,
+        high_demand=True,
+        performance_level="low",
+        editorial_quadrant="opportunity",
+        what_happened="Terjadi sesuatu penting.",
+        parties_involved=["Pihak A", "Pihak B", "Pihak A"],
+        editorial_angle="Sudut editorial yang menarik.",
+        summary=["Klaim satu", "Klaim dua", "Klaim satu"],
+    )
+    session.add_all([run, cluster, insight])
+    await session.flush()
+
+    response = await client.get(f"/api/v1/clusters/{cluster.id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["demand_score"] == pytest.approx(0.75)
+    assert data["high_demand"] is True
+    assert data["performance_level"] == "low"
+    assert data["editorial_quadrant"] == "opportunity"
+    assert data["what_happened"] == "Terjadi sesuatu penting."
+    assert data["editorial_angle"] == "Sudut editorial yang menarik."
+    # distinct applied — duplicates removed, order preserved
+    assert data["parties_involved"] == ["Pihak A", "Pihak B"]
+    assert data["bullet_insights"] == ["Klaim satu", "Klaim dua"]
+    assert data["parent_cluster"] is None
+    assert data["sibling_clusters"] is None
+    # raw GSC fields must not be in the response (D35)
+    assert "tempo_gsc_impressions" not in data
+    assert "gsc_demand_gap" not in data
+
+
+async def test_cluster_detail_returns_parent_and_siblings(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    parent, parent_insight = _cluster_with_insight(run.id)
+    child, child_insight = _cluster_with_insight(run.id, parent_cluster_id=parent.id)
+    sibling, sibling_insight = _cluster_with_insight(run.id, parent_cluster_id=parent.id)
+    session.add_all([run, parent, parent_insight, child, child_insight, sibling, sibling_insight])
+    await session.flush()
+
+    response = await client.get(f"/api/v1/clusters/{child.id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["parent_cluster"] is not None
+    assert data["parent_cluster"]["id"] == str(parent.id)
+    assert data["sibling_clusters"] is not None
+    sibling_ids = [s["id"] for s in data["sibling_clusters"]]
+    assert str(sibling.id) in sibling_ids
+    assert str(child.id) not in sibling_ids
 
 
 async def test_cluster_detail_returns_404_for_unknown_id(client: AsyncClient) -> None:
