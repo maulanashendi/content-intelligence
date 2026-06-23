@@ -7,6 +7,7 @@ import { Kpi, LoadingState, ErrorState } from "@ei-fe/ui"
 import { ArticleClustersCard } from "./article-clusters-card.js"
 import { ClusterForceGraph } from "./cluster-force-graph.js"
 import { EditorialBriefing } from "./editorial-briefing.js"
+import { NewsVolumeTrendCard } from "./news-volume-trend-card.js"
 import { OpportunityMatrixCard } from "./opportunity-matrix-card.js"
 import { TrendSignalCard } from "./trend-signal-card.js"
 
@@ -101,6 +102,10 @@ export function MorningView() {
 
       <div style={{ padding: "20px 28px 0" }}>
         <OpportunityMatrixCard clusters={clusters} />
+      </div>
+
+      <div style={{ padding: "20px 28px 0" }}>
+        <NewsVolumeTrendCard />
       </div>
 
       <div style={{ padding: "20px 28px 0" }}>
