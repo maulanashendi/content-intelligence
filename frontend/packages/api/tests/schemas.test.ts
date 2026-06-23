@@ -1,8 +1,10 @@
 import { describe, test, expect } from "bun:test"
-import { ContentSourceSchema, ContentSourceListSchema, ArticleSchema, PaginatedArticlesSchema, ClusterListResponseSchema, ClusterDetailSchema } from "../src/schemas.js"
+import { ContentSourceSchema, ContentSourceListSchema, ArticleSchema, PaginatedArticlesSchema, ClusterListResponseSchema, ClusterDetailSchema, BentoListResponseSchema, VolumeTrendResponseSchema } from "../src/schemas.js"
 import morningClusters from "./mocks/fixtures/morning-clusters.json"
 import clusterDetail from "./mocks/fixtures/cluster-detail.json"
 import clusterDetailsMap from "./mocks/fixtures/cluster-details-map.json"
+import bentoClusters from "./mocks/fixtures/bento-clusters.json"
+import clusterVolumeTrend from "./mocks/fixtures/cluster-volume-trend.json"
 
 // Minimal valid payload matching what the backend SourceResponse returns.
 const VALID_SOURCE = {
@@ -209,6 +211,42 @@ describe("ClusterListResponseSchema — morning-clusters fixture", () => {
     expect(counts.too_early).toBe(1)
     expect(counts.evergreen).toBe(1)
     expect(counts.ignore).toBe(3)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Fixture validation — bento + volume trend
+// ---------------------------------------------------------------------------
+
+describe("BentoListResponseSchema — bento-clusters fixture", () => {
+  test("validates bento-clusters.json", () => {
+    const result = BentoListResponseSchema.safeParse(bentoClusters)
+    expect(result.success).toBe(true)
+  })
+
+  test("all 10 cards have required integer fields", () => {
+    const result = BentoListResponseSchema.safeParse(bentoClusters)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    for (const card of result.data.cards) {
+      expect(typeof card.views).toBe("number")
+      expect(typeof card.internal_article_count).toBe("number")
+    }
+  })
+})
+
+describe("VolumeTrendResponseSchema — cluster-volume-trend fixture", () => {
+  test("validates cluster-volume-trend.json", () => {
+    const result = VolumeTrendResponseSchema.safeParse(clusterVolumeTrend)
+    expect(result.success).toBe(true)
+  })
+
+  test("fixture has exactly 48 hourly buckets", () => {
+    const result = VolumeTrendResponseSchema.safeParse(clusterVolumeTrend)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.buckets.length).toBe(48)
+    expect(result.data.bucket).toBe("hour")
   })
 })
 

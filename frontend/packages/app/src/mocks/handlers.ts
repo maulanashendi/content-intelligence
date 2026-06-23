@@ -5,6 +5,8 @@ import clusterDetail from "../../../api/tests/mocks/fixtures/cluster-detail.json
 import clusterDetailsMap from "../../../api/tests/mocks/fixtures/cluster-details-map.json"
 import analystAnalyze from "./fixtures/analyst-analyze.json"
 import analystRecommendation from "./fixtures/analyst-recommendation.json"
+import bentoClusters from "../../../api/tests/mocks/fixtures/bento-clusters.json"
+import clusterVolumeTrend from "../../../api/tests/mocks/fixtures/cluster-volume-trend.json"
 
 const BASE = `${(import.meta.env.BASE_URL ?? "/").replace(/\/$/, "")}/api/v1`
 
@@ -180,6 +182,17 @@ export const handlers = [
     const pageSize = parseInt(url.searchParams.get("page_size") ?? "20", 10)
     return HttpResponse.json(generateArticles(page, pageSize))
   }),
+  http.get(`${BASE}/clusters/bento`, ({ request }) => {
+    const url = new URL(request.url)
+    const limit = parseInt(url.searchParams.get("limit") ?? "8", 10)
+    const offset = parseInt(url.searchParams.get("offset") ?? "0", 10)
+    return HttpResponse.json({
+      ...bentoClusters,
+      cards: bentoClusters.cards.slice(offset, offset + limit),
+      total: bentoClusters.cards.length,
+    })
+  }),
+  http.get(`${BASE}/clusters/:id/volume-trend`, () => HttpResponse.json(clusterVolumeTrend)),
   http.get(`${BASE}/clusters/:id`, ({ params }) => {
     const { id } = params as { id: string }
     if (id in clusterDetailsMap) {
