@@ -5,6 +5,7 @@ import path from "path"
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  cacheDir: "/tmp/vite-ei-cache",
   base: process.env["VITE_BASE"] ?? "/",
   resolve: {
     alias: {

@@ -1,50 +1,13 @@
 import type { ClusterDetail } from "@ei-fe/api"
+import { formatDateTime } from "@ei-fe/core"
 
 interface GeneratedAnglesCardProps {
   cluster: ClusterDetail
 }
 
-interface Angle {
-  headline: string
-  insight: string
-  openAngle: string
-  competitors: { name: string; note: string }[]
-}
-
-function buildAngles(cluster: ClusterDetail): Angle[] {
-  const sources = [...new Set(cluster.members.map((m) => m.source_name))]
-  const label = cluster.label ?? "topik ini"
-  const topSource = cluster.members[0]?.source_name ?? "Kompas"
-  const secondSource = cluster.members[1]?.source_name ?? "Detik"
-  const thirdSource = cluster.members[2]?.source_name ?? "CNN Indonesia"
-  const highRelevance = cluster.members.filter((m) => (m.relevance_score ?? 0) > 0.85)
-  const competitorCount = cluster.competitor_count ?? 0
-
-  return [
-    {
-      headline: `Dampak jangka panjang ${label} terhadap kelompok rentan`,
-      insight: `${competitorCount} outlet kompetitor sudah menulis topik ini — mayoritas hanya menyentuh permukaan berita. Belum ada yang mengangkat perspektif masyarakat terdampak secara mendalam.`,
-      openAngle: `Investigasi lapangan ke komunitas terdampak langsung.`,
-      competitors: [
-        { name: topSource, note: "breaking news saja, tanpa analisis dampak" },
-        { name: secondSource, note: "kutip pejabat, tidak ada warga yang diwawancarai" },
-        { name: thirdSource, note: "replikasi siaran pers, tidak ada sudut baru" },
-      ],
-    },
-    {
-      headline: `Aktor di balik ${label}: siapa yang diuntungkan?`,
-      insight: `${highRelevance.length} dari ${cluster.member_count} artikel memiliki relevansi tinggi, namun tidak ada yang menelusuri rantai kepentingan di balik keputusan ini.`,
-      openAngle: `Pemetaan jaringan kepentingan dan aliran dana terkait kebijakan.`,
-      competitors: [
-        { name: sources[0] ?? topSource, note: "fokus pada pernyataan resmi" },
-        { name: sources[1] ?? secondSource, note: "hanya meliput reaksi DPR" },
-      ],
-    },
-  ]
-}
-
 export function GeneratedAnglesCard({ cluster }: GeneratedAnglesCardProps) {
-  const angles = buildAngles(cluster)
+  const { what_happened, editorial_angle, parties_involved, bullet_insights, insight_calculated_at } = cluster
+  const hasInsight = what_happened || editorial_angle || parties_involved?.length || bullet_insights?.length
 
   return (
     <div className="card">
@@ -53,38 +16,76 @@ export function GeneratedAnglesCard({ cluster }: GeneratedAnglesCardProps) {
           <span className="angle-tag">AI</span>
           {" "}Generated Angles · Bullet Insights
         </span>
-        <span className="card-meta">{angles.length} sudut ditemukan</span>
+        <span className="card-meta">
+          {insight_calculated_at ? formatDateTime(insight_calculated_at) : "—"}
+        </span>
       </div>
-      <div className="ci-list">
-        {angles.map((angle, i) => (
-          <div key={i} className="ci-block">
-            <div className="ci-block-head">
-              <span
-                style={{
-                  fontFamily: "var(--font-serif)",
-                  fontSize: 15,
-                  fontWeight: 500,
-                  lineHeight: 1.3,
-                  color: "var(--fg)",
-                }}
-              >
-                {angle.headline}
-              </span>
+
+      {!hasInsight ? (
+        <div className="ci-list">
+          <p style={{ fontSize: 13, color: "var(--fg-muted)", padding: "8px 0" }}>
+            Insight belum tersedia — cluster belum dilabeli.
+          </p>
+        </div>
+      ) : (
+        <div className="ci-list">
+          {what_happened && (
+            <div className="ci-block">
+              <div className="ci-block-head">
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--fg-muted)" }}>
+                  Peristiwa
+                </span>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--fg)", lineHeight: 1.5, marginTop: 4 }}>
+                {what_happened}
+              </p>
             </div>
-            <ul className="ci-bullets">
-              <li>{angle.insight}</li>
-              {angle.competitors.map((c) => (
-                <li key={c.name}>
-                  <strong>{c.name}</strong> — {c.note}
-                </li>
-              ))}
-              <li className="ci-gap">
-                <strong>Open angle:</strong> <em>{angle.openAngle}</em>
-              </li>
-            </ul>
-          </div>
-        ))}
-      </div>
+          )}
+
+          {editorial_angle && (
+            <div className="ci-block">
+              <div className="ci-block-head">
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--fg-muted)" }}>
+                  Sudut Editorial
+                </span>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--fg)", lineHeight: 1.5, marginTop: 4, fontStyle: "italic" }}>
+                {editorial_angle}
+              </p>
+            </div>
+          )}
+
+          {parties_involved && parties_involved.length > 0 && (
+            <div className="ci-block">
+              <div className="ci-block-head">
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--fg-muted)" }}>
+                  Pihak Terlibat
+                </span>
+              </div>
+              <ul className="ci-bullets" style={{ marginTop: 4 }}>
+                {parties_involved.map((party) => (
+                  <li key={party}>{party}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {bullet_insights && bullet_insights.length > 0 && (
+            <div className="ci-block">
+              <div className="ci-block-head">
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--fg-muted)" }}>
+                  Poin Kunci
+                </span>
+              </div>
+              <ul className="ci-bullets" style={{ marginTop: 4 }}>
+                {bullet_insights.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,14 +1,17 @@
 """Fetch Google Search Console data and upsert into gsc_page, gsc_query, gsc_page_query."""
 
 import logging
+import re
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from core.config import Settings
-from core.models import GscPage, GscPageQuery, GscQuery
+from core.config import Settings, settings as default_settings
+from core.models import Article, ArticleGscMetric, ContentSource, GscPage, GscPageQuery, GscQuery, SourceType
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -162,6 +165,167 @@ async def _upsert_page_queries(
             },
         )
         await session.execute(stmt)
+    return len(values)
+
+
+_NORM_SCHEME = re.compile(r"^https?://")
+_NORM_PREFIX = re.compile(r"^(www\.|en\.|m\.)")
+_NORM_SUFFIX = re.compile(r"[?#].*$")
+# Trailing numeric ID in Tempo slugs: ...-<6+digits> at path end
+_TEMPO_ID_TRAIL = re.compile(r"-(\d{6,})/?$")
+# en.tempo.co /read/<id>/ format
+_TEMPO_ID_READ = re.compile(r"/read/(\d{5,})/")
+
+
+def _normalize_url(url: str) -> str:
+    url = url.lower()
+    url = _NORM_SCHEME.sub("", url)
+    url = _NORM_PREFIX.sub("", url)
+    url = _NORM_SUFFIX.sub("", url)
+    return url.rstrip("/")
+
+
+def _extract_id_suffix(url: str) -> str | None:
+    m = _TEMPO_ID_TRAIL.search(url)
+    if m:
+        return m.group(1)
+    m = _TEMPO_ID_READ.search(url)
+    if m:
+        return m.group(1)
+    return None
+
+
+async def link_articles(session: AsyncSession, gsc_fetch_days: int | None = None) -> int:
+    """Map gsc_page rows to internal articles and upsert into article_gsc_metric.
+
+    Matching strategy (in order):
+    1. Exact normalized URL (strip scheme / www|en|m / query / trailing slash).
+    2. Trailing numeric ID fallback — Tempo slugs end in -<digits>; en.tempo.co
+       uses /read/<id>/ — used when exact norm fails.
+
+    Aggregates impression-weighted avg_position and sums clicks/impressions when
+    multiple gsc_page rows map to the same (article, period) — rare in practice.
+    """
+    window_days = gsc_fetch_days if gsc_fetch_days is not None else default_settings.gsc_fetch_days
+    cutoff = date.today() - timedelta(days=window_days)
+
+    # Load internal articles
+    rows = (
+        await session.execute(
+            select(Article.id, Article.url)
+            .join(ContentSource, ContentSource.id == Article.source_id)
+            .where(ContentSource.source_type == SourceType.internal)
+        )
+    ).all()
+
+    norm_to_id: dict[str, uuid.UUID] = {}
+    suffix_to_id: dict[str, uuid.UUID] = {}
+    for art_id, url in rows:
+        norm = _normalize_url(url)
+        norm_to_id[norm] = art_id
+        suffix = _extract_id_suffix(url)
+        # First article found for a given suffix wins; avoids false cross-matches
+        if suffix and suffix not in suffix_to_id:
+            suffix_to_id[suffix] = art_id
+
+    if not norm_to_id:
+        logger.info("gsc link_articles: no internal articles found, skipping")
+        return 0
+
+    # Load gsc_page rows whose window ends within the configured fetch horizon.
+    # Filter by period_end (not period_start) so a multi-day window like
+    # 2026-05-01→2026-06-01 is included as long as its end date is recent enough.
+    gsc_rows = (
+        await session.execute(
+            select(
+                GscPage.page_url,
+                GscPage.clicks,
+                GscPage.impressions,
+                GscPage.avg_position,
+                GscPage.period_start,
+                GscPage.period_end,
+            ).where(GscPage.period_end >= cutoff)
+        )
+    ).all()
+
+    # Match and aggregate per (article_id, period_start, period_end)
+    # value: {clicks, impressions, weighted_pos_num, weighted_pos_den}
+    agg: dict[tuple[uuid.UUID, date, date], dict] = {}
+    matched_exact = 0
+    matched_id = 0
+    unmatched = 0
+
+    for page_url, clicks, impressions, avg_position, period_start, period_end in gsc_rows:
+        article_id = norm_to_id.get(_normalize_url(page_url))
+        if article_id is not None:
+            matched_exact += 1
+        else:
+            suffix = _extract_id_suffix(page_url)
+            article_id = suffix_to_id.get(suffix) if suffix else None
+            if article_id is not None:
+                matched_id += 1
+            else:
+                unmatched += 1
+                continue
+
+        key = (article_id, period_start, period_end)
+        if key not in agg:
+            agg[key] = {"clicks": 0, "impressions": 0, "wpos_num": 0.0, "wpos_den": 0}
+        bucket = agg[key]
+        bucket["clicks"] += clicks or 0
+        imp = impressions or 0
+        bucket["impressions"] += imp
+        if avg_position is not None and imp > 0:
+            bucket["wpos_num"] += avg_position * imp
+            bucket["wpos_den"] += imp
+
+    logger.info(
+        "gsc link_articles: matched exact=%d id_fallback=%d unmatched=%d",
+        matched_exact,
+        matched_id,
+        unmatched,
+    )
+
+    if not agg:
+        return 0
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    values = []
+    for (article_id, period_start, period_end), bucket in agg.items():
+        imp = bucket["impressions"]
+        clk = bucket["clicks"]
+        avg_pos = (bucket["wpos_num"] / bucket["wpos_den"]) if bucket["wpos_den"] > 0 else None
+        ctr_val = (clk / imp) if imp > 0 else None
+        values.append(
+            {
+                "article_id": article_id,
+                "clicks": clk,
+                "impressions": imp,
+                "ctr": ctr_val,
+                "avg_position": avg_pos,
+                "period_start": period_start,
+                "period_end": period_end,
+                "fetched_at": now,
+            }
+        )
+
+    for batch in _chunked(values, _BATCH_SIZE):
+        stmt = pg_insert(ArticleGscMetric).values(batch)
+        await session.execute(
+            stmt.on_conflict_do_update(
+                constraint="uq_gsc_metric_article_period",
+                set_={
+                    "clicks": stmt.excluded.clicks,
+                    "impressions": stmt.excluded.impressions,
+                    "ctr": stmt.excluded.ctr,
+                    "avg_position": stmt.excluded.avg_position,
+                    "fetched_at": stmt.excluded.fetched_at,
+                },
+            )
+        )
+    await session.commit()
+
+    logger.info("gsc link_articles: upserted %d article_gsc_metric rows", len(values))
     return len(values)
 
 

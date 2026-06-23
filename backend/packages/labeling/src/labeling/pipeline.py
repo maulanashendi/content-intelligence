@@ -86,23 +86,25 @@ async def _select_cluster_ids_for_labeling(
     """Current top-level cluster ids in labeling priority order, capped at
     settings.labeling_max_clusters.
 
-    Priority: trend match (distinct trend signals captured in the last 24h that
-    the cluster's articles hit) desc, then member_count desc. When a run produces
+    Priority: trend match (distinct trending keywords within scoring_trend_window_days
+    that the cluster's articles hit) desc, then member_count desc. When a run produces
     more clusters than the cap, the Gemma budget is spent on the most newsworthy
     (trending) and largest clusters; the long tail is left unlabeled this run
     (still scored). Returns (selected_ids, total_current_count).
     """
-    t24h = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
+    trend_window = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+        days=settings.scoring_trend_window_days
+    )
     sql = text(
         """
         SELECT c.id AS cluster_id
         FROM article_cluster c
         LEFT JOIN (
-            SELECT m.cluster_id, COUNT(DISTINCT tsa.trend_signal_id) AS trend_match_count
+            SELECT m.cluster_id, COUNT(DISTINCT ts.keyword) AS trend_match_count
             FROM article_cluster_member m
             JOIN trend_signal_article tsa ON tsa.article_id = m.article_id
             JOIN trend_signal ts          ON ts.id = tsa.trend_signal_id
-            WHERE ts.captured_at >= :t24h
+            WHERE ts.captured_at >= :trend_window
             GROUP BY m.cluster_id
         ) t ON t.cluster_id = c.id
         WHERE c.is_current = true
@@ -114,7 +116,10 @@ async def _select_cluster_ids_for_labeling(
                  c.id
         """
     )
-    all_ids = [row.cluster_id for row in (await session.execute(sql, {"t24h": t24h})).all()]
+    all_ids = [
+        row.cluster_id
+        for row in (await session.execute(sql, {"trend_window": trend_window})).all()
+    ]
     return all_ids[: settings.labeling_max_clusters], len(all_ids)
 
 

@@ -13,6 +13,14 @@ import asyncpg
 from core.config import settings
 from core.db import get_session
 from core.models import ClusterRun, ContentSource, PipelineGroupLock, SourceStatus
+from pipeline.locks import (
+    GROUP_ANALYSIS,
+    GROUP_CLUSTER_LABEL_SCORE,
+    acquire_lock,
+    bump_lock,
+    reap_expired_lock,
+    release_lock,
+)
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -22,15 +30,19 @@ POLL_INTERVAL = 600
 RECONNECT_BACKOFF_BASE = 10
 IMMEDIATE_QUEUE_MAX = 1024
 
-_GROUP_CLUSTER_LABEL_SCORE = "cluster_label_score"
-_GROUP_ANALYSIS = "analysis"
+_GROUP_CLUSTER_LABEL_SCORE = GROUP_CLUSTER_LABEL_SCORE
+_GROUP_ANALYSIS = GROUP_ANALYSIS
 _CHANNEL_RSS_SOURCE_CREATED = "rss_source_created"
 _CHANNEL_CLUSTER_LABEL_SCORE = "pipeline_cluster_label_score_requested"
 _CHANNEL_ANALYSIS = "pipeline_analysis_requested"
 
-# Groups currently held by this process — used by the heartbeat task.
+# Groups currently held by this process — used by the embed-defer guard.
 # Written/discarded on the loop (single-threaded coroutines) — no lock needed.
 _held_groups: set[str] = set()
+
+# Re-exported so test_lock_lease.py can import these names from pipeline.runner.
+_acquire_lock = acquire_lock
+_release_lock = release_lock
 
 
 async def _run_ingest_then_embed() -> None:
@@ -41,6 +53,14 @@ async def _run_ingest_then_embed() -> None:
     from ingest.scraper import run as scrape_run
 
     await scrape_run()
+
+    # Skip embedding while cluster_label_score is active: running two large CPU
+    # inference jobs (sentence-transformers + Gemma GGUF) simultaneously in threads
+    # causes native-code crashes (no GPU available). Deferred batches are picked up
+    # on the next poll interval.
+    if _GROUP_CLUSTER_LABEL_SCORE in _held_groups:
+        logger.info("embed deferred: cluster_label_score in progress")
+        return
 
     from embedding.pipeline import run as embed_run
 
@@ -111,6 +131,14 @@ async def _run_gsc_fetch() -> None:
         await gsc.run(session, settings)
 
 
+async def _link_gsc_articles() -> None:
+    from ingest.gsc import link_articles
+
+    async with get_session() as session:
+        count = await link_articles(session)
+    logger.info("gsc article link complete linked=%d", count)
+
+
 async def _run_cluster_label_score() -> None:
     from pipeline.cluster_label_score import run
 
@@ -123,44 +151,6 @@ async def _run_analysis() -> None:
     await analysis_run()
 
 
-def _lease_cutoff() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None) - timedelta(
-        seconds=settings.pipeline_lock_lease_ttl_seconds
-    )
-
-
-async def _reap_expired_lock(group: str) -> None:
-    async with get_session() as session:
-        await session.execute(
-            delete(PipelineGroupLock).where(
-                PipelineGroupLock.group_name == group,
-                PipelineGroupLock.locked_at < _lease_cutoff(),
-            )
-        )
-        await session.commit()
-
-
-async def _acquire_lock(group: str) -> bool:
-    await _reap_expired_lock(group)
-    async with get_session() as session:
-        try:
-            session.add(PipelineGroupLock(group_name=group))
-            await session.commit()
-            return True
-        except IntegrityError:
-            await session.rollback()
-            logger.warning("group=%s lock already held (fresh lease), skipping", group)
-            return False
-
-
-async def _release_lock(group: str) -> None:
-    async with get_session() as session:
-        await session.execute(
-            delete(PipelineGroupLock).where(PipelineGroupLock.group_name == group)
-        )
-        await session.commit()
-
-
 async def _heartbeat(shutdown: asyncio.Event, held: set[str]) -> None:
     interval = settings.pipeline_lock_heartbeat_seconds
     while not shutdown.is_set():
@@ -169,19 +159,11 @@ async def _heartbeat(shutdown: asyncio.Event, held: set[str]) -> None:
             return
         except TimeoutError:
             pass
-        groups = list(held)
-        if not groups:
-            continue
-        try:
-            async with get_session() as session:
-                await session.execute(
-                    update(PipelineGroupLock)
-                    .where(PipelineGroupLock.group_name.in_(groups))
-                    .values(locked_at=datetime.now(UTC).replace(tzinfo=None))
-                )
-                await session.commit()
-        except Exception:
-            logger.exception("lock heartbeat bump failed groups=%s", groups)
+        for group in list(held):
+            try:
+                await bump_lock(group)
+            except Exception:
+                logger.exception("lock heartbeat bump failed group=%s", group)
 
 
 async def _cluster_worker(
@@ -202,6 +184,7 @@ async def _cluster_worker(
         logger.info("pipeline group=%s started", _GROUP_CLUSTER_LABEL_SCORE)
         try:
             await _run_gsc_fetch()
+            await _link_gsc_articles()
             await _run_cluster_label_score()
             logger.info("pipeline group=%s finished", _GROUP_CLUSTER_LABEL_SCORE)
             if not analysis_queue.full():
@@ -369,7 +352,7 @@ async def run_loop() -> None:
 
     # Reap any lock rows left by a previous container that was SIGKILLed.
     for group in (_GROUP_CLUSTER_LABEL_SCORE, _GROUP_ANALYSIS):
-        await _reap_expired_lock(group)
+        await reap_expired_lock(group)
     logger.info("startup lock reap complete")
 
     logger.info(
