@@ -112,3 +112,45 @@ export function activeFilters(
       value: key === "days_lookback" ? `${String(v)} hari` : String(v),
     }))
 }
+
+/** Reader-wants phrasing keyed by the need ID label (matches USER_NEED_ORDER[*].label). */
+export const PHRASE: Record<string, string> = {
+  "Beri tahu": "tahu kabar terbaru",
+  "Edukasi": "memahami persoalan",
+  "Perspektif": "melihat dari sudut lain",
+  "Bantu": "tahu langkah yang harus diambil",
+  "Inspirasi": "merasa terinspirasi",
+  "Hibur": "terhibur",
+}
+
+export function analyzeVerdict(
+  needs: { key: string; label: string; value: number }[],
+  detected: number,
+): { leadLabel: string; weakestLabel: string; sentence: string } {
+  const sorted = [...needs].sort((a, b) => b.value - a.value)
+  const lead = sorted[0]
+  const weakest = sorted[sorted.length - 1]
+
+  // Secondary: 2nd-highest if value ≥ 50 AND within 15 points of lead
+  const second = sorted[1]
+  const secondary =
+    second && second.value >= 50 && lead.value - second.value <= 15 ? second : null
+
+  if (lead.value < 40) {
+    return {
+      leadLabel: lead.label,
+      weakestLabel: weakest.label,
+      sentence: `Profil kebutuhan draf ini belum tajam — sinyal tertinggi ada di kebutuhan ${lead.label}.`,
+    }
+  }
+
+  const leadPhrase = PHRASE[lead.label] ?? lead.label
+  const secondPhrase = secondary ? ` dan ${PHRASE[secondary.label] ?? secondary.label}` : ""
+  const weakestPhrase = PHRASE[weakest.label] ?? weakest.label
+
+  return {
+    leadLabel: lead.label,
+    weakestLabel: weakest.label,
+    sentence: `Draf ini berbicara paling kuat kepada pembaca yang ingin ${leadPhrase}${secondPhrase} — dan paling lemah saat harus ${weakestPhrase}.`,
+  }
+}

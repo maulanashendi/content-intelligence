@@ -12,8 +12,16 @@ function Card({ tone, title, items }: { tone: Tone; title: string; items: string
   if (!items || items.length === 0) return null
   const s = STYLES[tone]
   return (
-    <div className="rounded-[6px] p-3" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
-      <p className="text-[10px] font-bold uppercase tracking-[0.05em] mb-1.5" style={{ color: s.head }}>{title}</p>
+    <div
+      className="rounded-[var(--radius)] p-3"
+      style={{ background: s.bg, border: `1px solid ${s.border}` }}
+    >
+      <p
+        className="text-[10.5px] font-semibold tracking-[0.04em] mb-1.5"
+        style={{ color: s.head }}
+      >
+        {title}
+      </p>
       <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
         {items.map((it, i) => (
           <li key={i} className="text-[12px] leading-snug pl-3 relative" style={{ color: "var(--fg-muted)" }}>
@@ -28,11 +36,14 @@ function Card({ tone, title, items }: { tone: Tone; title: string; items: string
 
 export function FeedbackCards({ feedback }: { feedback: EditorialFeedback }) {
   return (
-    <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-      <Card tone="judul" title="Saran Judul" items={feedback.recommendation_judul} />
-      <Card tone="info" title="Informasi Kurang" items={feedback.missing_info} />
-      <Card tone="bias" title="Cek Bias" items={feedback.bias_check} />
-      <Card tone="angle" title="Angle Lanjutan" items={feedback.next_angle} />
+    <div
+      className="grid gap-3 max-[560px]:[grid-template-columns:1fr]"
+      style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+    >
+      <Card tone="judul" title="Saran judul" items={feedback.recommendation_judul} />
+      <Card tone="info" title="Informasi kurang" items={feedback.missing_info} />
+      <Card tone="bias" title="Cek bias" items={feedback.bias_check} />
+      <Card tone="angle" title="Angle lanjutan" items={feedback.next_angle} />
     </div>
   )
 }

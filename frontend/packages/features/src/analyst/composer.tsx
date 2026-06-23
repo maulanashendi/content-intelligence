@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react"
+import { useEffect, useState, type KeyboardEvent } from "react"
 import { Sparkles, BarChart3, ArrowUp } from "@ei-fe/ui"
 
 export type Mode = "analyze" | "recommendation"
@@ -6,15 +6,26 @@ export type SubmitPayload =
   | { kind: "analyze"; title: string; content: string }
   | { kind: "recommendation"; intent: string }
 
-export function Composer({ mode, onModeChange, onSubmit, disabled, initialText }: {
+export function Composer({ mode, onModeChange, onSubmit, disabled, initialText, seedText, onSeedConsumed }: {
   mode: Mode
   onModeChange: (m: Mode) => void
   onSubmit: (p: SubmitPayload) => void
   disabled: boolean
   initialText?: string
+  /** When set, the composer replaces its current text with this value and notifies the parent via onSeedConsumed. */
+  seedText?: string
+  onSeedConsumed?: () => void
 }) {
   const [text, setText] = useState(initialText ?? "")
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (seedText !== undefined) {
+      setText(seedText)
+      setError(null)
+      onSeedConsumed?.()
+    }
+  }, [seedText]) // intentionally omit onSeedConsumed to avoid re-triggering on parent re-render
 
   function submit() {
     const value = text.trim()
