@@ -70,7 +70,7 @@ Switching the embedding model requires a schema migration (vector dimension) and
 
 | Library | Used for | Rationale |
 |---------|----------|-----------|
-| `openai` >=1.40 (currently 2.43.x) | OpenAI-compatible HTTP client for the `analyst` package | Vendor coupling isolated in `analyst/providers.py`; switch vendor via `ANALYST_LLM_PROVIDER` (see `docs/llm-models.md`). Local vs API = base-URL swap, no torch. Lives in the shared `llm` package (provider presets + structured output), reused by analyst and labeling. |
+| `openai` >=1.40 (currently 2.43.x) | OpenAI-compatible HTTP client for the `analyst` package | Vendor coupling isolated in `llm/providers.py` (provider presets + structured output in the shared `llm` package, reused by analyst and labeling); switch vendor via `ANALYST_LLM_PROVIDER` (see `docs/llm-models.md`). Local vs API = base-URL swap, no torch. |
 
 ## Operational
 
