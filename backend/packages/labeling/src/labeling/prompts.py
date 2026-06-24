@@ -183,3 +183,61 @@ def format_dedup_messages(all_claims: list[list[str]]) -> list[dict[str, str]]:
             "content": _DEDUP_PROMPT.format(claims=numbered),
         }
     ]
+
+
+_CLUSTER_INSIGHT_USER_API = (
+    "{system_prompt}\n\n"
+    "Berikut {count} sudut liputan berbeda dari satu klaster berita yang sama:\n\n"
+    "{articles}\n\n"
+    "Hasilkan ringkasan editorial: label topik 5 sampai 7 kata tanpa tanda baca, "
+    "apa yang terjadi dalam 1 sampai 2 kalimat, daftar pihak atau tokoh utama, "
+    "satu kalimat sudut editorial untuk redaksi, dan beberapa klaim fakta penting."
+)
+
+_LABEL_USER_API = (
+    "{system_prompt}\n\n"
+    "Berikut {count} artikel paling relevan dalam satu klaster:\n\n"
+    "{articles}\n\n"
+    "Hasilkan satu label topik singkat 5 sampai 7 kata tanpa tanda baca."
+)
+
+
+def format_cluster_insight_messages_api(reps: list[dict]) -> list[dict[str, str]]:
+    entries: list[str] = []
+    for idx, rep in enumerate(reps, start=1):
+        para = ((rep.get("first_paragraph") or "")[:FIRST_PARA_MAX_CHARS]).strip() or "-"
+        entries.append(
+            f"[Sudut {idx}] Judul: {(rep.get('title') or '').strip()}\nParagraf awal: {para}"
+        )
+    return [
+        {
+            "role": "user",
+            "content": _CLUSTER_INSIGHT_USER_API.format(
+                system_prompt=_CLUSTER_INSIGHT_SYSTEM,
+                count=len(reps),
+                articles="\n\n".join(entries),
+            ),
+        }
+    ]
+
+
+def format_label_messages_api(articles: list[dict[str, str | None]]) -> list[dict[str, str]]:
+    entries: list[str] = []
+    for idx, article in enumerate(articles, start=1):
+        entries.append(
+            ARTICLE_ENTRY.format(
+                idx=idx,
+                title=(article.get("title") or "").strip(),
+                first_paragraph=(article.get("first_paragraph") or "").strip() or "-",
+            )
+        )
+    return [
+        {
+            "role": "user",
+            "content": _LABEL_USER_API.format(
+                system_prompt=SYSTEM_PROMPT,
+                count=len(articles),
+                articles="\n\n".join(entries),
+            ),
+        }
+    ]

@@ -5,6 +5,7 @@ description = "Generate cluster labels using a small local LLM (Gemma 2B class)"
 requires-python = ">=3.11"
 dependencies = [
   "core",
+  "llm",
   "llama-cpp-python>=0.3",
   "huggingface-hub>=0.30",
   "numpy>=1.26",
@@ -13,6 +14,7 @@ dependencies = [
 
 [tool.uv.sources]
 core = { workspace = true }
+llm = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -74,3 +74,22 @@ def test_format_dedup_messages_empty_input():
     msgs = prompts.format_dedup_messages([])
     assert len(msgs) == 1
     assert msgs[0]["role"] == "user"
+
+
+from labeling.prompts import format_cluster_insight_messages_api, format_label_messages_api
+
+
+def test_cluster_insight_api_message_has_article_context() -> None:
+    msgs = format_cluster_insight_messages_api(
+        [{"title": "Harga beras naik", "first_paragraph": "Melonjak tajam di pasar."}]
+    )
+    assert len(msgs) == 1 and msgs[0]["role"] == "user"
+    body = msgs[0]["content"]
+    assert "Harga beras naik" in body
+    assert "LABEL:" not in body  # JSON schema is injected by complete_structured, not a prefix format
+
+
+def test_label_api_message_has_article_context() -> None:
+    msgs = format_label_messages_api([{"title": "Topik X", "first_paragraph": "Isi."}])
+    assert "Topik X" in msgs[0]["content"]
+    assert "LABEL:" not in msgs[0]["content"]

@@ -1196,6 +1196,7 @@ dependencies = [
     { name = "core" },
     { name = "huggingface-hub" },
     { name = "llama-cpp-python" },
+    { name = "llm" },
     { name = "numpy" },
 ]
 
@@ -1205,6 +1206,7 @@ requires-dist = [
     { name = "core", editable = "packages/core" },
     { name = "huggingface-hub", specifier = ">=0.30" },
     { name = "llama-cpp-python", specifier = ">=0.3" },
+    { name = "llm", editable = "packages/llm" },
     { name = "numpy", specifier = ">=1.26" },
 ]
 

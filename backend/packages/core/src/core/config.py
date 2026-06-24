@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     # When a run has more current clusters than this, label only the top N by
     # trend match (fresh signals, 24h) then member_count — cap the Gemma budget.
     labeling_max_clusters: int = 100
+    # Labeling backend (SP2): "local" = Gemma; an llm preset name routes to API.
+    labeling_provider: str = "local"
+    labeling_model: str = "openai/gpt-4o-mini"
+    labeling_llm_api_key: str = ""
+    labeling_llm_base_url: str = ""
+    labeling_request_timeout_seconds: float = 60.0
+    labeling_attribution_referer: str = ""
+    labeling_attribution_title: str = ""
 
 
 settings = Settings()
