@@ -1,21 +1,16 @@
 import json
 import logging
-from functools import lru_cache
-from typing import Any, TypeVar
+from typing import TypeVar
 
-from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
+from analyst import providers
 from analyst.config import settings
+from analyst.providers import LLMClient
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
-
-
-@lru_cache(maxsize=8)
-def get_async_client(base_url: str, api_key: str, timeout: float) -> AsyncOpenAI:
-    return AsyncOpenAI(base_url=base_url, api_key=api_key or "not-needed", timeout=timeout)
 
 
 def _extract_json(text: str) -> str:
@@ -42,7 +37,7 @@ def _augment(messages: list[dict[str, str]], schema: type[BaseModel]) -> list[di
 
 
 async def complete_structured(
-    client: Any,
+    client: LLMClient,
     model: str,
     messages: list[dict[str, str]],
     schema: type[T],
@@ -50,13 +45,7 @@ async def complete_structured(
     augmented = _augment(messages, schema)
     last_exc: Exception | None = None
     for attempt in (1, 2):
-        response = await client.chat.completions.create(
-            model=model,
-            messages=augmented,
-            temperature=0,
-            response_format={"type": "json_object"},
-        )
-        raw = response.choices[0].message.content or ""
+        raw = await client.complete(model=model, messages=augmented)
         try:
             return schema.model_validate_json(_extract_json(raw))
         except (ValidationError, json.JSONDecodeError) as exc:
@@ -71,9 +60,14 @@ async def complete_structured(
 async def complete_for_task(
     task: str, messages: list[dict[str, str]], schema: type[T]
 ) -> T:
-    client = get_async_client(
-        settings.base_url_for(task),
+    client = providers.build_client(
+        settings.analyst_llm_provider,
         settings.analyst_llm_api_key,
+        settings.analyst_llm_base_url,
         settings.analyst_request_timeout_seconds,
+        providers.attribution_headers(
+            settings.analyst_attribution_referer,
+            settings.analyst_attribution_title,
+        ),
     )
     return await complete_structured(client, settings.model_for(task), messages, schema)

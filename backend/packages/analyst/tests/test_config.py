@@ -1,18 +1,24 @@
+import pytest
+
 from analyst.config import AnalystSettings
 
 
-def test_defaults_and_per_task_resolution() -> None:
+def test_defaults() -> None:
     s = AnalystSettings(_env_file=None)
+    assert s.analyst_llm_provider == "openai"
+    assert s.analyst_llm_base_url == ""
+    assert s.analyst_request_timeout_seconds == 60.0
     assert s.model_for("analyze") == "gpt-4o"
     assert s.model_for("recommend") == "gpt-4o"
-    # falls back to the shared base url when no per-task override is set
-    assert s.base_url_for("analyze") == "https://api.openai.com/v1"
 
 
-def test_per_task_base_url_override() -> None:
-    s = AnalystSettings(
-        _env_file=None,
-        analyst_recommend_base_url="http://localhost:11434/v1",
-    )
-    assert s.base_url_for("recommend") == "http://localhost:11434/v1"
-    assert s.base_url_for("analyze") == "https://api.openai.com/v1"
+def test_model_for_rejects_unknown_task() -> None:
+    s = AnalystSettings(_env_file=None)
+    with pytest.raises(ValueError):
+        s.model_for("translate")
+
+
+def test_per_task_base_url_is_gone() -> None:
+    s = AnalystSettings(_env_file=None)
+    assert not hasattr(s, "base_url_for")
+    assert not hasattr(s, "analyst_analyze_base_url")
