@@ -22,6 +22,7 @@ scoring = { workspace = true }
 api = { workspace = true }
 pipeline = { workspace = true }
 analyst = { workspace = true }
+llm = { workspace = true }
 torch = [
   { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]

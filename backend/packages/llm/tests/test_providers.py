@@ -1,6 +1,6 @@
 import pytest
 
-from analyst.providers import (
+from llm.providers import (
     PRESETS,
     OpenAICompatibleClient,
     ProviderPreset,

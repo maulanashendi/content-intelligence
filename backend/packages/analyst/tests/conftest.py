@@ -3,14 +3,13 @@ from pathlib import Path
 
 import pytest
 
-# Add the analyst package and core package to the path for imports
 analyst_src = Path(__file__).parent.parent / "src"
 core_src = Path(__file__).parent.parent.parent / "core" / "src"
+llm_src = Path(__file__).parent.parent.parent / "llm" / "src"
 
-if str(analyst_src) not in sys.path:
-    sys.path.insert(0, str(analyst_src))
-if str(core_src) not in sys.path:
-    sys.path.insert(0, str(core_src))
+for p in (analyst_src, core_src, llm_src):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
 
 @pytest.fixture(scope="session", autouse=True)

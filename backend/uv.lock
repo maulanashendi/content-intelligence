@@ -20,6 +20,7 @@ members = [
     "embedding",
     "ingest",
     "labeling",
+    "llm",
     "pipeline",
     "scoring",
 ]
@@ -44,7 +45,7 @@ version = "0.1.0"
 source = { editable = "packages/analyst" }
 dependencies = [
     { name = "core" },
-    { name = "openai" },
+    { name = "llm" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
 ]
@@ -52,7 +53,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "core", editable = "packages/core" },
-    { name = "openai", specifier = ">=1.40" },
+    { name = "llm", editable = "packages/llm" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-settings", specifier = ">=2" },
 ]
@@ -1291,6 +1292,21 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e6/0f/17c0e400ed17094b360e3bcc07e7fbca890e0042a5a1e9dabb056693d57f/llama_cpp_python-0.3.21.tar.gz", hash = "sha256:533636e23953d1efcf16ddf5862d963405e4bc0bccfc04ba90e9ee7afefefa75", size = 67604365, upload-time = "2026-04-27T05:17:44.296Z" }
+
+[[package]]
+name = "llm"
+version = "0.1.0"
+source = { editable = "packages/llm" }
+dependencies = [
+    { name = "openai" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "openai", specifier = ">=1.40" },
+    { name = "pydantic", specifier = ">=2" },
+]
 
 [[package]]
 name = "llvmlite"
