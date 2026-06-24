@@ -24,6 +24,7 @@ COPY packages/labeling/pyproject.toml    packages/labeling/pyproject.toml
 COPY packages/scoring/pyproject.toml     packages/scoring/pyproject.toml
 COPY packages/pipeline/pyproject.toml    packages/pipeline/pyproject.toml
 COPY packages/analyst/pyproject.toml     packages/analyst/pyproject.toml
+COPY packages/llm/pyproject.toml         packages/llm/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-workspace --no-dev --frozen
 
@@ -31,6 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM deps AS api-build
 COPY packages/core/src    packages/core/src
 COPY packages/analyst/src packages/analyst/src
+COPY packages/llm/src     packages/llm/src
 COPY packages/api/src     packages/api/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --package api --no-dev --frozen
@@ -61,7 +63,8 @@ CMD ["uvicorn", "api.main:app", \
      "--reload", \
      "--reload-dir", "/app/packages/core/src", \
      "--reload-dir", "/app/packages/api/src", \
-     "--reload-dir", "/app/packages/analyst/src"]
+     "--reload-dir", "/app/packages/analyst/src", \
+     "--reload-dir", "/app/packages/llm/src"]
 
 # ============ Ingest build — add source, install workspace packages ============
 FROM deps AS ingest-build
