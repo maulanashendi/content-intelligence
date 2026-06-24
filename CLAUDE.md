@@ -28,9 +28,10 @@ All backend commands run from `backend/`.
 | `scoring`    | velocity, novelty, coverage        | sklearn, numpy                             |
 | `api`        | FastAPI read-only                  | NO torch, NO ML imports                    |
 | `pipeline`   | Long-running daemon (D24)          | reactive ingest+embed, scheduled cluster+label; imports all batch modules |
-| `analyst`    | Editorial AI Analyst: article scoring + recommendation | openai SDK behind `providers.py` vendor boundary; switch vendor via `ANALYST_LLM_PROVIDER`; no ML import |
+| `llm`        | Shared LLM client kernel: provider presets + structured output | openai SDK; imported by `analyst` (and `labeling` in SP2); no `core` dep |
+| `analyst`    | Editorial AI Analyst: article scoring + recommendation | uses shared `llm` package; switch vendor via `ANALYST_LLM_PROVIDER`; no ML import |
 
-Rule: `api` never imports ML modules. Batch modules never import each other — share via `core`. Cross-module imports must be declared in `pyproject.toml`.
+Rule: `api` never imports ML modules. Batch modules never import each other — share via `core` (DB kernel) or `llm` (LLM client kernel). Cross-module imports must be declared in `pyproject.toml`.
 
 ## Pipeline runtime (D24)
 
