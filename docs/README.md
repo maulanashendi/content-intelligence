@@ -25,6 +25,7 @@ Everything else in `docs/` is reference material — open it on demand via the r
 | Changing the pipeline schedule, scoring toggle, or cluster window | `decisions.md` D24 + `operations-sop.md` §Pipeline scheduler |
 | Hardening an existing feature | `hardening-sop.md` |
 | Reviewing a PR | `review-sop.md` |
+| Which models we run, local vs API, and how to switch the LLM vendor | `docs/llm-models.md` |
 | "Why was X chosen?" | `decisions.md` |
 | "Is X allowed?" | `constraints.md` |
 
