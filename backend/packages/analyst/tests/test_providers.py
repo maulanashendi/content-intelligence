@@ -41,3 +41,69 @@ def test_attribution_headers_builds_pairs() -> None:
 
 def test_attribution_headers_empty() -> None:
     assert attribution_headers("", "") == ()
+
+
+from analyst.providers import OpenAICompatibleClient, build_client
+
+
+class _Msg:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class _Choice:
+    def __init__(self, content: str) -> None:
+        self.message = _Msg(content)
+
+
+class _Completion:
+    def __init__(self, content: str) -> None:
+        self.choices = [_Choice(content)]
+
+
+class _Completions:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def create(self, **kwargs: object) -> _Completion:
+        self.calls.append(kwargs)
+        return _Completion("ok")
+
+
+class _Chat:
+    def __init__(self) -> None:
+        self.completions = _Completions()
+
+
+class _RawClient:
+    def __init__(self) -> None:
+        self.chat = _Chat()
+
+
+async def test_complete_returns_content_and_sets_json_mode() -> None:
+    raw = _RawClient()
+    client = OpenAICompatibleClient(raw, supports_json_mode=True)
+    out = await client.complete(model="m", messages=[{"role": "user", "content": "x"}])
+    assert out == "ok"
+    call = raw.chat.completions.calls[0]
+    assert call["response_format"] == {"type": "json_object"}
+    assert call["temperature"] == 0
+
+
+async def test_complete_omits_json_mode_when_unsupported() -> None:
+    raw = _RawClient()
+    client = OpenAICompatibleClient(raw, supports_json_mode=False)
+    await client.complete(model="m", messages=[{"role": "user", "content": "x"}])
+    assert "response_format" not in raw.chat.completions.calls[0]
+
+
+def test_build_client_caches_identical_args() -> None:
+    a = build_client("openai", "k", "", 60.0, ())
+    b = build_client("openai", "k", "", 60.0, ())
+    assert a is b
+    assert isinstance(a, OpenAICompatibleClient)
+
+
+def test_build_client_unknown_provider_raises() -> None:
+    with pytest.raises(ValueError):
+        build_client("nope", "k", "", 60.0, ())
