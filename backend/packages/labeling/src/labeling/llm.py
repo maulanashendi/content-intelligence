@@ -5,14 +5,19 @@ import re
 from typing import Any
 
 from core.config import settings
+from llm.providers import attribution_headers, build_client
+from llm.structured import complete_structured
 
 from labeling.prompts import (
     format_cluster_insight_messages,
+    format_cluster_insight_messages_api,
     format_dedup_messages,
     format_extract_messages,
     format_insight_messages,
+    format_label_messages_api,
     format_messages,
 )
+from labeling.schemas import ClusterInsightLLM, ClusterLabelLLM
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +80,7 @@ async def _chat(messages: list[dict[str, str]], max_tokens: int) -> str:
         return await asyncio.to_thread(_chat_sync, messages, max_tokens)
 
 
-async def generate_label(articles: list[dict[str, str | None]]) -> str:
+async def _label_local(articles: list[dict[str, str | None]]) -> str:
     raw = await _chat(format_messages(articles), max_tokens=24)
     return raw.strip().splitlines()[0].strip(" .,:;!?\"'")
 
@@ -178,9 +183,56 @@ def _cluster_insight_sync(reps: list[dict]) -> dict[str, Any]:
     return result
 
 
-async def generate_cluster_insight(reps: list[dict]) -> dict[str, Any]:
+async def _cluster_insight_local(reps: list[dict]) -> dict[str, Any]:
     async with _llm_lock:
         return await asyncio.to_thread(_cluster_insight_sync, reps)
+
+
+def _build_labeling_client():
+    return build_client(
+        settings.labeling_provider,
+        settings.labeling_llm_api_key,
+        settings.labeling_llm_base_url,
+        settings.labeling_request_timeout_seconds,
+        attribution_headers(
+            settings.labeling_attribution_referer,
+            settings.labeling_attribution_title,
+        ),
+    )
+
+
+async def _cluster_insight_api(reps: list[dict]) -> dict[str, Any]:
+    client = _build_labeling_client()
+    result = await complete_structured(
+        client,
+        settings.labeling_model,
+        format_cluster_insight_messages_api(reps),
+        ClusterInsightLLM,
+    )
+    return result.model_dump()
+
+
+async def _label_api(articles: list[dict[str, str | None]]) -> str:
+    client = _build_labeling_client()
+    result = await complete_structured(
+        client,
+        settings.labeling_model,
+        format_label_messages_api(articles),
+        ClusterLabelLLM,
+    )
+    return result.label.strip()
+
+
+async def generate_cluster_insight(reps: list[dict]) -> dict[str, Any]:
+    if settings.labeling_provider == "local":
+        return await _cluster_insight_local(reps)
+    return await _cluster_insight_api(reps)
+
+
+async def generate_label(articles: list[dict[str, str | None]]) -> str:
+    if settings.labeling_provider == "local":
+        return await _label_local(articles)
+    return await _label_api(articles)
 
 
 async def generate_label_and_insight(

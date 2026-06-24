@@ -248,3 +248,58 @@ async def test_generate_cluster_insight_trims_reps_when_budget_exceeded(caplog):
 
     assert result["label"] == "Topik Valid"
     assert any("trimmed" in r.message for r in caplog.records)
+
+
+# ── provider dispatcher ─────────────────────────────────────────────────────
+
+from unittest.mock import AsyncMock
+
+from core.config import settings
+from labeling.schemas import ClusterInsightLLM, ClusterLabelLLM
+
+
+async def test_cluster_insight_routes_to_api(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "labeling_provider", "openrouter")
+    import labeling.llm as lm
+    monkeypatch.setattr(lm, "build_client", lambda *a, **k: "CLIENT")
+    captured = {}
+
+    async def fake_cs(client, model, messages, schema):
+        captured["client"] = client
+        captured["model"] = model
+        captured["schema"] = schema
+        return ClusterInsightLLM(label="Topik uji", parties_involved=["A"])
+
+    monkeypatch.setattr(lm, "complete_structured", fake_cs)
+    out = await lm.generate_cluster_insight([{"title": "t", "first_paragraph": "p"}])
+    assert out["label"] == "Topik uji"
+    assert out["parties_involved"] == ["A"]
+    assert set(out) == {"label", "what_happened", "parties_involved", "editorial_angle", "summary"}
+    assert captured["client"] == "CLIENT"
+    assert captured["model"] == settings.labeling_model
+    assert captured["schema"] is ClusterInsightLLM
+
+
+async def test_label_routes_to_api(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "labeling_provider", "openrouter")
+    import labeling.llm as lm
+    monkeypatch.setattr(lm, "build_client", lambda *a, **k: "CLIENT")
+
+    async def fake_cs(client, model, messages, schema):
+        return ClusterLabelLLM(label="  Label Uji  ")
+
+    monkeypatch.setattr(lm, "complete_structured", fake_cs)
+    out = await lm.generate_label([{"title": "t", "first_paragraph": "p"}])
+    assert out == "Label Uji"
+
+
+async def test_cluster_insight_local_uses_gemma(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "labeling_provider", "local")
+    import labeling.llm as lm
+    called = {"build": False}
+    monkeypatch.setattr(lm, "build_client", lambda *a, **k: called.__setitem__("build", True))
+    llm = _make_mock_llm("LABEL: Topik lokal\nAPA_TERJADI: Sesuatu terjadi")
+    monkeypatch.setattr(lm, "get_llm", lambda: llm)
+    out = await lm.generate_cluster_insight([{"title": "t", "first_paragraph": "p"}])
+    assert out["label"] == "Topik lokal"
+    assert called["build"] is False  # API client never built on the local path
