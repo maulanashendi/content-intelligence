@@ -2,8 +2,10 @@ import pytest
 
 from analyst.providers import (
     PRESETS,
+    OpenAICompatibleClient,
     ProviderPreset,
     attribution_headers,
+    build_client,
     get_preset,
     resolve_base_url,
 )
@@ -42,8 +44,6 @@ def test_attribution_headers_builds_pairs() -> None:
 def test_attribution_headers_empty() -> None:
     assert attribution_headers("", "") == ()
 
-
-from analyst.providers import OpenAICompatibleClient, build_client
 
 
 class _Msg:
