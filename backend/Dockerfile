@@ -102,6 +102,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxfixes3 libxrandr2 libgbm1 libasound2 \
     && rm -rf /var/lib/apt/lists/*
 COPY packages/core/src        packages/core/src
+COPY packages/llm/src         packages/llm/src
 COPY packages/ingest/src      packages/ingest/src
 COPY packages/embedding/src   packages/embedding/src
 COPY packages/clustering/src  packages/clustering/src

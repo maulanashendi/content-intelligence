@@ -46,13 +46,18 @@ no change to `llm.py` or the callers.
 | Purpose | Model | Format | Library | Device | Driven by |
 | --- | --- | --- | --- | --- | --- |
 | Article embedding (768d) | `google/embeddinggemma-300m` | HuggingFace | `sentence-transformers` + `torch` (CPU) | CPU | `EMBEDDING_MODEL_NAME` |
-| Cluster labeling | `bartowski/gemma-2-2b-it-GGUF` (`Q4_K_M`) | GGUF 4-bit | `llama-cpp-python` | CPU (`n_gpu_layers=0`) | hardcoded in `labeling/llm.py` |
+| Cluster labeling | `bartowski/gemma-2-2b-it-GGUF` (`Q4_K_M`) *(default `local`)* or any API preset model | GGUF 4-bit (local) / HTTP (API) | `llama-cpp-python` (local) / shared `llm` package (API) | CPU (local) / remote (API) | `LABELING_PROVIDER` (default `local`); `LABELING_MODEL` for API path |
 
 - The embedding dimension is fixed at `vector(768)`; swapping the embedding
   model requires a DB migration plus a full re-embed (see `decisions.md` D4).
-- **Note:** The labeling model id is hardcoded in `backend/packages/labeling/src/labeling/llm.py`;
-  the `LLM_MODEL_NAME` env var is documented but not read. Tracked as a known
-  inconsistency, out of scope for the provider abstraction.
+- **Labeling backend is switchable (SP2):** set `LABELING_PROVIDER=local` (default) to run
+  on-box Gemma 2B via `llama-cpp-python`; set it to a preset name (`openai`,
+  `openrouter`, `ollama`, `vllm`) to route labeling through the shared `llm`
+  package with structured JSON output — no Gemma weights loaded. The API path
+  uses `LABELING_MODEL`, `LABELING_LLM_API_KEY`, and `LABELING_LLM_BASE_URL`.
+- **Note:** On the `local` path the model id remains hardcoded in
+  `backend/packages/labeling/src/labeling/llm.py`; the `LLM_MODEL_NAME` env var
+  is documented but not read on that path. Known inconsistency, out of scope.
 
 ## ML (non-LLM)
 
@@ -71,3 +76,7 @@ no change to `llm.py` or the callers.
 **Local models:** `EMBEDDING_MODEL_NAME`, `EMBEDDING_MODEL_VERSION`,
 `LLM_MODEL_NAME` (documented; see warning above), `LLM_MODEL_VERSION`,
 `HF_HOME`, `HF_TOKEN`.
+
+**Labeling backend (SP2):** `LABELING_PROVIDER` (default `local`),
+`LABELING_MODEL`, `LABELING_LLM_API_KEY`, `LABELING_LLM_BASE_URL` (optional),
+`LABELING_ATTRIBUTION_REFERER`, `LABELING_ATTRIBUTION_TITLE`.
