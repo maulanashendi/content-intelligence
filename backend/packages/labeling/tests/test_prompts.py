@@ -1,4 +1,5 @@
 import labeling.prompts as prompts
+from labeling.prompts import format_cluster_insight_messages_api, format_label_messages_api
 
 
 def test_format_messages_basic():
@@ -74,9 +75,6 @@ def test_format_dedup_messages_empty_input():
     msgs = prompts.format_dedup_messages([])
     assert len(msgs) == 1
     assert msgs[0]["role"] == "user"
-
-
-from labeling.prompts import format_cluster_insight_messages_api, format_label_messages_api
 
 
 def test_cluster_insight_api_message_has_article_context() -> None:
