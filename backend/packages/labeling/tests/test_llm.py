@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
+from core.config import settings
 from labeling.llm import (
     _parse_cluster_insight,
     deduplicate_claims,
@@ -9,6 +9,7 @@ from labeling.llm import (
     generate_label,
     get_llm,
 )
+from labeling.schemas import ClusterInsightLLM, ClusterLabelLLM
 
 
 def _make_mock_llm(content: str) -> MagicMock:
@@ -251,11 +252,6 @@ async def test_generate_cluster_insight_trims_reps_when_budget_exceeded(caplog):
 
 
 # ── provider dispatcher ─────────────────────────────────────────────────────
-
-from unittest.mock import AsyncMock
-
-from core.config import settings
-from labeling.schemas import ClusterInsightLLM, ClusterLabelLLM
 
 
 async def test_cluster_insight_routes_to_api(monkeypatch) -> None:
