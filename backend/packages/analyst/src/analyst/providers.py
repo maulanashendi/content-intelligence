@@ -67,11 +67,12 @@ def build_client(
     headers: tuple[tuple[str, str], ...],
 ) -> OpenAICompatibleClient:
     preset = get_preset(provider)
-    base_url = base_url_override or preset.base_url
+    base_url = resolve_base_url(provider, base_url_override)
     raw = AsyncOpenAI(
         base_url=base_url,
         api_key=api_key or "not-needed",
         timeout=timeout,
+        # openai SDK treats an empty dict the same as no headers; None is the correct sentinel
         default_headers=dict(headers) or None,
     )
     return OpenAICompatibleClient(raw, preset.supports_json_mode)

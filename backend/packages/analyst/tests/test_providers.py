@@ -21,7 +21,7 @@ def test_get_preset_known() -> None:
 
 
 def test_get_preset_unknown_raises() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown analyst LLM provider"):
         get_preset("nope")
 
 
@@ -105,5 +105,5 @@ def test_build_client_caches_identical_args() -> None:
 
 
 def test_build_client_unknown_provider_raises() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown analyst LLM provider"):
         build_client("nope", "k", "", 60.0, ())

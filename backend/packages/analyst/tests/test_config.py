@@ -7,6 +7,7 @@ def test_defaults() -> None:
     s = AnalystSettings(_env_file=None)
     assert s.analyst_llm_provider == "openai"
     assert s.analyst_llm_base_url == ""
+    assert s.analyst_llm_api_key == ""
     assert s.analyst_request_timeout_seconds == 60.0
     assert s.model_for("analyze") == "gpt-4o"
     assert s.model_for("recommend") == "gpt-4o"
@@ -14,7 +15,7 @@ def test_defaults() -> None:
 
 def test_model_for_rejects_unknown_task() -> None:
     s = AnalystSettings(_env_file=None)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown analyst task"):
         s.model_for("translate")
 
 
