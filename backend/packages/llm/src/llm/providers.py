@@ -24,7 +24,7 @@ def get_preset(provider: str) -> ProviderPreset:
         return PRESETS[provider]
     except KeyError:
         raise ValueError(
-            f"Unknown analyst LLM provider: {provider!r}. Expected one of {sorted(PRESETS)}"
+            f"Unknown LLM provider: {provider!r}. Expected one of {sorted(PRESETS)}"
         ) from None
 
 
