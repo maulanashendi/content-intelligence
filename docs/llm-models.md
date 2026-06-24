@@ -15,8 +15,9 @@ The Editorial AI Analyst is the only code that calls a hosted LLM over HTTP.
 
 - Client: `openai` SDK, behind the vendor boundary in `analyst/providers.py`.
 - Structured output: the schema is injected into the prompt and, when the
-  provider supports it, `response_format={"type":"json_object"}` is set; output
-  is validated against a Pydantic schema with one retry.
+  preset's `supports_json_mode` flag is set (the default for all current
+  presets), `response_format={"type":"json_object"}` is also sent; output is
+  validated against a Pydantic schema with one retry.
 
 ### Switching the API vendor
 
@@ -49,7 +50,7 @@ no change to `llm.py` or the callers.
 
 - The embedding dimension is fixed at `vector(768)`; swapping the embedding
   model requires a DB migration plus a full re-embed (see `decisions.md` D4).
-- The labeling model id is hardcoded in `backend/packages/labeling/src/labeling/llm.py`;
+- **Note:** The labeling model id is hardcoded in `backend/packages/labeling/src/labeling/llm.py`;
   the `LLM_MODEL_NAME` env var is documented but not read. Tracked as a known
   inconsistency, out of scope for the provider abstraction.
 
