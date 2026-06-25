@@ -67,7 +67,9 @@ async def test_e2e_pipeline_and_api(
     monkeypatch.setattr("ingest.pipeline.ingest_rss", fake_ingest_rss)
     monkeypatch.setattr("ingest.pipeline.ingest_sitemap", fake_ingest_sitemap)
     monkeypatch.setattr("ingest.pipeline.ingest_trends", fake_ingest_trends)
-    monkeypatch.setattr("embedding.pipeline.get_embedder", lambda: fake_embedder)
+    # get_embedder is lazily imported inside embedding.pipeline._encode_local (SP3),
+    # so patch it at its source module, not on embedding.pipeline.
+    monkeypatch.setattr("embedding.embedder.get_embedder", lambda: fake_embedder)
 
     async def fake_gsc_run(_session, _settings) -> None:
         return None
