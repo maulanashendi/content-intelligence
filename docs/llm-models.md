@@ -45,9 +45,16 @@ no change to `llm.py` or the callers.
 
 | Purpose | Model | Format | Library | Device | Driven by |
 | --- | --- | --- | --- | --- | --- |
-| Article embedding (768d) | `google/embeddinggemma-300m` | HuggingFace | `sentence-transformers` + `torch` (CPU) | CPU | `EMBEDDING_MODEL_NAME` |
+| Article embedding (768d) | `google/embeddinggemma-300m` *(local)* or `openai/text-embedding-3-large` @ 768 via OpenRouter *(api)* | HuggingFace (local) / HTTP (api) | `sentence-transformers` + `torch` (local) / shared `llm` package (api) | CPU (local) / remote (api) | `EMBEDDING_PROVIDER` (default `local`); `EMBEDDING_API_MODEL` for api path |
 | Cluster labeling | `bartowski/gemma-2-2b-it-GGUF` (`Q4_K_M`) *(default `local`)* or any API preset model | GGUF 4-bit (local) / HTTP (API) | `llama-cpp-python` (local) / shared `llm` package (API) | CPU (local) / remote (API) | `LABELING_PROVIDER` (default `local`); `LABELING_MODEL` for API path |
 
+- **Embedding backend is switchable (SP3):** set `EMBEDDING_PROVIDER=local` (default) to run
+  on-box `google/embeddinggemma-300m` via `sentence-transformers`; set it to `api` to route
+  embeddings through the shared `llm` package calling `openai/text-embedding-3-large` on
+  OpenRouter — no torch loaded. `vector(768)` is preserved on the api path via the `dimensions=768`
+  param. Switching providers for an existing DB requires the re-embed + validation procedure below.
+  The api path uses `EMBEDDING_API_KEY`, `EMBEDDING_API_BASE_URL`, `EMBEDDING_API_MODEL`, and
+  `EMBEDDING_API_DIMENSIONS`.
 - The embedding dimension is fixed at `vector(768)`; swapping the embedding
   model requires a DB migration plus a full re-embed (see `decisions.md` D4).
 - **Labeling backend is switchable (SP2):** set `LABELING_PROVIDER=local` (default) to run
@@ -58,6 +65,19 @@ no change to `llm.py` or the callers.
 - **Note:** On the `local` path the model id remains hardcoded in
   `backend/packages/labeling/src/labeling/llm.py`; the `LLM_MODEL_NAME` env var
   is documented but not read on that path. Known inconsistency, out of scope.
+
+### Embedding re-embed (SP3)
+
+When switching `EMBEDDING_PROVIDER` on an existing DB, run the validation script before
+committing to the new vectors (non-destructive; human go/no-go required):
+
+```text
+1. Validate (non-destructive, human go/no-go):
+   cd backend && ./.venv/bin/python scripts/validate_embeddings.py
+2. Cutover (operator-gated; set EMBEDDING_PROVIDER=api first; daemon stopped):
+   docker compose --profile manual run --rm pipeline reembed
+   docker compose --profile manual run --rm pipeline cluster
+```
 
 ## ML (non-LLM)
 

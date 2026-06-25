@@ -220,6 +220,49 @@ From `docs/tech-stack.md` §"Resource footprint estimate":
 
 VPS minimum: **8 GB RAM, 4 vCPU, 50 GB disk.**
 
+## Re-embed migration (SP3)
+
+Use this runbook when switching `EMBEDDING_PROVIDER` from `local` to `api` (or vice-versa) on a live DB. The operation is resumable and idempotent: `reembed` skips articles that already have a valid embedding under the new provider, and `cluster` replaces `is_current` atomically.
+
+**Prerequisites:** `EMBEDDING_API_KEY` and `EMBEDDING_API_MODEL` set in `.env`; `EMBEDDING_PROVIDER=api`.
+
+### Step 1 — Validate (non-destructive; human go/no-go required)
+
+Stop the daemon first, or rely on the `cluster_label_score` group lock that `reembed` holds to prevent concurrent cluster runs.
+
+```bash
+docker compose stop pipeline-daemon
+
+# Run the validation script against the configured EMBEDDING_PROVIDER
+cd backend && ./.venv/bin/python scripts/validate_embeddings.py
+```
+
+Read the output signals before proceeding:
+
+| Signal | Expected |
+| --- | --- |
+| `returned_dims` | **768** — confirms `dimensions=768` param is honoured by OpenRouter |
+| `n_clusters` | Comparable to current run (order-of-magnitude check) |
+| `noise_ratio` | Not materially worse than current run |
+| `sample_titles` | Titles are semantically coherent within each cluster |
+
+**Go/no-go:** if `returned_dims != 768` or cluster quality is clearly degraded, abort — set `EMBEDDING_PROVIDER=local` and restart the daemon. A mismatch in `returned_dims` would corrupt the `vector(768)` column.
+
+### Step 2 — Cutover (after go decision)
+
+```bash
+# Bulk re-embed all articles under the new provider (resumable)
+docker compose --profile manual run --rm pipeline reembed
+
+# Regenerate clusters from the new vectors
+docker compose --profile manual run --rm pipeline cluster
+
+# Restart the daemon (now runs in api embedding mode)
+docker compose up -d pipeline-daemon
+```
+
+`reembed` is operator-gated and never scheduled. Do not run it while `pipeline-daemon` is up — the group lock prevents concurrent cluster runs, but concurrent embed writes can interleave. Stop the daemon first.
+
 ## What this SOP does not cover
 
 - **Production monitoring, alerting, dashboards.** Owned externally per `docs/constraints.md`.

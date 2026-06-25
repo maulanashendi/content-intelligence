@@ -22,7 +22,7 @@ All backend commands run from `backend/`.
 | ------------ | ---------------------------------- | ------------------------------------------ |
 | `core`       | Models, async DB session, settings | Imported by all others                     |
 | `ingest`     | RSS + sitemap + Trends RSS         | feedparser, httpx                          |
-| `embedding`  | Vectorize articles, 768d           | sentence-transformers, embeddinggemma-300m |
+| `embedding`  | Vectorize articles, 768d           | sentence-transformers, embeddinggemma-300m; `EMBEDDING_PROVIDER=local\|api` |
 | `clustering` | UMAP → HDBSCAN                     | random_state pinned                        |
 | `labeling`   | LLM cluster labels                 | transformers + Gemma 2B 4-bit              |
 | `scoring`    | velocity, novelty, coverage        | sklearn, numpy                             |
@@ -89,7 +89,7 @@ docker compose up -d
 docker compose logs -f api
 ```
 
-- One-shot pipeline step: `docker compose --profile manual run --rm pipeline <step>` (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`)
+- One-shot pipeline step: `docker compose --profile manual run --rm pipeline <step>` (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`, `reembed`)
 - Tests: `docker compose run --rm api pytest packages/<module>/tests/`
 - Full operational reference: `docs/operations-sop.md`
 
