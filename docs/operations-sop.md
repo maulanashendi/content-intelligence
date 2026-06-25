@@ -228,7 +228,7 @@ Use this runbook when switching `EMBEDDING_PROVIDER` from `local` to `api` (or v
 
 ### Step 1 — Validate (non-destructive; human go/no-go required)
 
-Stop the daemon first, or rely on the `cluster_label_score` group lock that `reembed` holds to prevent concurrent cluster runs.
+Stop the daemon first — this is mandatory, not optional. The `cluster_label_score` group lock that `reembed` holds only blocks concurrent *cluster* runs; it does NOT stop the daemon's reactive embed cycle, which can interleave new embeddings while `reembed` is deleting and recomputing. Re-embed deletes rows, so a running daemon risks a half-migrated, mixed-provider vector set.
 
 ```bash
 docker compose stop pipeline-daemon
