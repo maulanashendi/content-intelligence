@@ -654,6 +654,8 @@ source = { editable = "packages/embedding" }
 dependencies = [
     { name = "click" },
     { name = "core" },
+    { name = "llm" },
+    { name = "numpy" },
     { name = "sentence-transformers" },
     { name = "torch", version = "2.11.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
@@ -663,6 +665,8 @@ dependencies = [
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "core", editable = "packages/core" },
+    { name = "llm", editable = "packages/llm" },
+    { name = "numpy", specifier = ">=1.26" },
     { name = "sentence-transformers", specifier = ">=3.2" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.4" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu" },

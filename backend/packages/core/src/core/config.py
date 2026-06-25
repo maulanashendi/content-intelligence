@@ -73,5 +73,15 @@ class Settings(BaseSettings):
     labeling_attribution_referer: str = ""
     labeling_attribution_title: str = ""
 
+    # Embedding backend (SP3): "local" = embeddinggemma (torch); "api" = OpenRouter embeddings.
+    embedding_provider: str = "local"
+    embedding_api_base_url: str = "https://openrouter.ai/api/v1"
+    embedding_api_key: str = ""
+    embedding_api_model: str = "openai/text-embedding-3-large"
+    embedding_api_dimensions: int = 768
+    embedding_request_timeout_seconds: float = 60.0
+    embedding_attribution_referer: str = ""
+    embedding_attribution_title: str = ""
+
 
 settings = Settings()
