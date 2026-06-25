@@ -127,3 +127,48 @@ async def test_run_api_path_uses_embedding_client_and_normalizes(db_session, mon
     assert rows[0].model_name == "openai/text-embedding-3-large"
     assert abs(rows[0].embedding[0] - 0.6) < 1e-6
     assert abs(rows[0].embedding[1] - 0.8) < 1e-6
+
+
+@pytest.mark.asyncio
+async def test_reembed_clears_non_target_then_recomputes(db_session, monkeypatch):
+    from embedding.pipeline import reembed
+
+    monkeypatch.setattr(settings, "embedding_provider", "api")
+    monkeypatch.setattr(settings, "embedding_api_model", "openai/text-embedding-3-large")
+    source = await _seed_source(db_session)
+    stale = await _seed_article(db_session, source.id)
+    keep = await _seed_article(db_session, source.id)
+    db_session.add_all(
+        [
+            ArticleEmbedding(
+                article_id=stale.id,
+                model_name="google/embeddinggemma-300m",
+                embedding=[0.0] * 768,
+            ),
+            ArticleEmbedding(
+                article_id=keep.id,
+                model_name="openai/text-embedding-3-large",
+                embedding=[0.0] * 768,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    mock_client = MagicMock()
+
+    async def fake_embed(texts, *, model, dimensions):
+        return [[1.0] + [0.0] * 767 for _ in texts]
+
+    mock_client.embed = fake_embed
+
+    with (
+        patch("llm.embeddings.build_embedding_client", return_value=mock_client),
+        patch("embedding.pipeline.get_session", lambda: _session_cm(db_session)),
+    ):
+        result = await reembed()
+
+    assert result["deleted"] == 1
+    assert result["embedded"] == 1  # only the stale article re-embedded; keep was skipped
+    rows = (await db_session.execute(select(ArticleEmbedding))).scalars().all()
+    assert len(rows) == 2
+    assert {r.model_name for r in rows} == {"openai/text-embedding-3-large"}

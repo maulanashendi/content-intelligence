@@ -5,7 +5,7 @@ import numpy as np
 from core.config import settings
 from core.db import get_session
 from core.models import Article, ArticleEmbedding
-from sqlalchemy import exists, select
+from sqlalchemy import delete, exists, select
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +99,19 @@ async def run() -> int:
             logger.info("embedded batch", extra={"count": len(rows), "total": total})
 
     return total
+
+
+async def reembed() -> dict[str, int]:
+    """Operator-gated migration: drop embeddings not from the active model, then
+    re-embed every now-unembedded article via run(). Resumable (run()'s ~exists
+    guard skips already-migrated rows)."""
+    model_name = _active_model_name()
+    async with get_session() as session:
+        result = await session.execute(
+            delete(ArticleEmbedding).where(ArticleEmbedding.model_name != model_name)
+        )
+        await session.commit()
+        deleted = result.rowcount or 0
+    logger.info("reembed cleared stale embeddings", extra={"deleted": deleted, "model": model_name})
+    embedded = await run()
+    return {"deleted": deleted, "embedded": embedded}

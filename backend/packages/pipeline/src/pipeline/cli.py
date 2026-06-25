@@ -157,6 +157,23 @@ def cluster_label_score_cmd() -> None:
     asyncio.run(_run_locked())
 
 
+@cli.command("reembed")
+def reembed_cmd() -> None:
+    _configure()
+    from embedding.pipeline import reembed
+
+    async def _run_locked() -> None:
+        try:
+            async with hold_lock(GROUP_CLUSTER_LABEL_SCORE):
+                result = await reembed()
+                logger.info("reembed complete", extra={"counts": result})
+        except LockHeld as exc:
+            logger.error("reembed blocked: %s", exc)
+            sys.exit(1)
+
+    asyncio.run(_run_locked())
+
+
 @cli.command("serve")
 def serve() -> None:
     _configure()
