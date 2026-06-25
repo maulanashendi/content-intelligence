@@ -8,7 +8,8 @@ from typing import Any
 import click
 from core.config import settings
 from core.logging import configure_logging
-from pipeline.locks import GROUP_ANALYSIS, GROUP_CLUSTER_LABEL_SCORE, LockHeld, hold_lock
+
+from pipeline.locks import GROUP_CLUSTER_LABEL_SCORE, LockHeld, hold_lock
 
 logger = logging.getLogger(__name__)
 
