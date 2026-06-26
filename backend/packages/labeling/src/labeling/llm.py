@@ -11,9 +11,6 @@ from llm.structured import complete_structured
 from labeling.prompts import (
     format_cluster_insight_messages,
     format_cluster_insight_messages_api,
-    format_dedup_messages,
-    format_extract_messages,
-    format_insight_messages,
     format_label_messages_api,
     format_messages,
 )
@@ -235,85 +232,3 @@ async def generate_label(articles: list[dict[str, str | None]]) -> str:
     return await _label_api(articles)
 
 
-async def generate_label_and_insight(
-    articles: list[dict[str, str | None]],
-) -> dict[str, Any]:
-    """Returns {label, what_happened, parties_involved, editorial_angle}.
-
-    Parser is tolerant of markdown bold and arbitrary leading bullets — Gemma 2B
-    often wraps the prefixes (e.g. **LABEL:**) despite the format instruction.
-    """
-    raw = await _chat(format_insight_messages(articles), max_tokens=384)
-
-    label: str | None = None
-    what_happened_parts: list[str] = []
-    parties: list[str] = []
-    editorial_angle: str | None = None
-
-    for raw_line in raw.splitlines():
-        line = _clean_line(raw_line)
-        if not line:
-            continue
-        upper = line.upper()
-        if upper.startswith("LABEL:"):
-            value = _strip_label(line[len("LABEL:"):])
-            if value and label is None:
-                label = value
-        elif upper.startswith("APA_TERJADI:") or upper.startswith("APA TERJADI:"):
-            prefix_len = len("APA_TERJADI:") if upper.startswith("APA_TERJADI:") else len("APA TERJADI:")
-            value = _clean_line(line[prefix_len:])
-            if value:
-                what_happened_parts.append(value)
-        elif upper.startswith("PIHAK:"):
-            value = _clean_line(line[len("PIHAK:"):])
-            if value and value.lower() not in _PIHAK_NONE_MARKERS:
-                parties.append(value)
-        elif upper.startswith("SUDUT:"):
-            value = _clean_line(line[len("SUDUT:"):])
-            if value and editorial_angle is None:
-                editorial_angle = value
-
-    return {
-        "label": label,
-        "what_happened": " ".join(what_happened_parts) or None,
-        "parties_involved": parties or None,
-        "editorial_angle": editorial_angle,
-    }
-
-
-def _clean_line(line: str) -> str:
-    """Strip whitespace and markdown bold markers so **KLAIM:** parses as KLAIM:."""
-    return line.strip().strip("*").strip()
-
-
-async def extract_article_claims(title: str, content: str) -> dict[str, Any]:
-    """Returns {"main_entity": str | None, "information_claims": list[str]}."""
-    raw = await _chat(format_extract_messages(title, content), max_tokens=512)
-    main_entity: str | None = None
-    information_claims: list[str] = []
-    for raw_line in raw.splitlines():
-        line = _clean_line(raw_line)
-        if line.upper().startswith("ENTITAS:"):
-            value = _clean_line(line[len("ENTITAS:"):])
-            if value:
-                main_entity = value
-        elif line.upper().startswith("KLAIM:"):
-            value = _clean_line(line[len("KLAIM:"):])
-            if value:
-                information_claims.append(value)
-    return {"main_entity": main_entity, "information_claims": information_claims}
-
-
-async def deduplicate_claims(all_claims: list[list[str]]) -> list[str]:
-    """Returns deduplicated unique claims across all articles in a cluster."""
-    if not any(all_claims):
-        return []
-    raw = await _chat(format_dedup_messages(all_claims), max_tokens=512)
-    unique: list[str] = []
-    for raw_line in raw.splitlines():
-        line = _clean_line(raw_line)
-        if line.upper().startswith("KLAIM:"):
-            value = _clean_line(line[len("KLAIM:"):])
-            if value:
-                unique.append(value)
-    return unique
