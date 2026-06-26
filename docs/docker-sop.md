@@ -30,29 +30,38 @@ To diagnose a cache miss: `docker compose build api 2>&1 | grep -E '(CACHED|RUN)
 
 The Dockerfile defines exactly these stages. Each runtime concern (api, ingest, pipeline) has a build/runtime/dev triple.
 
-| Stage           | Purpose                                                          | Used by                              |
-| --------------- | ---------------------------------------------------------------- | ------------------------------------ |
-| `base`          | python:3.11-slim + build tools + uv                              | All build stages                     |
-| `deps`          | External deps installed (no workspace packages)                  | Every `*-build` stage                |
-| `api-build`     | `deps` + core + api source + workspace install                   | `api`, `api-dev`                     |
-| `api`           | python:3.11-slim runtime, libpq5, venv copied from build         | docker-compose.prod.yml api          |
-| `api-dev`       | Same runtime image but venv-only (source bind-mounted)           | docker-compose.yml api               |
-| `pipeline-build`| `deps` + core + 5 ML modules + pipeline source + workspace install| `pipeline`, `pipeline-dev`           |
-| `pipeline`      | Runtime, ENTRYPOINT `python -m pipeline.cli`, default `run-daily`| pipeline + pipeline-daemon (prod)    |
-| `pipeline-dev`  | Venv-only, source bind-mounted                                   | pipeline + pipeline-daemon (dev)     |
+| Stage                  | Purpose                                                                        | Used by                                       |
+| ---------------------- | ------------------------------------------------------------------------------ | --------------------------------------------- |
+| `base`                 | python:3.11-slim + build tools + uv                                            | All build stages                              |
+| `deps`                 | External deps installed (no workspace packages)                                | Every `*-build` stage                         |
+| `api-build`            | `deps` + core + api source + workspace install                                 | `api`, `api-dev`                              |
+| `api`                  | python:3.11-slim runtime, libpq5, venv copied from build                       | docker-compose.prod.yml api                   |
+| `api-dev`              | Same runtime image but venv-only (source bind-mounted)                         | docker-compose.yml api                        |
+| `pipeline-src`         | `deps` + Playwright apt libs + all pipeline source copies (shared by both flavors) | `pipeline-api-build`, `pipeline-local-build` |
+| `pipeline-api-build`   | `pipeline-src` + `uv sync --package pipeline` (slim, no torch/llama-cpp)       | `pipeline-api`, `pipeline-api-dev`            |
+| `pipeline-api`         | Slim runtime; `EMBEDDING_PROVIDER=api LABELING_PROVIDER=api`; prod default     | pipeline-daemon (prod API mode)               |
+| `pipeline-api-dev`     | Venv-only, source bind-mounted; API-mode env baked in                          | pipeline-daemon (dev API mode)                |
+| `pipeline-local-build` | `pipeline-src` + `uv sync --package pipeline --extra local` (torch + llama-cpp) | `pipeline-local`, `pipeline-local-dev`       |
+| `pipeline-local`       | Full ML runtime; `EMBEDDING_PROVIDER=local LABELING_PROVIDER=local`; opt-in    | pipeline-daemon (prod local ML mode)          |
+| `pipeline-local-dev`   | Venv-only, source bind-mounted; local-mode env baked in                        | pipeline-daemon (dev local ML mode)           |
 
 The previous `ingest` / `ingest-dev` stages have been removed (D24). The `pipeline` image absorbs ingest's runtime concerns; the `ingest` workspace package is still installed as a dependency of `pipeline` but no longer ships its own runtime image.
 
+The previous `pipeline-build` / `pipeline` / `pipeline-dev` stages have been replaced by the API/local split above. The prod daemon uses `pipeline-api` by default; `pipeline-local` is opt-in for self-hosted ML inference.
+
 **Rule:** any new long-running process gets its own build/runtime/dev triple. Do not hijack an existing target.
+
+**Rule:** Local-only ML libs (`torch`, `sentence-transformers`, `llama-cpp-python`, `huggingface-hub`) live in each module's `[local]` extra and are installed **only** in `*-local-build` via `uv sync --package pipeline --extra local`. The API flavor must never carry them.
 
 ## Image-size budgets
 
-| Image      | Budget  | Source                                                              |
-| ---------- | ------- | ------------------------------------------------------------------- |
-| `api`      | ≤ 250MB | No torch, no transformers (D1, D6)                                  |
-| `pipeline` | ≤ 6GB   | sentence-transformers + llama-cpp + sklearn + feedparser + httpx (D24 absorbed ingest runtime) |
+| Image            | Budget   | Source                                                                                         |
+| ---------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `api`            | ≤ 250MB  | No torch, no transformers (D1, D6)                                                             |
+| `pipeline-api`   | ≤ 3GB    | No torch/llama-cpp; sklearn + UMAP/HDBSCAN (llvmlite+numba) + Playwright Chromium (~631MB) (SP4) |
+| `pipeline-local` | ≤ 6GB    | sentence-transformers + llama-cpp + sklearn + feedparser + httpx + Playwright Chromium (SP4)   |
 
-Check with `docker images | grep editor-intelligence`. If a runtime image exceeds budget, find and remove the leaked dependency before merging — do not raise the budget.
+Check with `docker images | grep ei-pipeline`. If a runtime image exceeds budget, find and remove the leaked dependency before merging — do not raise the budget.
 
 **No CUDA wheels in the image.** `torch` is pinned to PyTorch's CPU index for Linux/Windows builds in `backend/pyproject.toml`; `nvidia-*`, `cuda-*`, and `triton` must not appear in `uv.lock` or in any built image. They add ~1.5 GB of unusable libraries (no deploy target has an NVIDIA GPU; Colima cannot pass one through) and the extraction spike during `uv sync` is heavy enough to OOM a small Docker VM. After any `uv lock`, run `grep -E '^name = "(nvidia|cuda|triton)' backend/uv.lock` — it must return zero matches. See `docs/constraints.md` §Architectural don'ts.
 

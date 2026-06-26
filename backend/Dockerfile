@@ -93,8 +93,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 CMD ["python", "-m", "ingest.cli", "serve"]
 
-# ============ Pipeline build — full ML stack ============
-FROM deps AS pipeline-build
+# ============ Pipeline shared source (both flavors) ============
+FROM deps AS pipeline-src
 # Chromium system dependencies required by Playwright (fallback scraper)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
@@ -109,24 +109,31 @@ COPY packages/clustering/src  packages/clustering/src
 COPY packages/labeling/src    packages/labeling/src
 COPY packages/scoring/src     packages/scoring/src
 COPY packages/pipeline/src    packages/pipeline/src
+
+# ---- API-flavor build: slim, no torch/llama-cpp ----
+FROM pipeline-src AS pipeline-api-build
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --package pipeline --no-dev --frozen
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
 RUN .venv/bin/playwright install chromium
 
-FROM python:3.11-slim AS pipeline
+# ---- Local-flavor build: full ML stack via the [local] extra ----
+FROM pipeline-src AS pipeline-local-build
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --package pipeline --extra local --no-dev --frozen
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
+RUN .venv/bin/playwright install chromium
+
+# ============ Pipeline runtime base (shared apt + ENV) ============
+FROM python:3.11-slim AS pipeline-runtime-base
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 libgomp1 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
     libxfixes3 libxrandr2 libgbm1 libasound2 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=pipeline-build /app/.venv              /app/.venv
-COPY --from=pipeline-build /app/packages           /app/packages
-COPY --from=pipeline-build /app/playwright-browsers /app/playwright-browsers
-# Cap all CPU-BLAS/OpenMP thread pools to 4 so that two sequential ML jobs
-# (embedder + Gemma GGUF) each get predictable headroom on a 12-core host
-# without thrashing. Llama n_threads is set in llm.py via the same constant.
+# OMP/BLAS thread caps keep numpy/UMAP (and Gemma in the local flavor) from
+# saturating all host cores.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/models \
@@ -139,24 +146,32 @@ ENV PATH="/app/.venv/bin:$PATH" \
 ENTRYPOINT ["python", "-m", "pipeline.cli"]
 CMD ["run-daily"]
 
-# ============ Pipeline dev — venv only, source via bind mount ============
-FROM python:3.11-slim AS pipeline-dev
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 libgomp1 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-    libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
-    libxfixes3 libxrandr2 libgbm1 libasound2 \
-    && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY --from=pipeline-build /app/.venv               /app/.venv
-COPY --from=pipeline-build /app/playwright-browsers  /app/playwright-browsers
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    HF_HOME=/models \
-    PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers \
-    OMP_NUM_THREADS=4 \
-    OPENBLAS_NUM_THREADS=4 \
-    MKL_NUM_THREADS=4 \
-    NUMEXPR_NUM_THREADS=4 \
-    TOKENIZERS_PARALLELISM=false
-ENTRYPOINT ["python", "-m", "pipeline.cli"]
-CMD ["run-daily"]
+# ============ pipeline-api: slim runtime (prod default) ============
+FROM pipeline-runtime-base AS pipeline-api
+COPY --from=pipeline-api-build /app/.venv               /app/.venv
+COPY --from=pipeline-api-build /app/packages            /app/packages
+COPY --from=pipeline-api-build /app/playwright-browsers /app/playwright-browsers
+ENV EMBEDDING_PROVIDER=api \
+    LABELING_PROVIDER=api
+
+# ============ pipeline-api-dev: venv-only, source bind-mounted ============
+FROM pipeline-runtime-base AS pipeline-api-dev
+COPY --from=pipeline-api-build /app/.venv               /app/.venv
+COPY --from=pipeline-api-build /app/playwright-browsers /app/playwright-browsers
+ENV EMBEDDING_PROVIDER=api \
+    LABELING_PROVIDER=api
+
+# ============ pipeline-local: full ML runtime (opt-in) ============
+FROM pipeline-runtime-base AS pipeline-local
+COPY --from=pipeline-local-build /app/.venv               /app/.venv
+COPY --from=pipeline-local-build /app/packages            /app/packages
+COPY --from=pipeline-local-build /app/playwright-browsers /app/playwright-browsers
+ENV EMBEDDING_PROVIDER=local \
+    LABELING_PROVIDER=local
+
+# ============ pipeline-local-dev: venv-only, source bind-mounted ============
+FROM pipeline-runtime-base AS pipeline-local-dev
+COPY --from=pipeline-local-build /app/.venv               /app/.venv
+COPY --from=pipeline-local-build /app/playwright-browsers /app/playwright-browsers
+ENV EMBEDDING_PROVIDER=local \
+    LABELING_PROVIDER=local
