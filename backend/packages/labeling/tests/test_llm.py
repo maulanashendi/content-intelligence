@@ -19,7 +19,8 @@ def _make_mock_llm(content: str) -> MagicMock:
 
 # ── generate_label ──────────────────────────────────────────────────────────
 
-async def test_generate_label_returns_string():
+async def test_generate_label_returns_string(monkeypatch):
+    monkeypatch.setattr(settings, "labeling_provider", "local")
     llm = _make_mock_llm("Lonjakan harga beras premium")
     with patch("labeling.llm.get_llm", return_value=llm):
         label = await generate_label([{"title": "Harga beras naik", "first_paragraph": "Melonjak tajam."}])
@@ -27,7 +28,8 @@ async def test_generate_label_returns_string():
     assert label == "Lonjakan harga beras premium"
 
 
-async def test_generate_label_strips_punctuation_and_newlines():
+async def test_generate_label_strips_punctuation_and_newlines(monkeypatch):
+    monkeypatch.setattr(settings, "labeling_provider", "local")
     llm = _make_mock_llm("Harga beras premium terus naik.\nPenjelasan tambahan")
     with patch("labeling.llm.get_llm", return_value=llm):
         label = await generate_label([{"title": "Test", "first_paragraph": "Test"}])
@@ -136,8 +138,9 @@ def test_parse_cluster_insight_case_insensitive():
 # ── generate_cluster_insight (budget trim + zero-field warning) ─────────────
 
 @pytest.mark.asyncio
-async def test_generate_cluster_insight_warns_on_zero_fields(caplog):
+async def test_generate_cluster_insight_warns_on_zero_fields(caplog, monkeypatch):
     import logging
+    monkeypatch.setattr(settings, "labeling_provider", "local")
     llm = MagicMock()
     llm.create_chat_completion.return_value = {
         "choices": [{"message": {"content": "Tidak ada format yang cocok sama sekali."}}]
@@ -159,8 +162,9 @@ async def test_generate_cluster_insight_warns_on_zero_fields(caplog):
 
 
 @pytest.mark.asyncio
-async def test_generate_cluster_insight_trims_reps_when_budget_exceeded(caplog):
+async def test_generate_cluster_insight_trims_reps_when_budget_exceeded(caplog, monkeypatch):
     import logging
+    monkeypatch.setattr(settings, "labeling_provider", "local")
 
     call_count = 0
 

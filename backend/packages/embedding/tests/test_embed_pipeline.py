@@ -48,7 +48,8 @@ async def _session_cm(db_session):
 
 
 @pytest.mark.asyncio
-async def test_run_embeds_unembedded_articles_local(db_session):
+async def test_run_embeds_unembedded_articles_local(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "embedding_provider", "local")
     source = await _seed_source(db_session)
     article = await _seed_article(db_session, source.id)
 
