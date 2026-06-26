@@ -54,7 +54,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: pipeline-dev
+      target: pipeline-api-dev
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO
@@ -87,7 +87,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: pipeline-dev
+      target: pipeline-api-dev
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO

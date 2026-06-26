@@ -1,40 +1,24 @@
 name: editor-intelligence
 
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
-
   api:
     build:
       context: .
       dockerfile: Dockerfile
       target: api
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "127.0.0.1:8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    mem_limit: 512m
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/v1/health\").read()'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:
@@ -45,28 +29,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: pipeline
+      target: pipeline-api
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      HF_HOME: /models
       TIMEZONE: ${TIMEZONE:-Asia/Jakarta}
       CLUSTER_SCHEDULE_HOUR: ${CLUSTER_SCHEDULE_HOUR:-6}
       CLUSTER_SCHEDULE_MINUTE: ${CLUSTER_SCHEDULE_MINUTE:-0}
       CLUSTERING_WINDOW_DAYS: ${CLUSTERING_WINDOW_DAYS:-7}
       INGEST_TIMEOUT_SECONDS: ${INGEST_TIMEOUT_SECONDS:-30}
-    volumes:
-      - hfcache:/models
-    depends_on:
-      postgres:
-        condition: service_healthy
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-api}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:?EMBEDDING_API_KEY is required}
+      LABELING_PROVIDER: ${LABELING_PROVIDER:-api}
+      LABELING_LLM_API_KEY: ${LABELING_LLM_API_KEY:?LABELING_LLM_API_KEY is required}
+    mem_limit: 1g
     restart: always
     stop_grace_period: 30s
     command: ["serve"]
-    deploy:
-      resources:
-        limits:
-          memory: 7g
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'pipeline.cli serve' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     logging:
       driver: json-file
       options:
@@ -77,17 +61,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: pipeline
+      target: pipeline-api
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      HF_HOME: /models
       TIMEZONE: ${TIMEZONE:-Asia/Jakarta}
-    volumes:
-      - hfcache:/models
-    depends_on:
-      postgres:
-        condition: service_healthy
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-api}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      LABELING_PROVIDER: ${LABELING_PROVIDER:-api}
+      LABELING_LLM_API_KEY: ${LABELING_LLM_API_KEY:-}
     profiles:
       - manual
     logging:
@@ -95,7 +77,3 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
-
-volumes:
-  pgdata:
-  hfcache:

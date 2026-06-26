@@ -109,21 +109,23 @@ pipeline-daemon:
 - `api` exposes `8000:8000` (no localhost binding — IDE access from host).
 - `postgres` exposes `5433:5432` (host port 5433 to avoid colliding with a host-native Postgres).
 - `pipeline` runs only with `--profile manual` (one-shot CLI).
-- Build target is the `*-dev` variant.
+- Build target is the `*-dev` variant: `api` uses `api-dev`; `pipeline-daemon` and `pipeline` use `pipeline-api-dev` by default. To run local ML inference in dev, switch those services to `pipeline-local-dev` manually.
 
 ### Prod (`docker-compose.prod.yml`)
 
 - No bind mounts. Source is baked into the image.
-- All required env vars use `${VAR:?VAR is required}`. Optional ones use `${VAR:-default}`.
+- No bundled `postgres` service. `DATABASE_URL` must point at an external host via `${DATABASE_URL:?DATABASE_URL is required}`. No `pgdata` or `hfcache` volumes (the slim API image carries neither an HF model cache nor a co-located DB).
+- All required env vars use `${VAR:?VAR is required}`. Optional ones use `${VAR:-default}`. Required: `DATABASE_URL`, `EMBEDDING_API_KEY`, `LABELING_LLM_API_KEY`.
 - `api` binds to `127.0.0.1:8000:8000` — assumes a reverse proxy on the host. Do not expose to `0.0.0.0`.
-- `postgres` is not port-published in prod.
 - Every service has `restart: always`.
 - Every service has `logging: { driver: json-file, options: { max-size: 10m, max-file: 5 } }` (see `docs/logging-sop.md` for log content rules; this section governs the file rotation mechanism).
-- `pipeline-daemon` has `deploy.resources.limits.memory: 3g`. `pipeline` (manual) has no limit so a manual one-shot can use full RAM if needed.
+- Memory limits via `mem_limit:` (works under `docker compose up` on a single host; do NOT use `deploy.resources` — that is Swarm-only): `api: 512m`, `pipeline-daemon: 1g`. Verify live usage with `docker stats`.
+- Healthchecks are required for all long-running services (see §Healthchecks above). `api` uses the urllib health check; `pipeline-daemon` uses `pgrep -f 'pipeline.cli serve'`.
+- `pipeline-daemon` and `pipeline` build the `pipeline-api` target (slim, no torch/llama-cpp). To run local ML inference instead, switch the build target to `pipeline-local` on a suitably sized host.
 
 ### `pipeline-daemon` vs `pipeline`
 
-Both build from the `pipeline` target (prod) or `pipeline-dev` (dev). They differ only in command:
+Both build from the `pipeline-api` target (prod) or `pipeline-api-dev` (dev). They differ only in command:
 
 - `pipeline-daemon`: `command: ["serve"]` — long-running. Owns reactive ingest+embed, the `rss_source_created` listener, the `pipeline_cluster_label_score_requested` listener, and the in-process daily scheduler (D24).
 - `pipeline`: ENTRYPOINT default `run-daily` — one-shot manual runs (`docker compose --profile manual run --rm pipeline ingest`).
