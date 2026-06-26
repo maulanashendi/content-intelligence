@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     # trend match (fresh signals, 24h) then member_count — cap the Gemma budget.
     labeling_max_clusters: int = 100
     # Labeling backend (SP2): "local" = Gemma; an llm preset name routes to API.
-    labeling_provider: str = "local"
+    labeling_provider: str = "api"
     labeling_model: str = "openai/gpt-4o-mini"
     labeling_llm_api_key: str = ""
     labeling_llm_base_url: str = ""
@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     labeling_attribution_title: str = ""
 
     # Embedding backend (SP3): "local" = embeddinggemma (torch); "api" = OpenRouter embeddings.
-    embedding_provider: str = "local"
+    embedding_provider: str = "api"
     embedding_api_base_url: str = "https://openrouter.ai/api/v1"
     embedding_api_key: str = ""
     embedding_api_model: str = "openai/text-embedding-3-large"

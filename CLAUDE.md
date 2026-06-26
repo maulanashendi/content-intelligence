@@ -22,9 +22,9 @@ All backend commands run from `backend/`.
 | ------------ | ---------------------------------- | ------------------------------------------ |
 | `core`       | Models, async DB session, settings | Imported by all others                     |
 | `ingest`     | RSS + sitemap + Trends RSS         | feedparser, httpx                          |
-| `embedding`  | Vectorize articles, 768d           | sentence-transformers, embeddinggemma-300m; `EMBEDDING_PROVIDER=local\|api` |
+| `embedding`  | Vectorize articles, 768d           | sentence-transformers, embeddinggemma-300m; `EMBEDDING_PROVIDER=api (default)\|local` |
 | `clustering` | UMAP → HDBSCAN                     | random_state pinned                        |
-| `labeling`   | LLM cluster labels                 | transformers + Gemma 2B 4-bit              |
+| `labeling`   | LLM cluster labels                 | LLM cluster labels via shared llm package; `LABELING_PROVIDER=api (default)\|local` (Gemma 2B GGUF) |
 | `scoring`    | velocity, novelty, coverage        | sklearn, numpy                             |
 | `api`        | FastAPI read-only                  | NO torch, NO ML imports                    |
 | `pipeline`   | Long-running daemon (D24)          | reactive ingest+embed, scheduled cluster+label; imports all batch modules |
@@ -37,7 +37,7 @@ Rule: `api` never imports ML modules. Batch modules never import each other — 
 
 One supervised daemon, `python -m pipeline.cli serve`, owns every long-running concern. There is no host cron and no separate `ingest serve`.
 
-- **Reactive ingest + embed (continuous).** The daemon polls all enabled RSS sources every 10 minutes (`POLL_INTERVAL=600`), runs the embed cycle inline after each ingest, and listens on `pg_notify('rss_source_created')` to fetch a single new source on demand.
+- **Reactive ingest + embed (continuous).** The daemon polls all enabled RSS sources every 10 minutes (`POLL_INTERVAL=600`), runs the embed cycle inline after each ingest, and listens on `pg_notify('rss_source_created')` to fetch a single new source on demand. Embedding and labeling default to the API path (`EMBEDDING_PROVIDER=api`, `LABELING_PROVIDER=api`); the local path (on-box torch/Gemma) requires the `pipeline-local` image.
 - **Scheduled cluster + label + score (06:00 WIB daily).** An in-process `asyncio` scheduler emits `pg_notify('pipeline_cluster_label_score_requested')`; the same channel is used by the manual API trigger. Schedule is config-driven (`TIMEZONE`, `CLUSTER_SCHEDULE_HOUR`, `CLUSTER_SCHEDULE_MINUTE`). After clustering and labeling, `scoring.pipeline.run()` upserts raw signals into `cluster_insight` per D27 (supersedes D24's disabled clause). Signals: `tempo_covered`, `competitor_count`, `trend_match_count`, `trend_velocity`, `last_internal_days_ago`, `underperformed`.
 - **Singleton.** In-memory immediate-fetch queue and the `pipeline_group_lock` row both assume a single replica.
 
@@ -89,7 +89,7 @@ docker compose up -d
 docker compose logs -f api
 ```
 
-- One-shot pipeline step: `docker compose --profile manual run --rm pipeline <step>` (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`, `reembed`)
+- One-shot pipeline step: `docker compose --profile manual run --rm pipeline <step>` (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`, `reembed`) — the manual profile uses the `pipeline-api` image (no torch/Gemma).
 - Tests: `docker compose run --rm api pytest packages/<module>/tests/`
 - Full operational reference: `docs/operations-sop.md`
 
