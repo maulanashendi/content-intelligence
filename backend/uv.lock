@@ -656,6 +656,10 @@ dependencies = [
     { name = "core" },
     { name = "llm" },
     { name = "numpy" },
+]
+
+[package.optional-dependencies]
+local = [
     { name = "sentence-transformers" },
     { name = "torch", version = "2.11.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
@@ -667,10 +671,11 @@ requires-dist = [
     { name = "core", editable = "packages/core" },
     { name = "llm", editable = "packages/llm" },
     { name = "numpy", specifier = ">=1.26" },
-    { name = "sentence-transformers", specifier = ">=3.2" },
-    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.4" },
-    { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "sentence-transformers", marker = "extra == 'local'", specifier = ">=3.2" },
+    { name = "torch", marker = "(sys_platform == 'linux' and extra == 'local') or (sys_platform == 'win32' and extra == 'local')", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'local'", specifier = ">=2.4" },
 ]
+provides-extras = ["local"]
 
 [[package]]
 name = "fastapi"
@@ -1198,21 +1203,26 @@ source = { editable = "packages/labeling" }
 dependencies = [
     { name = "click" },
     { name = "core" },
-    { name = "huggingface-hub" },
-    { name = "llama-cpp-python" },
     { name = "llm" },
     { name = "numpy" },
+]
+
+[package.optional-dependencies]
+local = [
+    { name = "huggingface-hub" },
+    { name = "llama-cpp-python" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "core", editable = "packages/core" },
-    { name = "huggingface-hub", specifier = ">=0.30" },
-    { name = "llama-cpp-python", specifier = ">=0.3" },
+    { name = "huggingface-hub", marker = "extra == 'local'", specifier = ">=0.30" },
+    { name = "llama-cpp-python", marker = "extra == 'local'", specifier = ">=0.3" },
     { name = "llm", editable = "packages/llm" },
     { name = "numpy", specifier = ">=1.26" },
 ]
+provides-extras = ["local"]
 
 [[package]]
 name = "librt"
@@ -1819,16 +1829,25 @@ dependencies = [
     { name = "scoring" },
 ]
 
+[package.optional-dependencies]
+local = [
+    { name = "embedding", extra = ["local"] },
+    { name = "labeling", extra = ["local"] },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "clustering", editable = "packages/clustering" },
     { name = "core", editable = "packages/core" },
     { name = "embedding", editable = "packages/embedding" },
+    { name = "embedding", extras = ["local"], marker = "extra == 'local'", editable = "packages/embedding" },
     { name = "ingest", editable = "packages/ingest" },
     { name = "labeling", editable = "packages/labeling" },
+    { name = "labeling", extras = ["local"], marker = "extra == 'local'", editable = "packages/labeling" },
     { name = "scoring", editable = "packages/scoring" },
 ]
+provides-extras = ["local"]
 
 [[package]]
 name = "playwright"

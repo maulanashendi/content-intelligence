@@ -6,10 +6,14 @@ requires-python = ">=3.11"
 dependencies = [
   "core",
   "llm",
-  "llama-cpp-python>=0.3",
-  "huggingface-hub>=0.30",
   "numpy>=1.26",
   "click>=8.1",
+]
+
+[project.optional-dependencies]
+local = [
+  "llama-cpp-python>=0.3",
+  "huggingface-hub>=0.30",
 ]
 
 [tool.uv.sources]
