@@ -99,7 +99,7 @@ pipeline-daemon:
     retries: 3
 ```
 
-`postgres` already has `pg_isready`. *Current state (as of 2026-05): api/ingest/pipeline missing healthchecks in both compose files — flagged as a hardening task.*
+`postgres` already has `pg_isready`. *Current state (as of 2026-06): `api` and `pipeline-daemon` have healthchecks in `docker-compose.prod.yml`; dev-compose healthchecks remain a hardening task.*
 
 ## Compose conventions
 
