@@ -263,6 +263,31 @@ docker compose up -d pipeline-daemon
 
 `reembed` is operator-gated and never scheduled. Do not run it while `pipeline-daemon` is up — the group lock prevents concurrent cluster runs, but concurrent embed writes can interleave. Stop the daemon first.
 
+## Switching inference backend (API ⇄ local)
+
+The pipeline ships in two image flavors: `pipeline-api` (slim, default — embedding
+and labeling go to the external API) and `pipeline-local` (full ML on-box). Switching
+is a redeploy, not a live env flip — the slim image does not contain torch/llama-cpp.
+
+### local → API (the 2 GB default)
+1. Set `EMBEDDING_API_KEY` and `LABELING_LLM_API_KEY` (OpenRouter) in the prod `.env`.
+2. Run `backend/scripts/validate_embeddings.py`; confirm `returned_dims == 768` and the
+   cluster-quality signals; get human go/no-go.
+3. **Stop the daemon** (mandatory — the group lock does not block the reactive embed loop).
+4. Set `EMBEDDING_PROVIDER=api` / `LABELING_PROVIDER=api`, then run
+   `docker compose --profile manual run --rm pipeline reembed` and then `… cluster`.
+5. Deploy the `pipeline-api` image (`docker compose -f docker-compose.prod.yml up -d`).
+
+### API → local (re-enable on-box inference)
+1. Build/deploy the `pipeline-local` image (set the pipeline service `target: pipeline-local`),
+   mount a model-cache volume at `/models`.
+2. Set `EMBEDDING_PROVIDER=local` / `LABELING_PROVIDER=local` (the image already bakes these).
+3. If the local embedding model differs from the rows in DB, stop the daemon and run
+   `reembed` then `cluster`.
+4. Restart the daemon.
+
+See [Re-embed migration (SP3)](#re-embed-migration-sp3) for the full validate → cutover procedure that both paths share (stop daemon, validate, `reembed`, `cluster`).
+
 ## What this SOP does not cover
 
 - **Production monitoring, alerting, dashboards.** Owned externally per `docs/constraints.md`.
