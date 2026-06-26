@@ -35,6 +35,7 @@ The Dockerfile defines exactly these stages. Each runtime concern (api, ingest, 
 | `base`                 | python:3.11-slim + build tools + uv                                            | All build stages                              |
 | `deps`                 | External deps installed (no workspace packages)                                | Every `*-build` stage                         |
 | `api-build`            | `deps` + core + api source + workspace install                                 | `api`, `api-dev`                              |
+| `pipeline-runtime-base` | Shared apt installs + runtime ENV (libpq5, libgomp1, Playwright libs, OMP/BLAS caps, HF_HOME, ENTRYPOINT `python -m pipeline.cli`); inherited by all four pipeline runtime stages | `pipeline-api`, `pipeline-api-dev`, `pipeline-local`, `pipeline-local-dev` |
 | `api`                  | python:3.11-slim runtime, libpq5, venv copied from build                       | docker-compose.prod.yml api                   |
 | `api-dev`              | Same runtime image but venv-only (source bind-mounted)                         | docker-compose.yml api                        |
 | `pipeline-src`         | `deps` + Playwright apt libs + all pipeline source copies (shared by both flavors) | `pipeline-api-build`, `pipeline-local-build` |
@@ -60,6 +61,8 @@ The previous `pipeline-build` / `pipeline` / `pipeline-dev` stages have been rep
 | `api`            | ≤ 250MB  | No torch, no transformers (D1, D6)                                                             |
 | `pipeline-api`   | ≤ 3GB    | No torch/llama-cpp; sklearn + UMAP/HDBSCAN (llvmlite+numba) + Playwright Chromium (~631MB) (SP4) |
 | `pipeline-local` | ≤ 6GB    | sentence-transformers + llama-cpp + sklearn + feedparser + httpx + Playwright Chromium (SP4)   |
+
+`pipeline-api` is ≤3GB (not a torch image): the size is Playwright Chromium (~631MB, required by the scraper) plus UMAP/HDBSCAN's llvmlite/numba/scipy stack — no torch or llama-cpp is present. This is a measured floor for the slim flavor, not a relaxed ML budget.
 
 Check with `docker images | grep ei-pipeline`. If a runtime image exceeds budget, find and remove the leaked dependency before merging — do not raise the budget.
 
