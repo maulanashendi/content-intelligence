@@ -26,6 +26,29 @@ from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
+
+def _preflight_provider_deps() -> None:
+    """Fail fast at startup if a provider is set to 'local' but the local extra
+    is not installed in this image (e.g. running the slim pipeline-api image
+    with EMBEDDING_PROVIDER=local)."""
+    if settings.embedding_provider == "local":
+        try:
+            import embedding.embedder  # noqa: F401
+        except ImportError as exc:
+            raise RuntimeError(
+                "EMBEDDING_PROVIDER=local but the local extra is not installed. "
+                "Deploy the pipeline-local image or set EMBEDDING_PROVIDER=api."
+            ) from exc
+    if settings.labeling_provider == "local":
+        try:
+            import llama_cpp  # noqa: F401
+        except ImportError as exc:
+            raise RuntimeError(
+                "LABELING_PROVIDER=local but the local extra is not installed. "
+                "Deploy the pipeline-local image or set LABELING_PROVIDER=api."
+            ) from exc
+
+
 POLL_INTERVAL = 600
 RECONNECT_BACKOFF_BASE = 10
 IMMEDIATE_QUEUE_MAX = 1024
@@ -345,6 +368,8 @@ async def run_loop() -> None:
 
     shutdown = asyncio.Event()
     _install_signal_handlers(shutdown)
+
+    _preflight_provider_deps()
 
     immediate: deque[str] = deque(maxlen=IMMEDIATE_QUEUE_MAX)
     cluster_queue: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
