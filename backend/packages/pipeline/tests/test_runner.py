@@ -24,3 +24,14 @@ def test_preflight_local_missing_dep_raises(monkeypatch):
 
     with pytest.raises(RuntimeError, match="pipeline-local"):
         runner._preflight_provider_deps()
+
+
+def test_preflight_local_labeling_missing_dep_raises(monkeypatch):
+    from pipeline import runner
+
+    monkeypatch.setattr(runner.settings, "embedding_provider", "api")
+    monkeypatch.setattr(runner.settings, "labeling_provider", "local")
+    monkeypatch.setitem(sys.modules, "llama_cpp", None)
+
+    with pytest.raises(RuntimeError, match="pipeline-local"):
+        runner._preflight_provider_deps()
