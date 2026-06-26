@@ -25,7 +25,14 @@ def _active_model_name() -> str:
 
 
 def _encode_local(texts: list[str]) -> np.ndarray:
-    from embedding.embedder import get_embedder
+    try:
+        from embedding.embedder import get_embedder
+    except ImportError as exc:
+        raise RuntimeError(
+            "EMBEDDING_PROVIDER=local but the local extra is not installed "
+            "(torch/sentence-transformers missing). Deploy the pipeline-local "
+            "image or set EMBEDDING_PROVIDER=api."
+        ) from exc
 
     embedder = get_embedder()
     return embedder.encode(texts, normalize_embeddings=True, show_progress_bar=False)
