@@ -423,6 +423,9 @@ class ClusterInsight(Base):
     high_demand: Mapped[bool | None] = mapped_column(Boolean)
     performance_level: Mapped[str | None] = mapped_column(String)
     editorial_quadrant: Mapped[str | None] = mapped_column(String)
+    # Editorial fit classification (LLM, written by labeling step). Filtered at read-time by /morning.
+    desk_category: Mapped[str | None] = mapped_column(String)
+    user_need_category: Mapped[str | None] = mapped_column(String)
     summary: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
     what_happened: Mapped[str | None] = mapped_column(Text)
     parties_involved: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
