@@ -58,6 +58,8 @@ def _cluster_with_insight(
     editorial_angle: str | None = None,
     summary: list[str] | None = None,
     parent_cluster_id: uuid.UUID | None = None,
+    desk_category: str = "Politik",
+    user_need_category: str = "Update me",
 ) -> tuple[ArticleCluster, ClusterInsight]:
     cluster = ArticleCluster(
         id=uuid.uuid4(),
@@ -84,6 +86,8 @@ def _cluster_with_insight(
         parties_involved=parties_involved,
         editorial_angle=editorial_angle,
         summary=summary,
+        desk_category=desk_category,
+        user_need_category=user_need_category,
     )
     return cluster, insight
 
@@ -408,3 +412,63 @@ async def test_morning_is_not_stale_when_insight_recent(
     data = response.json()
     assert data["is_stale"] is False
     assert data["served_at"] is not None
+
+
+async def test_morning_excludes_off_desk_cluster(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster, insight = _cluster_with_insight(run.id, desk_category="Hiburan")
+    session.add_all([run, cluster, insight])
+    await session.flush()
+
+    response = await client.get("/api/v1/clusters/morning")
+    assert response.status_code == 200
+    ids = [r["id"] for r in response.json()["clusters"]]
+    assert str(cluster.id) not in ids
+
+
+async def test_morning_excludes_denied_user_need(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster, insight = _cluster_with_insight(run.id, user_need_category="Divert me")
+    session.add_all([run, cluster, insight])
+    await session.flush()
+
+    response = await client.get("/api/v1/clusters/morning")
+    assert response.status_code == 200
+    ids = [r["id"] for r in response.json()["clusters"]]
+    assert str(cluster.id) not in ids
+
+
+async def test_morning_excludes_null_classification(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster, insight = _cluster_with_insight(
+        run.id, desk_category=None, user_need_category=None
+    )
+    session.add_all([run, cluster, insight])
+    await session.flush()
+
+    response = await client.get("/api/v1/clusters/morning")
+    assert response.status_code == 200
+    ids = [r["id"] for r in response.json()["clusters"]]
+    assert str(cluster.id) not in ids
+
+
+async def test_morning_exposes_classification_fields(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster, insight = _cluster_with_insight(
+        run.id, desk_category="Hukum", user_need_category="Educate me"
+    )
+    session.add_all([run, cluster, insight])
+    await session.flush()
+
+    response = await client.get("/api/v1/clusters/morning")
+    rows = {r["id"]: r for r in response.json()["clusters"]}
+    assert rows[str(cluster.id)]["desk_category"] == "Hukum"
+    assert rows[str(cluster.id)]["user_need_category"] == "Educate me"

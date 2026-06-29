@@ -44,6 +44,8 @@ class ClusterSummary(BaseModel):
     high_demand: bool | None
     performance_level: str | None
     editorial_quadrant: str | None
+    desk_category: str | None
+    user_need_category: str | None
     what_happened: str | None
     parties_involved: list[str] | None
     editorial_angle: str | None
@@ -147,6 +149,8 @@ def _to_summary(
         high_demand=insight.high_demand if insight else None,
         performance_level=insight.performance_level if insight else None,
         editorial_quadrant=insight.editorial_quadrant if insight else None,
+        desk_category=insight.desk_category if insight else None,
+        user_need_category=insight.user_need_category if insight else None,
         what_happened=insight.what_happened if insight else None,
         parties_involved=_distinct(insight.parties_involved if insight else None),
         editorial_angle=insight.editorial_angle if insight else None,
@@ -303,6 +307,8 @@ async def morning_clusters(session: SessionDep) -> ClusterListResponse:
         .where(
             run_filter,
             ClusterInsight.tempo_covered.is_(False),
+            ClusterInsight.desk_category.in_(settings.morning_allowed_desks),
+            ClusterInsight.user_need_category.notin_(settings.morning_denied_user_needs),
             _leaf_guard(),
         )
         .order_by(*_ranking_order())
