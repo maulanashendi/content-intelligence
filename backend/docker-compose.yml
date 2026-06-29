@@ -25,6 +25,11 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/editor_intelligence
       LOG_LEVEL: INFO
+      ANALYST_LLM_PROVIDER: ${ANALYST_LLM_PROVIDER:-openai}
+      ANALYST_LLM_API_KEY: ${ANALYST_LLM_API_KEY:-}
+      ANALYST_LLM_BASE_URL: ${ANALYST_LLM_BASE_URL:-}
+      ANALYST_ANALYZE_MODEL: ${ANALYST_ANALYZE_MODEL:-gpt-4o}
+      ANALYST_RECOMMEND_MODEL: ${ANALYST_RECOMMEND_MODEL:-gpt-4o}
     ports:
       - "8002:8000"
     depends_on:
@@ -70,6 +75,14 @@ services:
       GSC_FETCH_DAYS: ${GSC_FETCH_DAYS:-7}
       PIPELINE_LOCK_LEASE_TTL_SECONDS: ${PIPELINE_LOCK_LEASE_TTL_SECONDS:-300}
       PIPELINE_LOCK_HEARTBEAT_SECONDS: ${PIPELINE_LOCK_HEARTBEAT_SECONDS:-30}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-api}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_API_BASE_URL: ${EMBEDDING_API_BASE_URL:-https://openrouter.ai/api/v1}
+      EMBEDDING_API_MODEL: ${EMBEDDING_API_MODEL:-openai/text-embedding-3-large}
+      LABELING_PROVIDER: ${LABELING_PROVIDER:-api}
+      LABELING_LLM_API_KEY: ${LABELING_LLM_API_KEY:-}
+      LABELING_LLM_BASE_URL: ${LABELING_LLM_BASE_URL:-}
+      LABELING_MODEL: ${LABELING_MODEL:-openai/gpt-4o-mini}
     volumes:
       - hfcache:/models
       - ./packages:/app/packages
@@ -97,6 +110,14 @@ services:
       GSC_SITE_URL: ${GSC_SITE_URL:-sc-domain:tempo.co}
       GSC_CREDENTIALS_PATH: /app/gsc-credentials.json
       GSC_FETCH_DAYS: ${GSC_FETCH_DAYS:-7}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-api}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_API_BASE_URL: ${EMBEDDING_API_BASE_URL:-https://openrouter.ai/api/v1}
+      EMBEDDING_API_MODEL: ${EMBEDDING_API_MODEL:-openai/text-embedding-3-large}
+      LABELING_PROVIDER: ${LABELING_PROVIDER:-api}
+      LABELING_LLM_API_KEY: ${LABELING_LLM_API_KEY:-}
+      LABELING_LLM_BASE_URL: ${LABELING_LLM_BASE_URL:-}
+      LABELING_MODEL: ${LABELING_MODEL:-openai/gpt-4o-mini}
     volumes:
       - hfcache:/models
       - ./packages:/app/packages
