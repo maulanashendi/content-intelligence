@@ -5,7 +5,7 @@ import { App } from "./app.js"
 import { Providers } from "./providers.js"
 
 async function bootstrap() {
-  if (import.meta.env.DEV || import.meta.env["VITE_MOCK"] === "true") {
+  if (import.meta.env["VITE_MOCK"] === "true") {
     const { worker } = await import("./mocks/browser.js")
     await worker.start({ onUnhandledRequest: "bypass", serviceWorker: { url: import.meta.env.BASE_URL + "mockServiceWorker.js" } }).catch(console.warn)
   } else if ("serviceWorker" in navigator) {
