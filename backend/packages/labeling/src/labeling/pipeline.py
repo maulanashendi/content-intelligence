@@ -10,6 +10,7 @@ from core.models import Article, ArticleCluster, ArticleClusterMember, ArticleEm
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.taxonomy import normalize_desk, normalize_user_need
 from labeling.llm import generate_cluster_insight, generate_label
 
 logger = logging.getLogger(__name__)
@@ -192,6 +193,8 @@ async def _upsert_insight(
     parties_involved: list[str] | None,
     editorial_angle: str | None,
     summary: list[str] | None = None,
+    desk_category: str | None = None,
+    user_need_category: str | None = None,
 ) -> None:
     """Non-destructive: only overwrites a field when the new value is non-None."""
     insight = (
@@ -210,6 +213,10 @@ async def _upsert_insight(
         insight.editorial_angle = editorial_angle
     if summary is not None:
         insight.summary = summary
+    if desk_category is not None:
+        insight.desk_category = desk_category
+    if user_need_category is not None:
+        insight.user_need_category = user_need_category
 
 
 async def run() -> dict[str, int]:
@@ -303,6 +310,8 @@ async def run() -> dict[str, int]:
                 result.get("parties_involved"),
                 result.get("editorial_angle"),
                 result.get("summary"),
+                desk_category=normalize_desk(result.get("desk_category")),
+                user_need_category=normalize_user_need(result.get("user_need_category")),
             )
             await session.commit()
 

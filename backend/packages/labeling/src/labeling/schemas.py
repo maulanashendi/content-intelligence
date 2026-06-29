@@ -7,6 +7,8 @@ class ClusterInsightLLM(BaseModel):
     parties_involved: list[str] | None = None
     editorial_angle: str | None = None
     summary: list[str] | None = None
+    desk_category: str | None = None
+    user_need_category: str | None = None
 
 
 class ClusterLabelLLM(BaseModel):

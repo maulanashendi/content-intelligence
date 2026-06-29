@@ -1,3 +1,8 @@
+from core.taxonomy import DESK_CATEGORIES, USER_NEED_CATEGORIES
+
+_DESK_OPTIONS = ", ".join(DESK_CATEGORIES)
+_USER_NEED_OPTIONS = ", ".join(USER_NEED_CATEGORIES)
+
 SYSTEM_PROMPT = (
     "Kamu adalah asisten editorial untuk newsroom Indonesia. "
     "Jawab hanya dalam Bahasa Indonesia. "
@@ -93,7 +98,10 @@ _CLUSTER_INSIGHT_USER_API = (
     "{articles}\n\n"
     "Hasilkan ringkasan editorial: label topik 5 sampai 7 kata tanpa tanda baca, "
     "apa yang terjadi dalam 1 sampai 2 kalimat, daftar pihak atau tokoh utama, "
-    "satu kalimat sudut editorial untuk redaksi, dan beberapa klaim fakta penting."
+    "satu kalimat sudut editorial untuk redaksi, dan beberapa klaim fakta penting. "
+    "Tentukan juga desk_category, pilih TEPAT SATU dari: " + _DESK_OPTIONS + ". "
+    "Dan user_need_category, pilih TEPAT SATU dari: " + _USER_NEED_OPTIONS + ". "
+    "Jika tidak yakin, pilih desk 'Lainnya'."
 )
 
 _LABEL_USER_API = (

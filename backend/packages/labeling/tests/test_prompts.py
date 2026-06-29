@@ -45,3 +45,12 @@ def test_label_api_message_has_article_context() -> None:
     msgs = format_label_messages_api([{"title": "Topik X", "first_paragraph": "Isi."}])
     assert "Topik X" in msgs[0]["content"]
     assert "LABEL:" not in msgs[0]["content"]
+
+
+def test_cluster_insight_api_prompt_lists_desk_and_user_need() -> None:
+    msgs = format_cluster_insight_messages_api(
+        [{"title": "Sidang korupsi", "first_paragraph": "Terdakwa hadir."}]
+    )
+    body = msgs[0]["content"]
+    assert "Politik" in body and "Hiburan" in body  # desk options listed
+    assert "Update me" in body and "Divert me" in body  # user-need options listed

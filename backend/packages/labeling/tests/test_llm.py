@@ -217,7 +217,7 @@ async def test_cluster_insight_routes_to_api(monkeypatch) -> None:
     out = await lm.generate_cluster_insight([{"title": "t", "first_paragraph": "p"}])
     assert out["label"] == "Topik uji"
     assert out["parties_involved"] == ["A"]
-    assert set(out) == {"label", "what_happened", "parties_involved", "editorial_angle", "summary"}
+    assert set(out) == {"label", "what_happened", "parties_involved", "editorial_angle", "summary", "desk_category", "user_need_category"}
     assert captured["client"] == "CLIENT"
     assert captured["model"] == settings.labeling_model
     assert captured["schema"] is ClusterInsightLLM
