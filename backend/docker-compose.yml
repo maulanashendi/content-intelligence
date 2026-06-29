@@ -47,7 +47,7 @@ services:
       target: prod
     environment:
       VITE_BACKEND_URL: http://api:8000
-      VITE_ENABLE_MOCK: "false"
+      VITE_MOCK: "false"
     ports:
       - "5174:5173"
     working_dir: /app/packages/app
