@@ -54,6 +54,19 @@ class Settings(BaseSettings):
     gsc_underperform_ctr_max: float = 0.02
     scoring_recent_internal_days: int = 7
     scoring_morning_top_n: int = 10
+    # Morning Tempo-relevance hard filter (read-time policy; tune via env without re-label).
+    # Env override expects a JSON array, e.g. MORNING_ALLOWED_DESKS='["Politik","Hukum"]'.
+    morning_allowed_desks: list[str] = [
+        "Politik",
+        "Hukum",
+        "Nasional",
+        "Ekonomi & Bisnis",
+        "Internasional",
+        "Investigasi",
+        "Sains & Teknologi",
+        "Lingkungan",
+    ]
+    morning_denied_user_needs: list[str] = ["Divert me", "Keep me engaged"]
     scoring_deferred_velocity_min: float = 0.4
     cluster_staleness_max_age_hours: int = 36
     cluster_run_retention_count: int = 14
