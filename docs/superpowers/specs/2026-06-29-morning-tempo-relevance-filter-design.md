@@ -133,14 +133,18 @@ on them**.
 
 ### 6. Pipeline ordering & interaction
 
-Daily run order: cluster → **label** (writes `desk_category`, `user_need_category`) →
-**score** (writes signals/quadrant). Both upsert `ClusterInsight`:
+Daily run order is cluster → **score** → **label** → prune
+(`pipeline/cluster_label_score.py` — score runs before label: cheap, SQL-only, always
+runs). Both score and label upsert `ClusterInsight`, and the new columns survive in
+**either** order:
 
-- Scoring's `pg_insert ... on_conflict_do_update` (`scoring/pipeline.py:92`) sets only its
-  own column set; it does not touch the two new columns, so they are preserved.
-- Labeling's `_upsert_insight` is non-destructive per-field.
+- Scoring's `pg_insert ... on_conflict_do_update` (`scoring/pipeline.py`) sets only its own
+  fixed column set; it never touches `desk_category` / `user_need_category` (they stay at
+  their NULL default on the row scoring inserts).
+- Labeling's `_upsert_insight` then SELECTs that row and fills the two classification
+  columns, non-destructive per-field (only overwrites when the new value is non-None).
 
-No write conflict.
+No write conflict in either ordering.
 
 **Known consequence:** clusters beyond `labeling_max_clusters` are never classified →
 never appear in `/morning`. Acceptable: the cap prioritizes by trend match + member count,
