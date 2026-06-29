@@ -1,12 +1,12 @@
 import uuid
 from contextlib import asynccontextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
 from core.config import settings
 from core.models import Article, ArticleEmbedding, ContentSource, SourceType
-from embedding.pipeline import run
+from embedding.pipeline import _encode_api, _encode_resilient, run
 from sqlalchemy import select
 
 
@@ -112,7 +112,7 @@ async def test_run_api_path_uses_embedding_client_and_normalizes(db_session, mon
     get_embedder_spy = MagicMock()
 
     with (
-        patch("llm.embeddings.build_embedding_client", return_value=mock_client),
+        patch("embedding.pipeline.build_embedding_client", return_value=mock_client),
         patch("embedding.embedder.get_embedder", get_embedder_spy),
         patch("embedding.pipeline.get_session", lambda: _session_cm(db_session)),
     ):
@@ -163,7 +163,7 @@ async def test_reembed_clears_non_target_then_recomputes(db_session, monkeypatch
     mock_client.embed = fake_embed
 
     with (
-        patch("llm.embeddings.build_embedding_client", return_value=mock_client),
+        patch("embedding.pipeline.build_embedding_client", return_value=mock_client),
         patch("embedding.pipeline.get_session", lambda: _session_cm(db_session)),
     ):
         result = await reembed()
@@ -173,3 +173,89 @@ async def test_reembed_clears_non_target_then_recomputes(db_session, monkeypatch
     rows = (await db_session.execute(select(ArticleEmbedding))).scalars().all()
     assert len(rows) == 2
     assert {r.model_name for r in rows} == {"openai/text-embedding-3-large"}
+
+
+# ---------------------------------------------------------------------------
+# Part 1: input truncation in _encode_api
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_encode_api_truncates_texts_to_max_input_chars(monkeypatch):
+    """_encode_api must truncate each text to embedding_max_input_chars before
+    calling the embedding client so a single long article cannot exceed the model
+    token limit and fail the whole batch."""
+    monkeypatch.setattr(settings, "embedding_provider", "api")
+    monkeypatch.setattr(settings, "embedding_max_input_chars", 10)
+
+    captured: list[list[str]] = []
+
+    async def fake_embed(texts, *, model, dimensions):
+        captured.append(list(texts))
+        n = len(texts)
+        return [[1.0] + [0.0] * 767 for _ in range(n)]
+
+    mock_client = MagicMock()
+    mock_client.embed = fake_embed
+
+    with patch("embedding.pipeline.build_embedding_client", return_value=mock_client):
+        await _encode_api(["short", "this is a very long text that exceeds the limit"])
+
+    assert captured, "embed() was never called"
+    sent = captured[0]
+    assert all(len(t) <= 10 for t in sent), f"texts not truncated: {sent}"
+    assert sent[0] == "short"
+    assert sent[1] == "this is a "
+
+
+# ---------------------------------------------------------------------------
+# Part 2: _encode_resilient falls back to per-item on batch failure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_encode_resilient_falls_back_per_item_on_batch_error(monkeypatch):
+    """When _encode raises on a batch of >1 texts, _encode_resilient retries each
+    text individually so the whole batch is NOT dropped."""
+    monkeypatch.setattr(settings, "embedding_provider", "api")
+
+    async def fake_encode(texts: list[str]):
+        if len(texts) > 1:
+            raise ValueError("No embedding data received")
+        return np.zeros((1, 768), dtype=np.float32)
+
+    with patch("embedding.pipeline._encode", side_effect=fake_encode):
+        results = await _encode_resilient(["text1", "text2", "text3"])
+
+    assert len(results) == 3
+    assert all(v is not None for v in results)
+    assert all(v.shape == (768,) for v in results)
+
+
+# ---------------------------------------------------------------------------
+# Part 3: _encode_resilient marks bad items None and keeps the rest
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_encode_resilient_marks_persistently_bad_items_none(monkeypatch):
+    """When per-item retry also fails for a specific text, _encode_resilient returns
+    None for that index and keeps the successful neighbours non-None."""
+    monkeypatch.setattr(settings, "embedding_provider", "api")
+
+    bad_text = "bad-article"
+
+    async def fake_encode(texts: list[str]):
+        if len(texts) > 1:
+            raise ValueError("batch error")
+        if texts[0] == bad_text:
+            raise ValueError("per-item error for bad article")
+        return np.zeros((1, 768), dtype=np.float32)
+
+    with patch("embedding.pipeline._encode", side_effect=fake_encode):
+        results = await _encode_resilient(["text1", bad_text, "text3"])
+
+    assert len(results) == 3
+    assert results[0] is not None
+    assert results[1] is None  # bad article is skipped
+    assert results[2] is not None

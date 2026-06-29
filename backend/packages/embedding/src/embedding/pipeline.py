@@ -5,6 +5,7 @@ import numpy as np
 from core.config import settings
 from core.db import get_session
 from core.models import Article, ArticleEmbedding
+from llm.embeddings import build_embedding_client
 from sqlalchemy import delete, exists, select
 
 logger = logging.getLogger(__name__)
@@ -39,8 +40,9 @@ def _encode_local(texts: list[str]) -> np.ndarray:
 
 
 async def _encode_api(texts: list[str]) -> np.ndarray:
-    from llm.embeddings import build_embedding_client
     from llm.providers import attribution_headers
+
+    texts = [t[: settings.embedding_max_input_chars] for t in texts]
 
     client = build_embedding_client(
         settings.embedding_api_key,
@@ -65,6 +67,25 @@ async def _encode(texts: list[str]) -> np.ndarray:
     return await asyncio.to_thread(_encode_local, texts)
 
 
+async def _encode_resilient(texts: list[str]) -> list[np.ndarray | None]:
+    """Embed a batch; on batch failure fall back to per-item so one bad input cannot
+    drop the whole batch. Returns one vector per input, None where embedding failed."""
+    try:
+        vectors = await _encode(texts)
+        return [np.asarray(v, dtype=np.float32) for v in vectors]
+    except Exception as exc:  # network/API boundary — degrade to per-item
+        logger.warning("batch embed failed; retrying per-item", extra={"size": len(texts), "error": str(exc)})
+    results: list[np.ndarray | None] = []
+    for text in texts:
+        try:
+            vectors = await _encode([text])
+            results.append(np.asarray(vectors[0], dtype=np.float32))
+        except Exception as exc:
+            logger.warning("per-item embed failed; skipping article", extra={"error": str(exc)})
+            results.append(None)
+    return results
+
+
 async def run() -> int:
     model_name = _active_model_name()
     total = 0
@@ -87,11 +108,13 @@ async def run() -> int:
                 f"{title}\n{body}" if (body := (content or first_paragraph)) else title
                 for _, title, first_paragraph, content in rows
             ]
-            vectors = await _encode(texts)
-            if vectors.shape[1] != 768:
-                raise ValueError(f"embedding dim mismatch: got {vectors.shape[1]}, expected 768")
-
+            vectors = await _encode_resilient(texts)
+            saved = 0
             for (article_id, _, _, _), vector in zip(rows, vectors, strict=True):
+                if vector is None:
+                    continue
+                if vector.shape[0] != 768:
+                    raise ValueError(f"embedding dim mismatch: got {vector.shape[0]}, expected 768")
                 session.add(
                     ArticleEmbedding(
                         article_id=article_id,
@@ -100,10 +123,11 @@ async def run() -> int:
                         embedding=vector.tolist(),
                     )
                 )
+                saved += 1
 
             await session.commit()
-            total += len(rows)
-            logger.info("embedded batch", extra={"count": len(rows), "total": total})
+            total += saved
+            logger.info("embedded batch", extra={"count": saved, "skipped": len(rows) - saved, "total": total})
 
     return total
 

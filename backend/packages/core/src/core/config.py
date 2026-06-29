@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     embedding_request_timeout_seconds: float = 60.0
     embedding_attribution_referer: str = ""
     embedding_attribution_title: str = ""
+    # text-embedding-3-large rejects inputs over its token limit; the local path truncates
+    # internally, so the API path must cap input length or one long article fails the whole batch.
+    embedding_max_input_chars: int = 8000
 
 
 settings = Settings()
