@@ -236,6 +236,23 @@ async def test_label_routes_to_api(monkeypatch) -> None:
     assert out == "Label Uji"
 
 
+async def test_label_api_provider_resolves_api_to_openrouter(monkeypatch) -> None:
+    # "api" is the documented LABELING_PROVIDER switch; build_client only accepts preset names
+    # so "api" must be resolved to the openrouter preset before being forwarded.
+    monkeypatch.setattr(settings, "labeling_provider", "api")
+    import labeling.llm as lm
+
+    captured: dict = {}
+    monkeypatch.setattr(lm, "build_client", lambda provider, *a, **k: captured.__setitem__("provider", provider) or "CLIENT")
+
+    async def fake_cs(client, model, messages, schema):
+        return ClusterLabelLLM(label="X")
+
+    monkeypatch.setattr(lm, "complete_structured", fake_cs)
+    await lm.generate_label([{"title": "t", "first_paragraph": "p"}])
+    assert captured["provider"] == "openrouter"
+
+
 async def test_cluster_insight_local_uses_gemma(monkeypatch) -> None:
     monkeypatch.setattr(settings, "labeling_provider", "local")
     import labeling.llm as lm

@@ -186,8 +186,11 @@ async def _cluster_insight_local(reps: list[dict]) -> dict[str, Any]:
 
 
 def _build_labeling_client():
+    # "api" is the generic switch (mirrors EMBEDDING_PROVIDER); labeling's API path targets
+    # OpenRouter by default, overridable via labeling_llm_base_url.
+    provider = "openrouter" if settings.labeling_provider == "api" else settings.labeling_provider
     return build_client(
-        settings.labeling_provider,
+        provider,
         settings.labeling_llm_api_key,
         settings.labeling_llm_base_url,
         settings.labeling_request_timeout_seconds,
