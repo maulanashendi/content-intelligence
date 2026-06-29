@@ -15,7 +15,8 @@
 - Classification is **computed and stored for all clusters**; only `/morning` filters on it. Do not add the filter to `/bento`, `/deferred`, `/quadrant`, or `/current`.
 - No `tempo_relevant` boolean column — store raw categories, filter at read-time against config so policy changes need no re-label.
 - New columns are nullable; NULL classification is excluded from `/morning` by construction (this is intended).
-- DB-backed tests run against a real Postgres via `docker compose` from `backend/`. The migration MUST be applied to that DB before column-dependent tests pass. The test fixtures (`api/tests/conftest.py`, `labeling/tests/conftest.py`) do NOT create tables — they assume migrations are applied.
+- **Tests run on the host venv from `backend/`:** `./.venv/bin/python -m pytest packages/<...>` — `pytest` is NOT installed in the `api` Docker image. The root `backend/conftest.py` is a session-scoped autouse fixture that creates a dedicated `editor_intelligence_test` database, runs Alembic migrations against it, and rebinds `core.db` + `settings.database_url` to it. So DB-backed tests never touch the dev DB (which holds seeded data), and any new migration is auto-applied to the test DB at session start — no manual migration step is needed for tests. Do NOT run tests against the dev DB directly (the `labeling` `clean_db` fixture DELETEs tracked tables).
+- **Alembic commands run in Docker:** `docker compose run --rm api alembic ...` (alembic IS in the `api` image; its in-container `DATABASE_URL` targets the dev DB).
 - No `print()`; logging is JSON via `core.logging`. Follow existing module patterns.
 - Default `labeling_provider` is `"api"`; the `"local"` (Gemma) path still exists and must keep parity.
 - Allowed desks default: `Politik, Hukum, Nasional, Ekonomi & Bisnis, Internasional, Investigasi, Sains & Teknologi, Lingkungan`. Denied user-needs default: `Divert me, Keep me engaged`.
@@ -103,7 +104,7 @@ def test_normalize_user_need_canonicalizes_and_rejects():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `docker compose run --rm api pytest packages/core/tests/test_taxonomy.py -v`
+Run: `./.venv/bin/python -m pytest packages/core/tests/test_taxonomy.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'core.taxonomy'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -163,7 +164,7 @@ def normalize_user_need(value: str | None) -> str | None:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `docker compose run --rm api pytest packages/core/tests/test_taxonomy.py -v`
+Run: `./.venv/bin/python -m pytest packages/core/tests/test_taxonomy.py -v`
 Expected: PASS (5 passed)
 
 - [ ] **Step 5: Commit**
@@ -201,7 +202,7 @@ def test_morning_filter_defaults():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `docker compose run --rm api pytest packages/core/tests/test_config.py::test_morning_filter_defaults -v`
+Run: `./.venv/bin/python -m pytest packages/core/tests/test_config.py::test_morning_filter_defaults -v`
 Expected: FAIL with `AttributeError: 'Settings' object has no attribute 'morning_allowed_desks'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -226,7 +227,7 @@ In `backend/packages/core/src/core/config.py`, immediately after the line `scori
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `docker compose run --rm api pytest packages/core/tests/test_config.py -v`
+Run: `./.venv/bin/python -m pytest packages/core/tests/test_config.py -v`
 Expected: PASS (all tests in file)
 
 - [ ] **Step 5: Commit**
@@ -362,7 +363,7 @@ def test_cluster_label() -> None:
 
 - [ ] **Step 2: Run schema test to verify it fails**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_schemas.py -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_schemas.py -v`
 Expected: FAIL — `desk_category` not in dump / `set(d)` mismatch.
 
 - [ ] **Step 3: Add the schema fields**
@@ -382,7 +383,7 @@ class ClusterInsightLLM(BaseModel):
 
 - [ ] **Step 4: Run schema test to verify it passes**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_schemas.py -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_schemas.py -v`
 Expected: PASS
 
 - [ ] **Step 5: Write the failing prompt test**
@@ -401,7 +402,7 @@ def test_cluster_insight_api_prompt_lists_desk_and_user_need() -> None:
 
 - [ ] **Step 6: Run prompt test to verify it fails**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_prompts.py::test_cluster_insight_api_prompt_lists_desk_and_user_need -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_prompts.py::test_cluster_insight_api_prompt_lists_desk_and_user_need -v`
 Expected: FAIL — desk names absent from prompt body.
 
 - [ ] **Step 7: Extend the API prompt**
@@ -433,7 +434,7 @@ _CLUSTER_INSIGHT_USER_API = (
 
 - [ ] **Step 8: Run prompt test to verify it passes**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_prompts.py -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_prompts.py -v`
 Expected: PASS (including the pre-existing prompt tests)
 
 - [ ] **Step 9: Write the failing pipeline-persist test**
@@ -504,7 +505,7 @@ async def test_upsert_insight_none_classification_left_unset(clean_db) -> None:
 
 - [ ] **Step 10: Run pipeline-persist test to verify it fails**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_pipeline_classification.py -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_pipeline_classification.py -v`
 Expected: FAIL — `_upsert_insight() got an unexpected keyword argument 'desk_category'`
 
 - [ ] **Step 11: Extend `_upsert_insight` and `run()`**
@@ -570,12 +571,12 @@ Then in `run()`, replace the `_upsert_insight(...)` call (lines 299-306) with:
 
 - [ ] **Step 12: Run pipeline-persist test to verify it passes**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_pipeline_classification.py -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_pipeline_classification.py -v`
 Expected: PASS (2 passed)
 
 - [ ] **Step 13: Run the full labeling suite for regressions**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/ -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/ -v`
 Expected: PASS (no regressions in `test_llm.py`, `test_pipeline_integration.py`, etc.)
 
 - [ ] **Step 14: Commit**
@@ -631,7 +632,7 @@ def test_parse_cluster_insight_missing_classification_is_none() -> None:
 
 - [ ] **Step 2: Run parser test to verify it fails**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_llm.py::test_parse_cluster_insight_extracts_desk_and_user_need -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_llm.py::test_parse_cluster_insight_extracts_desk_and_user_need -v`
 Expected: FAIL — `KeyError: 'desk_category'`
 
 - [ ] **Step 3: Extend the regex and parser**
@@ -728,7 +729,7 @@ _CLUSTER_INSIGHT_USER = (
 
 - [ ] **Step 5: Run parser + prompt tests to verify they pass**
 
-Run: `docker compose run --rm api pytest packages/labeling/tests/test_llm.py packages/labeling/tests/test_prompts.py -v`
+Run: `./.venv/bin/python -m pytest packages/labeling/tests/test_llm.py packages/labeling/tests/test_prompts.py -v`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -835,7 +836,7 @@ Note: `_cluster_with_insight(run.id, desk_category=None, ...)` requires the sign
 
 - [ ] **Step 3: Run the exclusion tests to verify they fail**
 
-Run: `docker compose run --rm api pytest packages/api/tests/test_clusters.py -k "off_desk or denied_user_need or null_classification or exposes_classification" -v`
+Run: `./.venv/bin/python -m pytest packages/api/tests/test_clusters.py -k "off_desk or denied_user_need or null_classification or exposes_classification" -v`
 Expected: FAIL — off-desk/denied/null clusters still appear; classification fields absent from response (KeyError / wrong value).
 
 - [ ] **Step 4: Add fields to `ClusterSummary`**
@@ -874,12 +875,12 @@ In `morning_clusters`, replace the `.where(...)` block (lines 303-307) with:
 
 - [ ] **Step 7: Run the new tests to verify they pass**
 
-Run: `docker compose run --rm api pytest packages/api/tests/test_clusters.py -k "off_desk or denied_user_need or null_classification or exposes_classification" -v`
+Run: `./.venv/bin/python -m pytest packages/api/tests/test_clusters.py -k "off_desk or denied_user_need or null_classification or exposes_classification" -v`
 Expected: PASS (4 passed)
 
 - [ ] **Step 8: Run the full cluster suite for regressions**
 
-Run: `docker compose run --rm api pytest packages/api/tests/test_clusters.py packages/api/tests/test_clusters_no_gsc_leak.py -v`
+Run: `./.venv/bin/python -m pytest packages/api/tests/test_clusters.py packages/api/tests/test_clusters_no_gsc_leak.py -v`
 Expected: PASS (the existing morning include/ordering/top_n tests still pass because the helper now defaults to an allowed desk + need).
 
 - [ ] **Step 9: Commit**
