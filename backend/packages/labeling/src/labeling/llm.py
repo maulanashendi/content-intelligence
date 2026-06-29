@@ -91,7 +91,7 @@ _N_CTX = 4096
 _FIELD_RE = re.compile(
     r"^[\s\d.\-•]*"
     r"(?:\*+)?"
-    r"(?P<key>LABEL|APA_TERJADI|APA\s+TERJADI|SUDUT|PIHAK|KLAIM)"
+    r"(?P<key>LABEL|APA_TERJADI|APA\s+TERJADI|SUDUT|PIHAK|KLAIM|DESK|KEBUTUHAN)"
     r"(?:\*+)?"
     r"\s*:\s*"
     r"(?P<value>.*)",
@@ -116,6 +116,8 @@ def _parse_cluster_insight(raw: str) -> dict[str, Any]:
     parties: list[str] = []
     editorial_angle: str | None = None
     summary: list[str] = []
+    desk_category: str | None = None
+    user_need_category: str | None = None
 
     for raw_line in raw.splitlines():
         m = _FIELD_RE.match(raw_line.strip())
@@ -137,6 +139,10 @@ def _parse_cluster_insight(raw: str) -> dict[str, Any]:
                 parties.append(value)
         elif key == "KLAIM":
             summary.append(value)
+        elif key == "DESK" and desk_category is None:
+            desk_category = value
+        elif key == "KEBUTUHAN" and user_need_category is None:
+            user_need_category = value
 
     return {
         "label": label,
@@ -144,6 +150,8 @@ def _parse_cluster_insight(raw: str) -> dict[str, Any]:
         "parties_involved": parties or None,
         "editorial_angle": editorial_angle,
         "summary": summary or None,
+        "desk_category": desk_category,
+        "user_need_category": user_need_category,
     }
 
 

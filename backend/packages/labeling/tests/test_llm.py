@@ -263,3 +263,29 @@ async def test_cluster_insight_local_uses_gemma(monkeypatch) -> None:
     out = await lm.generate_cluster_insight([{"title": "t", "first_paragraph": "p"}])
     assert out["label"] == "Topik lokal"
     assert called["build"] is False  # API client never built on the local path
+
+
+def test_parse_cluster_insight_extracts_desk_and_user_need() -> None:
+    from labeling.llm import _parse_cluster_insight
+
+    raw = (
+        "LABEL: Sidang korupsi pejabat daerah\n"
+        "APA_TERJADI: Terdakwa hadir di pengadilan.\n"
+        "SUDUT: Telusuri aliran dana.\n"
+        "PIHAK: KPK\n"
+        "KLAIM: Dana mengalir ke proyek fiktif.\n"
+        "DESK: Hukum\n"
+        "KEBUTUHAN: Update me\n"
+    )
+    result = _parse_cluster_insight(raw)
+    assert result["desk_category"] == "Hukum"
+    assert result["user_need_category"] == "Update me"
+
+
+def test_parse_cluster_insight_missing_classification_is_none() -> None:
+    from labeling.llm import _parse_cluster_insight
+
+    raw = "LABEL: Topik tanpa klasifikasi\n"
+    result = _parse_cluster_insight(raw)
+    assert result["desk_category"] is None
+    assert result["user_need_category"] is None
