@@ -54,7 +54,7 @@ MVP is shipped. Post-MVP work is hardening, governed by four SOPs. Read the rele
 
 ## API endpoints
 
-Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/bento`, `/api/v1/clusters/{id}`, `/api/v1/clusters/{id}/volume-trend`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/articles/volume-trend`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream. Stateless analyst endpoints (no DB writes): `POST /api/v1/analyst/analyze`, `POST /api/v1/analyst/analyze/batch`, `POST /api/v1/analyst/recommendation`.
+Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/bento`, `/api/v1/clusters/{id}`, `/api/v1/clusters/{id}/volume-trend`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/articles/volume-trend`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream. Stateless analyst endpoints (no DB writes): `POST /api/v1/analyst/analyze`, `POST /api/v1/analyst/analyze/batch`, `POST /api/v1/analyst/recommendation`. `/clusters/morning` additionally hard-filters to clusters whose `desk_category` is in `morning_allowed_desks` AND whose `user_need_category` is not in `morning_denied_user_needs` (classification written by the labeling step).
 
 ## Schema
 
