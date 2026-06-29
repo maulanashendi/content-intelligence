@@ -57,3 +57,32 @@ async def test_upsert_insight_none_classification_left_unset(clean_db) -> None:
         ).scalar_one()
         assert row.desk_category is None
         assert row.user_need_category is None
+
+
+async def test_upsert_insight_does_not_overwrite_with_none(clean_db) -> None:
+    async with get_session() as session:
+        run = ClusterRun(id=uuid.uuid4())
+        cluster = ArticleCluster(id=uuid.uuid4(), run_id=run.id, is_current=True)
+        session.add_all([run, cluster])
+        await session.flush()
+
+        await _upsert_insight(
+            session, cluster.id, None, None, None, None,
+            desk_category="Politik", user_need_category="Update me",
+        )
+        await session.commit()
+
+        # Second call with None classification must NOT overwrite existing values.
+        await _upsert_insight(
+            session, cluster.id, None, None, None, None,
+            desk_category=None, user_need_category=None,
+        )
+        await session.commit()
+
+        row = (
+            await session.execute(
+                select(ClusterInsight).where(ClusterInsight.cluster_id == cluster.id)
+            )
+        ).scalar_one()
+        assert row.desk_category == "Politik"
+        assert row.user_need_category == "Update me"

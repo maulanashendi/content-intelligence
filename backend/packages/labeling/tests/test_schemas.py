@@ -14,6 +14,8 @@ def test_cluster_insight_parses_full_payload() -> None:
         }
     )
     d = m.model_dump()
+    assert d["label"] == "Kenaikan harga beras premium"
+    assert d["parties_involved"] == ["Bulog", "Kemendag"]
     assert d["desk_category"] == "Ekonomi & Bisnis"
     assert d["user_need_category"] == "Update me"
     assert set(d) == {
