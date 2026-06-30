@@ -4,10 +4,10 @@ import { clusterKeys, articleKeys, sourceKeys, pipelineKeys, trendSignalKeys, cl
 import { ClusterListResponseSchema, ClusterDetailSchema, PaginatedArticlesSchema, ContentSourceSchema, ContentSourceListSchema, PipelineTriggerResultSchema, PipelineStatusSchema, TrendSignalListSchema, ClusterRunSchema, QuadrantSummarySchema, AnalyzeResultSchema, RecommendationOutputSchema, VolumeTrendResponseSchema, BentoListResponseSchema } from "./schemas.js"
 import type { SourceUpdate } from "./schemas.js"
 
-export function useMorningClusters() {
+export function useMorningClusters(dna: boolean = true) {
   return useQuery({
-    queryKey: clusterKeys.morning(),
-    queryFn: () => apiGet("/clusters/morning", ClusterListResponseSchema),
+    queryKey: clusterKeys.morning(dna),
+    queryFn: () => apiGet(`/clusters/morning?dna=${dna}`, ClusterListResponseSchema),
   })
 }
 
@@ -93,18 +93,18 @@ export function useTrendSignals(limit: number = 10) {
   })
 }
 
-export function useQuadrantSummary() {
+export function useQuadrantSummary(dna: boolean = true) {
   return useQuery({
-    queryKey: clusterKeys.quadrantSummary(),
-    queryFn: () => apiGet("/clusters/quadrant-summary", QuadrantSummarySchema),
+    queryKey: clusterKeys.quadrantSummary(dna),
+    queryFn: () => apiGet(`/clusters/quadrant-summary?dna=${dna}`, QuadrantSummarySchema),
     staleTime: 5 * 60 * 1000,
   })
 }
 
-export function useClustersByQuadrant(quadrant: string | null, limit = 8) {
+export function useClustersByQuadrant(quadrant: string | null, limit = 8, dna: boolean = true) {
   return useQuery({
-    queryKey: clusterKeys.byQuadrant(quadrant ?? ""),
-    queryFn: () => apiGet(`/clusters/quadrant/${quadrant}?limit=${limit}`, ClusterListResponseSchema),
+    queryKey: clusterKeys.byQuadrant(quadrant ?? "", dna),
+    queryFn: () => apiGet(`/clusters/quadrant/${quadrant}?limit=${limit}&dna=${dna}`, ClusterListResponseSchema),
     enabled: !!quadrant,
     staleTime: 5 * 60 * 1000,
   })
@@ -174,10 +174,10 @@ export function useVolumeTrend(bucket: "hour" | "day") {
 // Growing-limit pagination by design: "Show more" increments limit (8→16→24…) and re-fetches the
 // full window from offset=0. offset is hardcoded and NOT in the query key; add it there before
 // converting to true offset paging.
-export function useClusterBento(limit: number) {
+export function useClusterBento(limit: number, dna: boolean = true) {
   return useQuery({
-    queryKey: clusterKeys.bento(limit),
-    queryFn: () => apiGet(`/clusters/bento?limit=${limit}&offset=0`, BentoListResponseSchema),
+    queryKey: clusterKeys.bento(limit, dna),
+    queryFn: () => apiGet(`/clusters/bento?limit=${limit}&offset=0&dna=${dna}`, BentoListResponseSchema),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
   })
