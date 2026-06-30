@@ -880,14 +880,28 @@ export function UserNeedCard({ cluster }: { cluster: ClusterDetail }) {
   if (needs.length === 0) return null
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <span className="card-title">Kebutuhan Pembaca</span>
-        <span className="card-meta">
+    <div
+      className="overflow-hidden border rounded-[var(--radius-lg)]"
+      style={{ background: "var(--bg-elev)", borderColor: "var(--line)" }}
+    >
+      <div
+        className="flex items-center gap-[10px] px-[14px] py-[12px] border-b"
+        style={{ borderColor: "var(--line)" }}
+      >
+        <span
+          className="text-[12px] font-semibold uppercase tracking-[0.01em]"
+          style={{ color: "var(--fg-muted)" }}
+        >
+          Kebutuhan Pembaca
+        </span>
+        <span
+          className="ml-auto text-[11.5px]"
+          style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)" }}
+        >
           {reps < 3 ? "indikatif · " : ""}berdasarkan {reps} artikel
         </span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 8 }}>
+      <div className="flex flex-col gap-3 p-[14px]">
         <UserNeedsRadar needs={needs} />
         <UserNeedsBars needs={needs} />
       </div>
@@ -896,7 +910,7 @@ export function UserNeedCard({ cluster }: { cluster: ClusterDetail }) {
 }
 ```
 
-(`.card`/`.card-head`/`.card-title`/`.card-meta` mirror the sibling cards in this feature — they are existing feature classes, not new components, so the legacy-class rule does not apply.)
+**Hard-rule compliance (decided up front):** this NEW component must NOT use the legacy `.card`/`.card-head`/`.card-title`/`.card-meta` global classes (CLAUDE.md). It replicates the sibling-card chrome with Tailwind utilities + design tokens only (the JSX above maps 1:1 to `globals.css` `.card`: `bg-elev` background, `var(--line)` border, `var(--radius-lg)` radius, uppercase muted title, mono faint meta).
 
 - [ ] **Step 6: Wire into the detail view**
 
