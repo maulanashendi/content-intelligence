@@ -20,3 +20,8 @@ export { VelocityBar } from "./primitives/velocity-bar.js"
 export { ClusterTable } from "./cluster-table.js"
 
 export * from "./icons.js"
+
+export { UserNeedsRadar } from "./charts/user-needs-radar.js"
+export { UserNeedsBars } from "./charts/user-needs-bars.js"
+export { radarPoints } from "./charts/radar-points.js"
+export type { UserNeedDatum } from "./charts/radar-points.js"

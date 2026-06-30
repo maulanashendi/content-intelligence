@@ -1,6 +1,5 @@
-import { radarPoints } from "./data.js"
-
-interface Need { key: string; label: string; value: number }
+import { radarPoints } from "./radar-points.js"
+import type { UserNeedDatum as Need } from "./radar-points.js"
 
 // viewBox carries generous horizontal padding so the longest labels ("Perspektif",
 // "Inspirasi") stay fully inside the box and never bleed into the bars column beside it.
