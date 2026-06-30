@@ -426,6 +426,8 @@ class ClusterInsight(Base):
     # Editorial fit classification (LLM, written by labeling step). Filtered at read-time by /morning.
     desk_category: Mapped[str | None] = mapped_column(String)
     user_need_category: Mapped[str | None] = mapped_column(String)
+    user_need_distribution: Mapped[dict[str, int] | None] = mapped_column(JSONB)
+    user_need_reps_tagged: Mapped[int | None] = mapped_column(Integer)
     summary: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
     what_happened: Mapped[str | None] = mapped_column(Text)
     parties_involved: Mapped[list[str] | None] = mapped_column(ARRAY(Text()))
