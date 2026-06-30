@@ -341,7 +341,9 @@ A code generator was considered but rejected for MVP. The token surface is small
 
 **Rationale.** Two parallel "frontends" in the repo invite confusion: which is canonical, which file does the user mean. The prototype's value is consumed during the migration; afterwards it is a maintenance hazard (its CDN-loaded React will eventually 404 a version, its CSS will diverge from the production tokens). Git history preserves it for reference.
 
-**Implication.** Removal happens at a specific point in the migration plan (`frontend.md` §15, step 9). Until that step, `template-fe/` is read-only — no edits to it are made, even if a bug is discovered. Bugs discovered in the prototype are noted and addressed in the production port.
+**Implication.** Removal happens at a specific point in the migration plan. Until that step, `template-fe/` is read-only — no edits to it are made, even if a bug is discovered. Bugs discovered in the prototype are noted and addressed in the production port.
+
+**Status (2026-06-30): done.** `frontend/` is the production SPA reproducing the MVP views; `template-fe/` has been deleted.
 
 
 ---
@@ -824,7 +826,7 @@ The margin is safe: the longest blocked native call after the `asyncio.to_thread
 - D27's "scoring inputs only" rule for GSC is refined: internal aggregate columns stay internal; derived editorial labels are surfaced.
 - D34's labeling cap join updated to use 7-day window + distinct keyword count (consistent with D35 trend match).
 - `constraints.md §73` updated: see that section for the revised wording.
-- `docs/plan/pr1…pr5.md` documents the implementation sequence.
+- Shipped across five PRs (window alignment, GSC↔article link, scoring split, API contract, FE opportunity card); see git history.
 
 ## D36 — Cross-process single-flight lock for ML steps + thread caps + deferred `finished_at`
 

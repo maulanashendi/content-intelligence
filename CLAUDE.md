@@ -22,13 +22,13 @@ All backend commands run from `backend/`.
 | ------------ | ---------------------------------- | ------------------------------------------ |
 | `core`       | Models, async DB session, settings | Imported by all others                     |
 | `ingest`     | RSS + sitemap + Trends RSS         | feedparser, httpx                          |
-| `embedding`  | Vectorize articles, 768d           | sentence-transformers, embeddinggemma-300m; `EMBEDDING_PROVIDER=api (default)\|local` |
-| `clustering` | UMAP → HDBSCAN                     | random_state pinned                        |
-| `labeling`   | LLM cluster labels                 | LLM cluster labels via shared llm package; `LABELING_PROVIDER=api (default)\|local` (Gemma 2B GGUF) |
-| `scoring`    | velocity, novelty, coverage        | sklearn, numpy                             |
+| `embedding`  | Vectorize articles, 768d           | API default (`text-embedding-3-large` via OpenRouter, shared `llm`); local opt-in (`embeddinggemma-300m`, torch). `EMBEDDING_PROVIDER=api (default)\|local` |
+| `clustering` | UMAP → HDBSCAN                     | random_state pinned; always on-box         |
+| `labeling`   | LLM cluster labels + desk/user-need classification | API default (`gpt-4o-mini` via OpenRouter, shared `llm`); local opt-in (Gemma 2B GGUF). `LABELING_PROVIDER=api (default)\|local` |
+| `scoring`    | demand × performance → editorial quadrant (D35) | sklearn, numpy; always on-box       |
 | `api`        | FastAPI read-only                  | NO torch, NO ML imports                    |
-| `pipeline`   | Long-running daemon (D24)          | reactive ingest+embed, scheduled cluster+label; imports all batch modules |
-| `llm`        | Shared LLM client kernel: provider presets + structured output | openai SDK; imported by `analyst` (and `labeling` in SP2); no `core` dep |
+| `pipeline`   | Long-running daemon (D24)          | reactive ingest+embed, scheduled cluster+score+label; imports all batch modules |
+| `llm`        | Shared LLM client kernel: provider presets + structured output | openai SDK; imported by `embedding`, `labeling`, `analyst`; no `core` dep |
 | `analyst`    | Editorial AI Analyst: article scoring + recommendation | uses shared `llm` package; switch vendor via `ANALYST_LLM_PROVIDER`; no ML import |
 
 Rule: `api` never imports ML modules. Batch modules never import each other — share via `core` (DB kernel) or `llm` (LLM client kernel). Cross-module imports must be declared in `pyproject.toml`.
@@ -37,8 +37,8 @@ Rule: `api` never imports ML modules. Batch modules never import each other — 
 
 One supervised daemon, `python -m pipeline.cli serve`, owns every long-running concern. There is no host cron and no separate `ingest serve`.
 
-- **Reactive ingest + embed (continuous).** The daemon polls all enabled RSS sources every 10 minutes (`POLL_INTERVAL=600`), runs the embed cycle inline after each ingest, and listens on `pg_notify('rss_source_created')` to fetch a single new source on demand. Embedding and labeling default to the API path (`EMBEDDING_PROVIDER=api`, `LABELING_PROVIDER=api`); the local path (on-box torch/Gemma) requires the `pipeline-local` image.
-- **Scheduled cluster + label + score (06:00 WIB daily).** An in-process `asyncio` scheduler emits `pg_notify('pipeline_cluster_label_score_requested')`; the same channel is used by the manual API trigger. Schedule is config-driven (`TIMEZONE`, `CLUSTER_SCHEDULE_HOUR`, `CLUSTER_SCHEDULE_MINUTE`). After clustering and labeling, `scoring.pipeline.run()` upserts raw signals into `cluster_insight` per D27 (supersedes D24's disabled clause). Signals: `tempo_covered`, `competitor_count`, `trend_match_count`, `trend_velocity`, `last_internal_days_ago`, `underperformed`.
+- **Reactive ingest + embed (continuous).** The daemon polls all enabled RSS sources every 10 minutes (`POLL_INTERVAL=600`), runs the embed cycle inline after each ingest, and listens on `pg_notify('rss_source_created')` to fetch a single new source on demand. Embedding and labeling default to the API path (`EMBEDDING_PROVIDER=api`, `LABELING_PROVIDER=api`); the local on-box path (torch/Gemma) is an opt-in build that requires the `pipeline-local` image.
+- **Scheduled cluster + score + label (06:00 WIB daily).** An in-process `asyncio` scheduler emits `pg_notify('pipeline_cluster_label_score_requested')`; the same channel is used by the manual API trigger. Schedule is config-driven (`TIMEZONE`, `CLUSTER_SCHEDULE_HOUR`, `CLUSTER_SCHEDULE_MINUTE`). The run executes in order: **cluster → score → label → prune**. `scoring.pipeline.run()` (active per D27, redesigned by D35) upserts `cluster_insight` with demand × performance signals and the derived `editorial_quadrant`; labeling then writes labels + desk/user-need classification.
 - **Singleton.** In-memory immediate-fetch queue and the `pipeline_group_lock` row both assume a single replica.
 
 Each batch step is also exposed as `python -m pipeline.cli <step>` for ad-hoc debugging (`ingest`, `embed`, `cluster`, `label`, `score`, `run-daily`); these are operator tools, not the production execution surface.
@@ -54,7 +54,7 @@ MVP is shipped. Post-MVP work is hardening, governed by four SOPs. Read the rele
 
 ## API endpoints
 
-Reads dominate. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-cluster — score is skipped). Live read endpoints: `/api/v1/clusters/morning`, `/api/v1/clusters/bento`, `/api/v1/clusters/{id}`, `/api/v1/clusters/{id}/volume-trend`, `/api/v1/clusters/deferred`, `/api/v1/articles`, `/api/v1/articles/volume-trend`, `/api/v1/sources` (GET), `/api/v1/pipeline/status`, `/api/v1/health`. Auth handled upstream. Stateless analyst endpoints (no DB writes): `POST /api/v1/analyst/analyze`, `POST /api/v1/analyst/analyze/batch`, `POST /api/v1/analyst/recommendation`. `/clusters/morning` additionally hard-filters to clusters whose `desk_category` is in `morning_allowed_desks` AND whose `user_need_category` is not in `morning_denied_user_needs` (classification written by the labeling step).
+Reads dominate; `/openapi.json` (live at `/docs`) is the contract. Two write surfaces: `ContentSource` CRUD on `/api/v1/sources` (D19), and `POST /api/v1/pipeline/cluster-label-score` (D24, manual re-run — runs the full cluster + score + label path, same as the scheduled run). Read endpoints under `/api/v1`: `clusters/{morning,bento,deferred,quadrant-summary,quadrant/{q},runs/latest,current}`, `clusters/{id}`, `clusters/{id}/volume-trend`, `articles`, `articles/volume-trend`, `trend-signals/latest`, `sources` (GET), `pipeline/status`, `health`. Auth handled upstream. Stateless analyst endpoints (no DB writes): `POST /api/v1/analyst/{analyze,analyze/batch,recommendation}`. The four `clusters/{morning,bento,quadrant-summary,quadrant/{q}}` endpoints accept a `dna` toggle (D39) that hard-filters to clusters whose `desk_category` ∈ `morning_allowed_desks` AND `user_need_category` ∉ `morning_denied_user_needs` (classification written by the labeling step); on for `/morning` by default.
 
 ## Schema
 
@@ -95,7 +95,7 @@ docker compose logs -f api
 
 ## Out of scope (other teams)
 
-Auth, production deploy infra, frontend implementation, monitoring stack, internal GSC analytics dashboard.
+Auth, production deploy infra (orchestration/scaling/secrets beyond compose), frontend hosting/serving config (gateway, nginx, cache headers, SPA fallback), monitoring stack, and the separate internal GSC analytics dashboard. The frontend SPA **itself** lives in `frontend/` and is in scope — see `docs/frontend.md`.
 
 ## When unsure
 

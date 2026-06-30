@@ -244,7 +244,7 @@ Table cluster_insight {
   calculated_at timestamp [default: `now()`]
 }
 
-// One row per running pipeline group. Inserted by the pipeline serve daemon
+// One row per running pipeline group. Inserted by the pipeline-daemon
 // before starting a group; deleted on completion. API checks for existence
 // before sending pg_notify — presence means 409. Row persists on daemon crash
 // until an operator clears it (D22).

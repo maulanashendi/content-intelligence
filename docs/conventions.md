@@ -11,7 +11,7 @@ cd backend
 uv sync
 ```
 
-The `docs/` folder lives at the repository root. The `template-fe/` folder is the legacy prototype; it is read-only and will be deleted per `decisions.md` D18 once migration is complete.
+The `docs/` folder lives at the repository root. The frontend lives in `frontend/` (Bun workspace) — see `docs/frontend.md`.
 
 ## Source layout
 
@@ -75,6 +75,9 @@ backend/packages/api/src/api/
     ├── clusters.py
     ├── articles.py
     ├── sources.py
+    ├── trend_signals.py
+    ├── analyst.py
+    ├── pipeline.py
     └── health.py
 ```
 

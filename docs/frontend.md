@@ -344,7 +344,7 @@ Three styling systems exist in the codebase. Pick the highest-priority one that 
 
 1. **Tailwind utilities + `cn()`** — default. Use for everything that can be expressed as static classes (layout, spacing, colors from tokens, typography, hover/focus states).
 2. **Inline `style={{}}`** — allowed only when the value is computed from runtime data (a tag color from props, a d3-driven transform, a position derived from state). Not for static tweaks like `padding: "16px 20px"` or `fontSize: 11` — those go in Tailwind classes.
-3. **Global CSS classes (`.card`, `.kw-row`, `.audit-list`)** — legacy from `template-fe/`. Allowed in existing components until they migrate. Forbidden in new components — reach for Tailwind utilities and a primitive in `@ei-fe/ui` instead.
+3. **Global CSS classes (`.card`, `.kw-row`, `.audit-list`)** — legacy holdovers. Allowed in existing components until they migrate. Forbidden in new components — reach for Tailwind utilities and a primitive in `@ei-fe/ui` instead.
 
 ```
 runtime-computed?    ──► inline style={{}} (allowed)
@@ -469,10 +469,6 @@ These exist or will exist for the product but are NOT implemented in `frontend/`
 ## Out of MVP scope
 
 The deferred-feature list lives in `prd.md` §6 and `constraints.md` (frontend section). Do not duplicate here. If a request implies a deferred feature, surface the conflict before implementing.
-
-## Migration from `template-fe/`
-
-`template-fe/` is the visual reference prototype. It is read-only and will be deleted per `decisions.md` D18 once `@ei-fe/app` reproduces the three MVP views. The prototype pages that map to deferred PRD §6 features are not ported.
 
 ## Forward-compat with Next.js
 

@@ -1,6 +1,6 @@
 # Logging SOP
 
-This is the standard procedure for logging in Editor Intelligence. Every service — `api`, `ingest serve`, `pipeline serve`, `pipeline run-daily`, and any future entry point — follows it. Written for AI agents and humans.
+This is the standard procedure for logging in Editor Intelligence. Every service — `api`, the `pipeline-daemon` (`pipeline.cli serve`), the manual `pipeline` CLI steps (`run-daily`, `cluster`, …), and any future entry point — follows it. Written for AI agents and humans.
 
 The SOP is opinionated on purpose. JSON logs to stdout are the *only* observability surface this codebase produces; per `docs/constraints.md`, monitoring/alerting/dashboards are owned externally. If a log is missing, wrong, or unstructured, the operator sees nothing.
 
