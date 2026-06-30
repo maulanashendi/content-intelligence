@@ -889,3 +889,23 @@ period per article during scoring) is returned as an aggregated per-cluster
 position remain internal scoring inputs and are still asserted absent from every
 response by `test_clusters_no_gsc_leak.py`. No new column, no migration — the
 existing aggregate is un-hidden under a non-raw field name.
+
+---
+
+## D39. User-need as a per-cluster distribution insight (grounded by counting per-article tags)
+
+User-need was a single holistic LLM label on `cluster_insight.user_need_category`,
+used only as the `/morning` gate. We promote it to a **distribution**: the existing
+one-call insight prompt now also tags each representative article with up to 2 needs,
+and `aggregate_user_needs` (pure, in `labeling.pipeline`) counts those into an 8-key
+distribution persisted on `cluster_insight.user_need_distribution` (JSONB) with
+`user_need_reps_tagged` as the sample size. The argmax becomes the **dominant** need,
+written to the retained `user_need_category` — so the `/morning` filter is unchanged
+but now grounded in counting rather than one holistic guess. No extra LLM call (no
+cost regression); display-only (no ranking change). The local Gemma path keeps the
+single-label behaviour with a null distribution (production is full-API). Frontend
+promotes the analyst radar/bars to `@ei-fe/ui` and renders the 8-axis distribution on
+cluster detail.
+
+> Numbering note: created on branch `feat+cluster-user-need-distribution` off master.
+> The concurrent `feat/morning-dna-toggle` branch also adds a D39; renumber one at merge.
