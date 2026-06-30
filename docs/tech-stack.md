@@ -45,14 +45,19 @@ This document lists every concrete library and runtime choice in the project, wi
 | `hdbscan` 0.8.38+ | Clustering | Algorithm specified by PRD |
 | `scikit-learn` 1.5+ | Utility: TF-IDF, vector ops, helpers | Standard ML toolkit for non-DL tasks |
 
-## Active models
+## Models
 
-| Purpose | Model | Format | Output / Footprint |
-|---------|-------|--------|--------------------|
-| Embedding | `google/embeddinggemma-300m` | HuggingFace (sentence-transformers) | 768-dim, ~300MB on disk |
-| LLM labeling | `bartowski/gemma-2-2b-it-GGUF` — `gemma-2-2b-it-Q4_K_M.gguf` | GGUF Q4_K_M | ~1.6GB on disk, ~2GB RAM |
+Embedding, labeling, and the analyst run through a hosted API by **default** (no
+weights on disk). The on-box models below are the **opt-in** local path
+(`pipeline-local` image); full inventory and env vars in `docs/llm-models.md`.
 
-Switching the embedding model requires a schema migration (vector dimension) and a full re-embed of all articles. See `decisions.md` (D4).
+| Purpose | Default (API) | Opt-in local model | Local footprint |
+|---------|---------------|--------------------|-----------------|
+| Embedding | `openai/text-embedding-3-large` @ 768 (OpenRouter) | `google/embeddinggemma-300m` (sentence-transformers) | ~300 MB on disk |
+| LLM labeling | `openai/gpt-4o-mini` (OpenRouter) | `bartowski/gemma-2-2b-it-GGUF` `Q4_K_M` | ~1.6 GB disk, ~2 GB RAM |
+| Analyst | `gpt-4o` (OpenAI) | — | — |
+
+Switching the embedding model (or dimension) requires a schema migration and a full re-embed of all articles. See `decisions.md` (D4).
 
 ## Ingestion
 
@@ -97,7 +102,13 @@ Scheduling lives inside the `pipeline-daemon` as plain `asyncio` tasks (D24). Th
 | Docker | Container runtime |
 | docker-compose v2 | Local development orchestration; production composition |
 
-The Dockerfile is multi-stage with two runtime concerns (`api`, `pipeline`), each with build/runtime/dev variants (D24 collapsed the previous `ingest` runtime into `pipeline`). The `api` image excludes torch and transformers — deliberately lean (≤250 MB). The `pipeline` image includes the full ML stack plus ingest deps (≤6 GB). See `architecture.md` for the split rationale and `docs/docker-sop.md` for layer-cache rules, image budgets, healthchecks, and runtime hardening (`USER app`, BuildKit, `.dockerignore`). Operational use of the compose stack — start/stop, exec, alembic, recovery — lives in `docs/operations-sop.md`.
+The Dockerfile is multi-stage (D24 collapsed the previous `ingest` runtime into `pipeline`). Three runtime images, each with build/runtime/dev variants:
+
+- `api` — excludes torch/transformers, deliberately lean (≤250 MB).
+- `pipeline-api` — **prod default daemon**; slim, no torch/llama-cpp, runs all AI via the API path (≤3 GB budget).
+- `pipeline-local` — **opt-in**; full on-box ML stack (torch + llama-cpp Gemma) for the local inference path.
+
+See `architecture.md` for the split rationale and `docs/docker-sop.md` for layer-cache rules, image budgets, healthchecks, and runtime hardening (`USER app`, BuildKit, `.dockerignore`). Operational use of the compose stack — start/stop, exec, alembic, recovery — lives in `docs/operations-sop.md`.
 
 ## What was rejected and why
 

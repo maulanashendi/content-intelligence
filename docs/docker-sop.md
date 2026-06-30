@@ -136,7 +136,7 @@ Do not merge them. They serve different lifecycles.
 
 The current `backend/.dockerignore` is the canonical list. When adding entries:
 
-- Always exclude: `.git`, `.venv`, `venv`, `__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `.coverage`, `htmlcov`, `**/tests/`, `docs/`, `template-fe/`, `*.md`, `.env`, `.env.*`, `.vscode`, `.idea`, `.DS_Store`, `models/`, `hf_cache/`, `.cache/`, `*.log`.
+- Always exclude: `.git`, `.venv`, `venv`, `__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `.coverage`, `htmlcov`, `**/tests/`, `docs/`, `*.md`, `.env`, `.env.*`, `.vscode`, `.idea`, `.DS_Store`, `models/`, `hf_cache/`, `.cache/`, `*.log`.
 - Never exclude: `.env.example` (`!.env.example`), workspace package READMEs (`!packages/**/*.md`).
 - New top-level directories that should not enter the image must be added explicitly. Check with `docker build --no-cache -f Dockerfile . --progress=plain 2>&1 | grep 'transferring context'` — if the context size jumps, something new is leaking in.
 

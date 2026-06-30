@@ -165,7 +165,7 @@ docker compose --profile manual run --rm pipeline label
 
 If clustering succeeded but labeling crashed, do not re-run `cluster` — that flips `is_current` and creates a new `cluster_run`. Run only `label` against the existing run.
 
-`scoring` is currently disabled in the daemon (D24). The `score` CLI command still runs but is not part of the production execution path; do not rely on its output.
+`scoring` is **active** in the daemon (re-enabled by D27, redesigned by D35): the daily run is `cluster → score → label → prune`. The `score` CLI command (`--profile manual run --rm pipeline score`) re-runs just that step against the current run for ad-hoc debugging.
 
 ## Alembic in dev and prod
 

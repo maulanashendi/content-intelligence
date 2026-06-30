@@ -1,102 +1,100 @@
 # LLM & Model Inventory
 
-Which models this project runs, for what, and whether they are hosted **API**
-calls or **local** on-box weights. Vendor switching for the API LLM is covered
-in §"Switching the API vendor".
+Which models this project runs, for what, and how to switch vendors.
 
-## API models — `analyst` package (hosted LLM)
+**Hosted API is the default for all three AI tasks** — embedding, cluster
+labeling, and the editorial analyst — through an OpenAI-compatible endpoint
+reached via the shared `llm` package. This keeps the production footprint inside
+a ~2 GB VPS: no `torch`, no GGUF weights, no GPU. On-box weights are an **opt-in
+build** (the `pipeline-local` image); see §"Local on-box path".
 
-The Editorial AI Analyst is the only code that calls a hosted LLM over HTTP.
+## AI tasks (hosted by default)
 
-| Task | Purpose | Default model | Env var |
+| Task | API default model | Provider env | Notes |
 | --- | --- | --- | --- |
-| `analyze` | Extract article attributes + editorial feedback | `gpt-4o` | `ANALYST_ANALYZE_MODEL` |
-| `recommend` | Extract data filters, then generate insights (two LLM calls) | `gpt-4o` | `ANALYST_RECOMMEND_MODEL` |
+| Article embedding (768d) | `openai/text-embedding-3-large` @ 768 via OpenRouter | `EMBEDDING_PROVIDER=api` | `dimensions=768` preserves `vector(768)`; `EMBEDDING_API_{BASE_URL,MODEL,KEY,DIMENSIONS}` |
+| Cluster labeling + desk/user-need | `openai/gpt-4o-mini` via OpenRouter | `LABELING_PROVIDER=api` | `LABELING_MODEL`, `LABELING_LLM_{API_KEY,BASE_URL}` |
+| Analyst `analyze` | `gpt-4o` (OpenAI) | `ANALYST_LLM_PROVIDER=openai` | `ANALYST_ANALYZE_MODEL` |
+| Analyst `recommend` | `gpt-4o` (OpenAI, two LLM calls) | `ANALYST_LLM_PROVIDER=openai` | `ANALYST_RECOMMEND_MODEL` |
 
-- Client: `openai` SDK, behind the vendor boundary in `analyst/providers.py`.
+- Client: `openai` SDK, behind the provider boundary in the shared `llm` package
+  (`llm/providers.py`), reused by `embedding`, `labeling`, and `analyst`.
 - Structured output: the schema is injected into the prompt and, when the
-  preset's `supports_json_mode` flag is set (the default for all current
-  presets), `response_format={"type":"json_object"}` is also sent; output is
-  validated against a Pydantic schema with one retry.
+  preset's `supports_json_mode` flag is set (default for all current presets),
+  `response_format={"type":"json_object"}` is also sent; output is validated
+  against a Pydantic schema with one retry.
 
 ### Switching the API vendor
 
-Switching among OpenAI-compatible vendors is a `.env` change only:
+Switching among OpenAI-compatible vendors is a `.env` change only. Each task has
+its own provider/model env vars (above). To repoint one task: set its
+`*_PROVIDER` to a preset name, set its API key, set the model id to the vendor's
+format (OpenRouter uses `vendor/model`), and for self-hosted endpoints override
+the base URL.
 
-1. Set `ANALYST_LLM_PROVIDER` to a preset name.
-2. Set `ANALYST_LLM_API_KEY`.
-3. Set the model ids to the vendor's format (OpenRouter uses `vendor/model`).
-4. For self-hosted endpoints, set `ANALYST_LLM_BASE_URL` to override the host:port.
-
-Preset table (`analyst/providers.py`):
+Preset table (`llm/providers.py`):
 
 | Provider | Base URL | Notes |
 | --- | --- | --- |
-| `openai` | `https://api.openai.com/v1` | Default |
-| `openrouter` | `https://openrouter.ai/api/v1` | Optional `HTTP-Referer`/`X-Title` via `ANALYST_ATTRIBUTION_*` |
+| `openai` | `https://api.openai.com/v1` | Analyst default |
+| `openrouter` | `https://openrouter.ai/api/v1` | Embedding + labeling default; optional `HTTP-Referer`/`X-Title` via `*_ATTRIBUTION_*` |
 | `ollama` | `http://localhost:11434/v1` | Self-hosted; override base URL for non-local host |
 | `vllm` | `http://localhost:8000/v1` | Self-hosted; override base URL for non-local host |
 
 A future native-incompatible vendor (e.g. Anthropic Messages API) is added by
-implementing a new `LLMClient` in `analyst/providers.py` plus a preset entry —
-no change to `llm.py` or the callers.
+implementing a new `LLMClient` in `llm/providers.py` plus a preset entry — no
+change to the callers.
 
-## Local models — on-box weights (not vendor-swappable)
+## Local on-box path (opt-in)
 
-| Purpose | Model | Format | Library | Device | Driven by |
-| --- | --- | --- | --- | --- | --- |
-| Article embedding (768d) | `google/embeddinggemma-300m` *(local)* or `openai/text-embedding-3-large` @ 768 via OpenRouter *(api)* | HuggingFace (local) / HTTP (api) | `sentence-transformers` + `torch` (local) / shared `llm` package (api) | CPU (local) / remote (api) | `EMBEDDING_PROVIDER` (default `local`); `EMBEDDING_API_MODEL` for api path |
-| Cluster labeling | `bartowski/gemma-2-2b-it-GGUF` (`Q4_K_M`) *(default `local`)* or any API preset model | GGUF 4-bit (local) / HTTP (API) | `llama-cpp-python` (local) / shared `llm` package (API) | CPU (local) / remote (API) | `LABELING_PROVIDER` (default `local`); `LABELING_MODEL` for API path |
+Set `EMBEDDING_PROVIDER=local` and/or `LABELING_PROVIDER=local` to run weights
+on-box. This requires the heavier `pipeline-local` image (the default
+`pipeline-api` image ships without torch/llama-cpp). The path still exists and
+is reversible — useful only where a GPU/large box is available.
 
-- **Embedding backend is switchable (SP3):** set `EMBEDDING_PROVIDER=local` (default) to run
-  on-box `google/embeddinggemma-300m` via `sentence-transformers`; set it to `api` to route
-  embeddings through the shared `llm` package calling `openai/text-embedding-3-large` on
-  OpenRouter — no torch loaded. `vector(768)` is preserved on the api path via the `dimensions=768`
-  param. Switching providers for an existing DB requires the re-embed + validation procedure below.
-  The api path uses `EMBEDDING_API_KEY`, `EMBEDDING_API_BASE_URL`, `EMBEDDING_API_MODEL`, and
-  `EMBEDDING_API_DIMENSIONS`.
-- The embedding dimension is fixed at `vector(768)`; swapping the embedding
-  model requires a DB migration plus a full re-embed (see `decisions.md` D4).
-- **Labeling backend is switchable (SP2):** set `LABELING_PROVIDER=local` (default) to run
-  on-box Gemma 2B via `llama-cpp-python`; set it to a preset name (`openai`,
-  `openrouter`, `ollama`, `vllm`) to route labeling through the shared `llm`
-  package with structured JSON output — no Gemma weights loaded. The API path
-  uses `LABELING_MODEL`, `LABELING_LLM_API_KEY`, and `LABELING_LLM_BASE_URL`.
-- **Note:** On the `local` path the model id remains hardcoded in
-  `backend/packages/labeling/src/labeling/llm.py`; the `LLM_MODEL_NAME` env var
-  is documented but not read on that path. Known inconsistency, out of scope.
+| Purpose | Local model | Format | Library |
+| --- | --- | --- | --- |
+| Article embedding (768d) | `google/embeddinggemma-300m` | HuggingFace | `sentence-transformers` + `torch` (CPU) |
+| Cluster labeling | `bartowski/gemma-2-2b-it-GGUF` (`Q4_K_M`) | GGUF 4-bit | `llama-cpp-python` (CPU) |
 
-### Embedding re-embed (SP3)
+- `vector(768)` is fixed; swapping the embedding model requires a DB migration
+  plus a full re-embed (see `decisions.md` D4).
+- **Known inconsistency:** on the `local` labeling path the model id is hardcoded
+  in `labeling/src/labeling/llm.py`; the `LLM_MODEL_NAME` env var is documented
+  but not read on that path. Out of scope.
 
-When switching `EMBEDDING_PROVIDER` on an existing DB, run the validation script before
-committing to the new vectors (non-destructive; human go/no-go required):
+### Re-embed when switching `EMBEDDING_PROVIDER`
+
+On an existing DB, validate before committing to new vectors (non-destructive;
+human go/no-go). Full runbook in `operations-sop.md` §Switching inference backend.
 
 ```text
 1. Validate (non-destructive, human go/no-go):
    cd backend && ./.venv/bin/python scripts/validate_embeddings.py
-2. Cutover (operator-gated; set EMBEDDING_PROVIDER=api first; daemon stopped):
+2. Cutover (operator-gated; daemon stopped):
    docker compose --profile manual run --rm pipeline reembed
    docker compose --profile manual run --rm pipeline cluster
 ```
 
-## ML (non-LLM)
+## ML (non-LLM, always on-box)
 
 | Purpose | Package | Libraries |
 | --- | --- | --- |
 | Dimensionality reduction → clustering | `clustering` | `umap-learn` → `hdbscan` |
-| Scoring (velocity, novelty, coverage) | `scoring` | `scikit-learn`, `numpy` |
+| Demand × performance scoring (D35) | `scoring` | `scikit-learn`, `numpy` |
 
 ## Env var reference
 
-**API (analyst):** `ANALYST_LLM_PROVIDER`, `ANALYST_LLM_API_KEY`,
+**Embedding:** `EMBEDDING_PROVIDER` (default `api`), `EMBEDDING_API_BASE_URL`,
+`EMBEDDING_API_MODEL`, `EMBEDDING_API_KEY`, `EMBEDDING_API_DIMENSIONS`.
+Local-only: `EMBEDDING_MODEL_NAME`, `EMBEDDING_MODEL_VERSION`, `HF_HOME`, `HF_TOKEN`.
+
+**Labeling:** `LABELING_PROVIDER` (default `api`), `LABELING_MODEL`,
+`LABELING_LLM_API_KEY`, `LABELING_LLM_BASE_URL` (optional),
+`LABELING_ATTRIBUTION_REFERER`, `LABELING_ATTRIBUTION_TITLE`.
+Local-only: `LLM_MODEL_NAME` (documented; see warning above), `LLM_MODEL_VERSION`.
+
+**Analyst:** `ANALYST_LLM_PROVIDER` (default `openai`), `ANALYST_LLM_API_KEY`,
 `ANALYST_LLM_BASE_URL` (optional override), `ANALYST_ANALYZE_MODEL`,
 `ANALYST_RECOMMEND_MODEL`, `ANALYST_ATTRIBUTION_REFERER`,
 `ANALYST_ATTRIBUTION_TITLE`, `ANALYST_REQUEST_TIMEOUT_SECONDS`.
-
-**Local models:** `EMBEDDING_MODEL_NAME`, `EMBEDDING_MODEL_VERSION`,
-`LLM_MODEL_NAME` (documented; see warning above), `LLM_MODEL_VERSION`,
-`HF_HOME`, `HF_TOKEN`.
-
-**Labeling backend (SP2):** `LABELING_PROVIDER` (default `local`),
-`LABELING_MODEL`, `LABELING_LLM_API_KEY`, `LABELING_LLM_BASE_URL` (optional),
-`LABELING_ATTRIBUTION_REFERER`, `LABELING_ATTRIBUTION_TITLE`.

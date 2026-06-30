@@ -82,11 +82,11 @@ These invariants are enforced by `schema.dbml` and must be preserved:
 - `cluster_insight.summary` exists but is not currently surfaced to the API. Reserved for future LLM-generated summaries; safe to ignore for now.
 - The two personas (Maulana and the desk head) use the **same** application. There is no role-based feature partitioning. They use different views of the same data.
 - Cluster + label runs once per day at 06:00 WIB on the daemon's internal scheduler, plus on demand via `POST /api/v1/pipeline/cluster-label-score`. Ingest and embed run reactively whenever a new RSS source is added or the daemon's poll loop tick fires. There is no streaming and no hourly cluster refresh; clustering is the expensive step and is intentionally bounded to one daily run plus operator-driven re-runs.
-- The `scoring` step is currently disabled in the daemon. The package, tables, ORM models, and CLI entry remain in place; new daemon runs do not write `cluster_insight` rows. Existing rows are kept for reference. Re-enabling scoring requires a decision entry.
+- The `scoring` step is **active** in the daemon (re-enabled by D27, redesigned by D35). The daily run executes `cluster → score → label → prune`; `scoring.pipeline.run()` upserts `cluster_insight` with demand × performance signals and the derived `editorial_quadrant`. Raw GSC numbers stay internal; only derived levels are surfaced (D35, amended D38).
 
 ## Frontend constraints
 
-The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The legacy prototype `template-fe/` is reference-only and will be deleted per `decisions.md` D18. See `frontend.md` for the full architecture.
+The production frontend lives in `frontend/` (Bun workspace, Vite SPA). See `frontend.md` for the full architecture. (The legacy `template-fe/` prototype has been deleted — D18 complete.)
 
 ### Out of the frontend codebase
 - **Authentication.** Upstream gateway (D10). The FE never validates identity.
@@ -103,7 +103,7 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 - **No auth library.** No NextAuth, Auth0 SDK, Clerk, or session helpers. Identity is upstream.
 - **No form library.** No react-hook-form, Formik, or Final Form. The only write surface (source management, D19) is small enough that controlled inputs + native validation suffice.
 - **No internationalization library.** No i18next, react-intl, or LinguiJS. Strings are Bahasa Indonesia and hard-coded.
-- **No theme switcher.** One palette, light only. The `tweaks-panel` from `template-fe/` is designer tooling and is not ported.
+- **No theme switcher.** One palette, light only. No runtime design-tweak panel.
 - **No Storybook or component-isolation environment.** Visual review happens in the dev server.
 - **No icon set besides Lucide.** Adding a second icon system is forbidden — extend `@ei-fe/ui/src/icons.ts` instead.
 - **No write-side endpoints beyond source management.** Per D19 the FE has source CRUD on `/sources` and `/sources/rss`. No other mutating UI elements (no claim, dismiss, bookmark, etc.) — clusters, articles, and trend signals stay read-only.
@@ -124,7 +124,6 @@ The production frontend lives in `frontend/` (Bun workspace, Vite SPA). The lega
 - **Design tokens have one source: `@ei-fe/core/src/tokens.ts`.** `globals.css` mirrors them; do not introduce a third location.
 
 ### Things that look like bugs but aren't
-- The `template-fe/` directory contains pages (`page-keywords.jsx`, `page-buckets.jsx`, `page-performance.jsx`, `page-desk.jsx`, `page-queue.jsx`, `tweaks-panel.jsx`) that are NOT ported. They correspond to features deferred per `prd.md` §6.
 - The FE has no polling timer. Refresh on window focus plus a manual refresh button is the entire freshness model. The pipeline runs once per day; an interval poll would do nothing useful.
 - `generated.ts` is committed to git. This is intentional (D16) so schema changes appear as reviewed diffs, not silent CI artifacts.
 - The two personas use the same dashboard. There is no role-based gating; auth is upstream. Both land on `/morning` as the primary entry point.

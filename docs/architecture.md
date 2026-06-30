@@ -98,9 +98,9 @@ article_embedding rows ready for the next cluster run
 
 There is no manual ingest + embed trigger. New articles flow into the database and become embedded without any operator action. The previous `POST /api/v1/pipeline/ingest-embed` endpoint has been removed.
 
-### Scheduled cluster + label (06:00 WIB daily)
+### Scheduled cluster + score + label (06:00 WIB daily)
 
-The daemon's internal scheduler emits `pg_notify('pipeline_cluster_label_score_requested')` once per day at 06:00 WIB. The same channel is used by the manual API trigger below — there is exactly one execution path for cluster + label.
+The daemon's internal scheduler emits `pg_notify('pipeline_cluster_label_score_requested')` once per day at 06:00 WIB. The same channel is used by the manual API trigger below — there is exactly one execution path. The steps run **in order: cluster → score → label → prune** (scoring runs before labeling — it is cheap SQL/numpy and does not depend on labels).
 
 ```
 06:00 WIB internal scheduler tick
@@ -116,20 +116,24 @@ Cluster
   - Mark all previous article_cluster.is_current = false
   - Insert new cluster_run, article_cluster, article_cluster_member rows
 
-Label
-  - For each (top-N) cluster: pick top 3-5 articles by relevance
-  - Format prompt with title + first_paragraph
-  - Generate label via the hosted LLM (default: OpenRouter gpt-4o-mini,
-    structured JSON). On-box Gemma 2 2B GGUF is the opt-in local path.
-  - Update article_cluster.label
-
 Score (active — D27/D35)
   - Compute per-cluster demand_score / high_demand, performance_level,
     and the derived editorial_quadrant (on-box: scikit-learn, numpy).
   - Upsert signals into cluster_insight. Raw GSC numbers stay internal.
+
+Label
+  - For each (top-N) cluster: pick top 3-5 articles by relevance
+  - Format prompt with title + first_paragraph
+  - Generate label + desk/user-need classification via the hosted LLM
+    (default: OpenRouter gpt-4o-mini, structured JSON). On-box Gemma 2 2B
+    GGUF is the opt-in local path.
+  - Update article_cluster.label and cluster_insight classification fields
+
+Prune (D33)
+  - Drop cluster runs beyond the retention window (ON DELETE CASCADE)
   │
   ▼
-release DB lock
+mark cluster_run.finished_at (D36), release DB lock
 ```
 
 The cluster window is 7 days (down from the previous 30) to keep topics tied to the current week's news cycle. Scheduler interval, time-of-day, and timezone are config-driven via `core.config.settings`; the default is 06:00 WIB to preserve the morning-view contract.
@@ -146,7 +150,7 @@ api: check pipeline_group_lock; if free, INSERT lock row + pg_notify
 pipeline-daemon: same code path as the scheduled run
 ```
 
-The endpoint name keeps `cluster-label-score` for FE compatibility; request body and response shape are unchanged. Inside the daemon, the run executes all three steps — cluster, label, and score.
+The endpoint name keeps `cluster-label-score` for FE compatibility; request body and response shape are unchanged. Inside the daemon, the run executes the full path — cluster, score, label, prune — identical to the scheduled run.
 
 ### CLI entry points (debugging only)
 
@@ -173,6 +177,8 @@ These endpoints serve the dashboard. Authentication is handled by an upstream ga
 | `GET`    | `/api/v1/clusters/quadrant/{quadrant}`  | Top clusters in one editorial quadrant             |
 | `GET`    | `/api/v1/clusters/quadrant-summary`     | Quadrant distribution across current clusters      |
 | `GET`    | `/api/v1/clusters/deferred`             | High-demand, uncovered, stale-coverage topics      |
+| `GET`    | `/api/v1/clusters/runs/latest`          | Metadata for the most recent finished cluster run  |
+| `GET`    | `/api/v1/clusters/current`              | Current run's clusters (lightweight list)          |
 | `GET`    | `/api/v1/clusters/{cluster_id}`         | Cluster detail with member articles                |
 | `GET`    | `/api/v1/clusters/{cluster_id}/volume-trend` | Competitor vs internal volume per WIB bucket  |
 | `GET`    | `/api/v1/articles`                      | Paginated list of all ingested articles            |
@@ -181,16 +187,18 @@ These endpoints serve the dashboard. Authentication is handled by an upstream ga
 | `POST`   | `/api/v1/sources`                       | Add a new RSS source                               |
 | `PATCH`  | `/api/v1/sources/{id}`                  | Toggle a source on or off                          |
 | `DELETE` | `/api/v1/sources/{id}`                  | Hard delete a source with no articles              |
-| `POST`   | `/api/v1/pipeline/cluster-label-score`  | Manual re-cluster trigger (cluster + label + score) |
+| `POST`   | `/api/v1/pipeline/cluster-label-score`  | Manual re-run trigger (cluster + score + label + prune) |
+| `POST`   | `/api/v1/pipeline/analysis`             | Manual analysis-step trigger (D29)                 |
 | `GET`    | `/api/v1/pipeline/status`               | Pipeline run status                                |
 | `POST`   | `/api/v1/analyst/analyze` · `/analyze/batch` · `/recommendation` | Stateless editorial analyst (no DB writes) |
 | `GET`    | `/api/v1/trend-signals/latest`          | Latest trending keywords                           |
 | `GET`    | `/api/v1/health`                        | DB connectivity check                              |
 
-All cluster, article, and trend-signal endpoints are read-only. Two write surfaces exist:
+All cluster, article, and trend-signal endpoints are read-only. The `dna` query param (D39) toggles the desk/user-need filter on `clusters/{morning,bento,quadrant-summary,quadrant/{q}}` (default on for `/morning`, off for the other three). The only surface that writes a data table is:
 
 - `/api/v1/sources` (POST/PATCH/DELETE) — runtime feed management. POST emits `pg_notify('rss_source_created', <id>)`; the daemon consumes that channel and ingests the new feed within minutes.
-- `/api/v1/pipeline/cluster-label-score` (POST) — manual re-cluster. Writes a row to `pipeline_group_lock` and emits `pg_notify('pipeline_cluster_label_score_requested')`. Returns 409 if the lock is held.
+
+The pipeline trigger endpoints (`POST /pipeline/cluster-label-score`, `POST /pipeline/analysis`, D29) write only a `pipeline_group_lock` row and emit a `pg_notify`; they touch no analytical table and return 409 if the lock is held.
 
 The previous `POST /api/v1/pipeline/ingest-embed` is removed. Ingest + embed is fully reactive and needs no operator trigger.
 
