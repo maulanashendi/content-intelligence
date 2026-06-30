@@ -11,6 +11,7 @@ def test_cluster_insight_parses_full_payload() -> None:
             "summary": ["Harga naik 10 persen", "Stok menipis"],
             "desk_category": "Ekonomi & Bisnis",
             "user_need_category": "Update me",
+            "article_needs": [["Update me", "Give me perspective"], ["Update me"]],
         }
     )
     d = m.model_dump()
@@ -18,9 +19,10 @@ def test_cluster_insight_parses_full_payload() -> None:
     assert d["parties_involved"] == ["Bulog", "Kemendag"]
     assert d["desk_category"] == "Ekonomi & Bisnis"
     assert d["user_need_category"] == "Update me"
+    assert d["article_needs"] == [["Update me", "Give me perspective"], ["Update me"]]
     assert set(d) == {
         "label", "what_happened", "parties_involved", "editorial_angle",
-        "summary", "desk_category", "user_need_category",
+        "summary", "desk_category", "user_need_category", "article_needs",
     }
 
 
@@ -34,6 +36,7 @@ def test_cluster_insight_minimal() -> None:
         "summary": None,
         "desk_category": None,
         "user_need_category": None,
+        "article_needs": None,
     }
 
 
