@@ -18,9 +18,18 @@
   "performance_level": "low",
   "editorial_quadrant": "opportunity",
   "what_happened": "Pertamina menaikkan harga BBM non-subsidi Pertamax, Dexlite, dan Pertamina Dex mulai 1 Mei 2025, dipicu pelemahan rupiah dan lonjakan harga minyak dunia ke level $94/barel.",
-  "parties_involved": ["Pertamina", "DPR RI Komisi VII", "Asosiasi Pengusaha Logistik", "LPEM UI"],
+  "parties_involved": [
+    "Pertamina",
+    "DPR RI Komisi VII",
+    "Asosiasi Pengusaha Logistik",
+    "LPEM UI"
+  ],
   "editorial_angle": "Investigasi: apakah Pertamina melakukan kajian dampak inflasi sebelum menaikkan harga? Minta dokumen RKAP 2025 dan bandingkan proyeksi dampak inflasi BI vs kenaikan aktual.",
-  "bullet_insights": ["8 kompetitor sudah menulis, Tempo belum hadir", "3 keyword trend aktif minggu ini", "Topik konsumsi publik luas — potensi trafik tinggi"],
+  "bullet_insights": [
+    "8 kompetitor sudah menulis, Tempo belum hadir",
+    "3 keyword trend aktif minggu ini",
+    "Topik konsumsi publik luas — potensi trafik tinggi"
+  ],
   "insight_calculated_at": "2026-05-09T06:05:00Z",
   "is_stale": false,
   "sub_clusters": null,
@@ -135,5 +144,16 @@
       "source_name": "Republika",
       "relevance_score": 0.52
     }
-  ]
+  ],
+  "user_need_distribution": {
+    "Update me": 4,
+    "Keep me engaged": 3,
+    "Educate me": 2,
+    "Give me perspective": 2,
+    "Inspire me": 1,
+    "Divert me": 1,
+    "Help me": 2,
+    "Connect me": 1
+  },
+  "user_need_reps_tagged": 8
 }
