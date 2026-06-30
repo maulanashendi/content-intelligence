@@ -38,6 +38,8 @@ def _insight(cluster_id: uuid.UUID) -> ClusterInsight:
         trend_match_count=1,
         tempo_covered=False,
         underperformed=False,
+        desk_category="Politik",
+        user_need_category="Update me",
     )
 
 

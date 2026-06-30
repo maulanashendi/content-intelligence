@@ -495,3 +495,89 @@ async def test_cluster_detail_returns_user_need_distribution(
     body = response.json()
     assert body["user_need_distribution"] == {"Update me": 2, "Educate me": 1}
     assert body["user_need_reps_tagged"] == 3
+
+
+# --- dna param tests ---
+
+
+async def test_morning_dna_false_includes_off_desk_cluster(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """?dna=false bypasses the DNA gate — a Selebriti cluster (off allow-list) is returned."""
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster, insight = _cluster_with_insight(
+        run.id, tempo_covered=False, desk_category="Selebriti", user_need_category="Update me"
+    )
+    session.add_all([run, cluster, insight])
+    await session.flush()
+
+    resp_off = await client.get("/api/v1/clusters/morning?dna=false")
+    assert resp_off.status_code == 200
+    ids_off = [r["id"] for r in resp_off.json()["clusters"]]
+    assert str(cluster.id) in ids_off
+
+    resp_on = await client.get("/api/v1/clusters/morning")
+    assert resp_on.status_code == 200
+    ids_on = [r["id"] for r in resp_on.json()["clusters"]]
+    assert str(cluster.id) not in ids_on
+
+    resp_explicit = await client.get("/api/v1/clusters/morning?dna=true")
+    assert resp_explicit.status_code == 200
+    ids_explicit = [r["id"] for r in resp_explicit.json()["clusters"]]
+    assert str(cluster.id) not in ids_explicit
+
+
+async def test_quadrant_summary_dna_true_excludes_off_dna(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """?dna=true on /quadrant-summary excludes off-list desk, denied user-need, and NULL desk."""
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    # on-DNA: allowed desk + allowed user-need
+    c_on, i_on = _cluster_with_insight(
+        run.id, editorial_quadrant="opportunity", desk_category="Politik", user_need_category="Update me"
+    )
+    # off-DNA: desk not in allow-list
+    c_desk, i_desk = _cluster_with_insight(
+        run.id, editorial_quadrant="opportunity", desk_category="Selebriti", user_need_category="Update me"
+    )
+    # off-DNA: user_need in deny-list
+    c_need, i_need = _cluster_with_insight(
+        run.id, editorial_quadrant="opportunity", desk_category="Politik", user_need_category="Divert me"
+    )
+    # off-DNA: NULL desk
+    c_null, i_null = _cluster_with_insight(
+        run.id, editorial_quadrant="opportunity", desk_category=None, user_need_category="Update me"
+    )
+    session.add_all([run, c_on, i_on, c_desk, i_desk, c_need, i_need, c_null, i_null])
+    await session.flush()
+
+    # default (dna=false) — counts all four
+    resp_default = await client.get("/api/v1/clusters/quadrant-summary")
+    assert resp_default.status_code == 200
+    assert resp_default.json()["opportunity"] == 4
+
+    # dna=true — only c_on passes
+    resp_dna = await client.get("/api/v1/clusters/quadrant-summary?dna=true")
+    assert resp_dna.status_code == 200
+    assert resp_dna.json()["opportunity"] == 1
+
+
+async def test_quadrant_by_quadrant_dna_true_excludes_off_dna(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """?dna=true on /quadrant/{q} excludes clusters that fail the DNA gate."""
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    c_on, i_on = _cluster_with_insight(
+        run.id, editorial_quadrant="opportunity", desk_category="Politik", user_need_category="Update me"
+    )
+    c_off, i_off = _cluster_with_insight(
+        run.id, editorial_quadrant="opportunity", desk_category="Selebriti", user_need_category="Update me"
+    )
+    session.add_all([run, c_on, i_on, c_off, i_off])
+    await session.flush()
+
+    resp_dna = await client.get("/api/v1/clusters/quadrant/opportunity?dna=true")
+    assert resp_dna.status_code == 200
+    ids = [r["id"] for r in resp_dna.json()["clusters"]]
+    assert str(c_on.id) in ids
+    assert str(c_off.id) not in ids

@@ -196,11 +196,11 @@ function BentoCard({ card, open, onToggle }: { card: BentoCardData; open: boolea
   )
 }
 
-export function ClusterBentoCard() {
+export function ClusterBentoCard({ dnaOn }: { dnaOn: boolean }) {
   const [shown, setShown] = useState(PAGE)
   const [openId, setOpenId] = useState<string | null>(null)
   const qc = useQueryClient()
-  const { data, isLoading, isError, error } = useClusterBento(shown)
+  const { data, isLoading, isError, error } = useClusterBento(shown, dnaOn)
 
   return (
     <div
@@ -222,7 +222,7 @@ export function ClusterBentoCard() {
       {isError && (
         <ErrorState
           error={error}
-          onRetry={() => qc.invalidateQueries({ queryKey: clusterKeys.bento(shown) })}
+          onRetry={() => qc.invalidateQueries({ queryKey: clusterKeys.bento(shown, dnaOn) })}
         />
       )}
       {!isLoading && !isError && data && data.cards.length === 0 && (

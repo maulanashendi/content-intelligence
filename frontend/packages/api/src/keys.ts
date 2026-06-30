@@ -1,11 +1,11 @@
 export const clusterKeys = {
   all: ["clusters"] as const,
-  morning: () => [...clusterKeys.all, "morning"] as const,
+  morning: (dna: boolean) => [...clusterKeys.all, "morning", dna] as const,
   current: (order: "asc" | "desc") => [...clusterKeys.all, "current", order] as const,
   detail: (id: string) => [...clusterKeys.all, "detail", id] as const,
-  quadrantSummary: () => [...clusterKeys.all, "quadrant-summary"] as const,
-  byQuadrant: (quadrant: string) => [...clusterKeys.all, "by-quadrant", quadrant] as const,
-  bento: (limit: number) => [...clusterKeys.all, "bento", limit] as const,
+  quadrantSummary: (dna: boolean) => [...clusterKeys.all, "quadrant-summary", dna] as const,
+  byQuadrant: (quadrant: string, dna: boolean) => [...clusterKeys.all, "by-quadrant", quadrant, dna] as const,
+  bento: (limit: number, dna: boolean) => [...clusterKeys.all, "bento", limit, dna] as const,
   volumeTrend: (id: string) => [...clusterKeys.all, "volume-trend", id] as const,
 }
 

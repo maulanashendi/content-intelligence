@@ -7,6 +7,7 @@ import { QUADRANTS, TOO_EARLY_DEF, type Quadrant, type QuadrantDef } from "./qua
 
 interface OpportunityMatrixCardProps {
   clusters: ClusterSummary[]
+  dnaOn: boolean
 }
 
 // ─── Cluster row ─────────────────────────────────────────────────────────────
@@ -70,13 +71,15 @@ function QuadrantPanel({
   count,
   onClose,
   onNavigate,
+  dnaOn,
 }: {
   def: QuadrantDef | typeof TOO_EARLY_DEF
   count: number
   onClose: () => void
   onNavigate: (id: string) => void
+  dnaOn: boolean
 }) {
-  const { data, isLoading } = useClustersByQuadrant(def.key, 8)
+  const { data, isLoading } = useClustersByQuadrant(def.key, 8, dnaOn)
   const clusters = data?.clusters ?? []
 
   return (
@@ -209,9 +212,9 @@ function QuadrantCell({
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function OpportunityMatrixCard({ clusters: _clusters }: OpportunityMatrixCardProps) {
+export function OpportunityMatrixCard({ clusters: _clusters, dnaOn }: OpportunityMatrixCardProps) {
   const navigate = useNavigate()
-  const { data, isLoading } = useQuadrantSummary()
+  const { data, isLoading } = useQuadrantSummary(dnaOn)
   const [selected, setSelected] = useState<Quadrant | null>(null)
 
   const counts = data ?? { opportunity: 0, winning: 0, evergreen: 0, ignore: 0, too_early: 0, total: 0 }
@@ -246,7 +249,7 @@ export function OpportunityMatrixCard({ clusters: _clusters }: OpportunityMatrix
             Matriks Peluang Editorial
           </span>
           <span className="text-[11px]" style={{ color: "var(--fg-faint)" }}>
-            {isLoading ? "memuat…" : `${total} topik · semua cluster aktif`}
+            {isLoading ? "memuat…" : dnaOn ? `${total} topik · tema Tempo` : `${total} topik · semua cluster`}
           </span>
         </div>
 
@@ -324,6 +327,7 @@ export function OpportunityMatrixCard({ clusters: _clusters }: OpportunityMatrix
             setSelected(null)
             navigate(`/clusters/${id}`)
           }}
+          dnaOn={dnaOn}
         />
       )}
     </div>

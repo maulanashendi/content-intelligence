@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useMemo } from "react"
 import { useQueryClient, useQueries } from "@tanstack/react-query"
 import { useMorningClusters, useLatestClusterRun, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
@@ -11,6 +11,8 @@ import { NewsVolumeTrendCard } from "./news-volume-trend-card.js"
 import { ClusterBentoCard } from "./cluster-bento-card.js"
 import { OpportunityMatrixCard } from "./opportunity-matrix-card.js"
 import { TrendSignalCard } from "./trend-signal-card.js"
+import { parseDnaParam } from "./dna-param.js"
+import { DnaToggle } from "./dna-toggle.js"
 
 function KpiRow({ clusters }: { clusters: { tempo_covered: boolean | null; underperformed: boolean | null; member_count: number | null; trend_velocity: number | null }[] }) {
   const uncovered = clusters.filter((c) => !c.tempo_covered).length
@@ -43,7 +45,18 @@ function fmtRunTime(iso: string): string {
 export function MorningView() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { data, isLoading, isError, error, isFetching } = useMorningClusters()
+  const [params, setParams] = useSearchParams()
+  const dnaOn = parseDnaParam(params)
+
+  const setDna = (next: boolean) => {
+    setParams(prev => {
+      const p = new URLSearchParams(prev)
+      if (next) p.delete("dna"); else p.set("dna", "off")
+      return p
+    }, { replace: true })
+  }
+
+  const { data, isLoading, isError, error, isFetching } = useMorningClusters(dnaOn)
   const { data: run } = useLatestClusterRun()
 
   const detailQueries = useQueries({
@@ -64,7 +77,7 @@ export function MorningView() {
     return (
       <ErrorState
         error={error}
-        onRetry={() => queryClient.invalidateQueries({ queryKey: clusterKeys.morning() })}
+        onRetry={() => queryClient.invalidateQueries({ queryKey: clusterKeys.morning(dnaOn) })}
       />
     )
   }
@@ -101,8 +114,15 @@ export function MorningView() {
       )}
       <KpiRow clusters={clusters} />
 
-      <div style={{ padding: "20px 28px 0" }}>
-        <OpportunityMatrixCard clusters={clusters} />
+      <div style={{ padding: "16px 28px 0", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 12, color: "var(--fg-faint)" }}>
+          Hanya tema Tempo (desk + kebutuhan pembaca)
+        </span>
+        <DnaToggle on={dnaOn} onChange={setDna} />
+      </div>
+
+      <div style={{ padding: "12px 28px 0" }}>
+        <OpportunityMatrixCard clusters={clusters} dnaOn={dnaOn} />
       </div>
 
       <div style={{ padding: "20px 28px 0" }}>
@@ -110,7 +130,7 @@ export function MorningView() {
       </div>
 
       <div style={{ padding: "20px 28px 0" }}>
-        <ClusterBentoCard />
+        <ClusterBentoCard dnaOn={dnaOn} />
       </div>
 
       <div style={{ padding: "20px 28px 0" }}>
