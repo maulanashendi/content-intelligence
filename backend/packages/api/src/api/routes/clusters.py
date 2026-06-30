@@ -46,6 +46,8 @@ class ClusterSummary(BaseModel):
     editorial_quadrant: str | None
     desk_category: str | None
     user_need_category: str | None
+    user_need_distribution: dict[str, int] | None
+    user_need_reps_tagged: int | None
     what_happened: str | None
     parties_involved: list[str] | None
     editorial_angle: str | None
@@ -151,6 +153,8 @@ def _to_summary(
         editorial_quadrant=insight.editorial_quadrant if insight else None,
         desk_category=insight.desk_category if insight else None,
         user_need_category=insight.user_need_category if insight else None,
+        user_need_distribution=insight.user_need_distribution if insight else None,
+        user_need_reps_tagged=insight.user_need_reps_tagged if insight else None,
         what_happened=insight.what_happened if insight else None,
         parties_involved=_distinct(insight.parties_involved if insight else None),
         editorial_angle=insight.editorial_angle if insight else None,
@@ -580,7 +584,7 @@ async def cluster_volume_trend(
     return VolumeTrendResponse(bucket=bucket, buckets=buckets, generated_at=now_utc)
 
 
-@router.get("/{cluster_id}", response_model=ClusterDetail, summary="Full detail for a single cluster")
+@router.get("/{cluster_id}", response_model=ClusterDetail, summary="Full detail for a single cluster, including user-need distribution")
 async def cluster_detail(cluster_id: uuid.UUID, session: SessionDep) -> ClusterDetail:
     cluster_stmt = (
         select(ArticleCluster, ClusterInsight)
