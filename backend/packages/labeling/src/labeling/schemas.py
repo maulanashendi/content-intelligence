@@ -9,6 +9,7 @@ class ClusterInsightLLM(BaseModel):
     summary: list[str] | None = None
     desk_category: str | None = None
     user_need_category: str | None = None
+    article_needs: list[list[str]] | None = None
 
 
 class ClusterLabelLLM(BaseModel):

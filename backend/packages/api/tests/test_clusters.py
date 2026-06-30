@@ -60,6 +60,8 @@ def _cluster_with_insight(
     parent_cluster_id: uuid.UUID | None = None,
     desk_category: str = "Politik",
     user_need_category: str = "Update me",
+    user_need_distribution: dict[str, int] | None = None,
+    user_need_reps_tagged: int | None = None,
 ) -> tuple[ArticleCluster, ClusterInsight]:
     cluster = ArticleCluster(
         id=uuid.uuid4(),
@@ -88,6 +90,8 @@ def _cluster_with_insight(
         summary=summary,
         desk_category=desk_category,
         user_need_category=user_need_category,
+        user_need_distribution=user_need_distribution,
+        user_need_reps_tagged=user_need_reps_tagged,
     )
     return cluster, insight
 
@@ -472,3 +476,22 @@ async def test_morning_exposes_classification_fields(
     rows = {r["id"]: r for r in response.json()["clusters"]}
     assert rows[str(cluster.id)]["desk_category"] == "Hukum"
     assert rows[str(cluster.id)]["user_need_category"] == "Educate me"
+
+
+async def test_cluster_detail_returns_user_need_distribution(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster, insight = _cluster_with_insight(
+        run.id,
+        user_need_distribution={"Update me": 2, "Educate me": 1},
+        user_need_reps_tagged=3,
+    )
+    session.add_all([run, cluster, insight])
+    await session.flush()
+
+    response = await client.get(f"/api/v1/clusters/{cluster.id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user_need_distribution"] == {"Update me": 2, "Educate me": 1}
+    assert body["user_need_reps_tagged"] == 3

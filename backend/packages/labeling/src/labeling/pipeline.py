@@ -10,12 +10,40 @@ from core.models import Article, ArticleCluster, ArticleClusterMember, ArticleEm
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.taxonomy import normalize_desk, normalize_user_need
+from core.taxonomy import USER_NEED_CATEGORIES, normalize_desk, normalize_user_need
 from labeling.llm import generate_cluster_insight, generate_label
 
 logger = logging.getLogger(__name__)
 
 TOP_ARTICLES_PER_CLUSTER = 5
+_MAX_NEEDS_PER_ARTICLE = 2
+
+
+def aggregate_user_needs(
+    article_needs: list[list[str]] | None,
+) -> tuple[dict[str, int] | None, str | None, int]:
+    if not article_needs:
+        return None, None, 0
+    distribution = {need: 0 for need in USER_NEED_CATEGORIES}
+    reps_tagged = 0
+    for raw_needs in article_needs:
+        valid: list[str] = []
+        for raw in raw_needs or []:
+            norm = normalize_user_need(raw)
+            if norm is not None and norm not in valid:
+                valid.append(norm)
+            if len(valid) == _MAX_NEEDS_PER_ARTICLE:
+                break
+        for norm in valid:
+            distribution[norm] += 1
+        if valid:
+            reps_tagged += 1
+    if reps_tagged == 0:
+        return None, None, 0
+    dominant = max(USER_NEED_CATEGORIES, key=lambda need: distribution[need])
+    return distribution, dominant, reps_tagged
+
+
 _SUB_CLUSTER_THRESHOLD = 0.90
 _MAX_REPRESENTATIVES = 20
 
@@ -195,6 +223,8 @@ async def _upsert_insight(
     summary: list[str] | None = None,
     desk_category: str | None = None,
     user_need_category: str | None = None,
+    user_need_distribution: dict[str, int] | None = None,
+    user_need_reps_tagged: int | None = None,
 ) -> None:
     """Non-destructive: only overwrites a field when the new value is non-None."""
     insight = (
@@ -217,6 +247,10 @@ async def _upsert_insight(
         insight.desk_category = desk_category
     if user_need_category is not None:
         insight.user_need_category = user_need_category
+    if user_need_distribution is not None:
+        insight.user_need_distribution = user_need_distribution
+    if user_need_reps_tagged is not None:
+        insight.user_need_reps_tagged = user_need_reps_tagged
 
 
 async def run() -> dict[str, int]:
@@ -303,6 +337,10 @@ async def run() -> dict[str, int]:
                 skipped += 1
                 continue
             cluster_row.label = label
+            distribution, dominant, reps_tagged = aggregate_user_needs(
+                result.get("article_needs")
+            )
+            user_need = dominant or normalize_user_need(result.get("user_need_category"))
             await _upsert_insight(
                 session,
                 cluster_id,
@@ -311,7 +349,9 @@ async def run() -> dict[str, int]:
                 result.get("editorial_angle"),
                 result.get("summary"),
                 desk_category=normalize_desk(result.get("desk_category")),
-                user_need_category=normalize_user_need(result.get("user_need_category")),
+                user_need_category=user_need,
+                user_need_distribution=distribution,
+                user_need_reps_tagged=reps_tagged or None,
             )
             await session.commit()
 

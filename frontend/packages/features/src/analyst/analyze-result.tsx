@@ -1,7 +1,6 @@
 import type { AnalyzeResult } from "@ei-fe/api"
 import { orderedUserNeeds, groupedFeatures, analyzeVerdict } from "./data.js"
-import { UserNeedsRadar } from "./user-needs-radar.js"
-import { UserNeedsBars } from "./user-needs-bars.js"
+import { UserNeedsRadar, UserNeedsBars } from "@ei-fe/ui"
 import { FeatureMatrix } from "./feature-matrix.js"
 import { FeedbackCards } from "./feedback-cards.js"
 import { ResultCard, Section } from "./result-shell.js"

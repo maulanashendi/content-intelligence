@@ -19,9 +19,18 @@
     "performance_level": "low",
     "editorial_quadrant": "opportunity",
     "what_happened": "MK menyidangkan sengketa hasil Pilkada Kaltim 2024 yang diajukan pasangan calon kalah, dengan potensi putusan dalam dua minggu ke depan.",
-    "parties_involved": ["Mahkamah Konstitusi", "Pasangan Calon Kaltim", "KPU Kaltim", "Bawaslu"],
+    "parties_involved": [
+      "Mahkamah Konstitusi",
+      "Pasangan Calon Kaltim",
+      "KPU Kaltim",
+      "Bawaslu"
+    ],
     "editorial_angle": "Liputan langsung sidang MK: fokus pada kualitas bukti yang diajukan dan kemungkinan preseden putusan untuk sengketa pilkada serupa di daerah lain.",
-    "bullet_insights": ["6 kompetitor aktif meliput, Tempo belum", "Deadline putusan menciptakan urgensi editorial", "2 keyword trend terkait aktif"],
+    "bullet_insights": [
+      "6 kompetitor aktif meliput, Tempo belum",
+      "Deadline putusan menciptakan urgensi editorial",
+      "2 keyword trend terkait aktif"
+    ],
     "insight_calculated_at": "2026-05-09T06:05:00Z",
     "is_stale": false,
     "sub_clusters": null,
@@ -73,7 +82,18 @@
         "source_name": "Bisnis Indonesia",
         "relevance_score": 0.72
       }
-    ]
+    ],
+    "user_need_distribution": {
+      "Update me": 4,
+      "Keep me engaged": 3,
+      "Educate me": 2,
+      "Give me perspective": 2,
+      "Inspire me": 1,
+      "Divert me": 1,
+      "Help me": 2,
+      "Connect me": 1
+    },
+    "user_need_reps_tagged": 8
   },
   "a1b2c3d4-0001-4000-8000-000000000003": {
     "id": "a1b2c3d4-0001-4000-8000-000000000003",
@@ -95,9 +115,18 @@
     "performance_level": "high",
     "editorial_quadrant": "winning",
     "what_happened": "Kejaksaan Tinggi Jawa Tengah menetapkan 12 kepala desa sebagai tersangka korupsi dana desa senilai Rp 4,8 miliar di 3 kabupaten melalui proyek fiktif dan markup material bangunan.",
-    "parties_involved": ["Kejati Jawa Tengah", "12 Kepala Desa", "Kemendesa", "BPK"],
+    "parties_involved": [
+      "Kejati Jawa Tengah",
+      "12 Kepala Desa",
+      "Kemendesa",
+      "BPK"
+    ],
     "editorial_angle": "Analisis pola: apakah ada distributor rekanan yang sama di ketiga kabupaten? Bandingkan modus dengan kasus korupsi dana desa di Jatim dan NTB — cari pola sistemik yang menjangkau banyak daerah.",
-    "bullet_insights": ["Tempo sudah meliput 3 hari lalu dengan trafik bagus", "5 kompetitor aktif — butuh angle investigatif untuk membedakan", "BPK temukan pola serupa di 5 provinsi lain"],
+    "bullet_insights": [
+      "Tempo sudah meliput 3 hari lalu dengan trafik bagus",
+      "5 kompetitor aktif — butuh angle investigatif untuk membedakan",
+      "BPK temukan pola serupa di 5 provinsi lain"
+    ],
     "insight_calculated_at": "2026-05-09T06:05:00Z",
     "is_stale": false,
     "sub_clusters": null,
@@ -120,7 +149,7 @@
         "first_paragraph": "Penyelidikan Kejati Jateng mengungkap modus serupa di ketiga kabupaten: dana desa digunakan untuk proyek pembangunan infrastruktur yang tidak ada fisiknya, dengan dokumen pengadaan dari rekanan yang sama.",
         "published_at": "2025-04-25T14:00:00Z",
         "source_name": "Detik",
-        "relevance_score": 0.90
+        "relevance_score": 0.9
       },
       {
         "id": "c3d4e5f6-0003-4000-8000-000000000001",
@@ -158,7 +187,18 @@
         "source_name": "Bisnis Indonesia",
         "relevance_score": 0.65
       }
-    ]
+    ],
+    "user_need_distribution": {
+      "Update me": 2,
+      "Keep me engaged": 4,
+      "Educate me": 3,
+      "Give me perspective": 2,
+      "Inspire me": 1,
+      "Divert me": 2,
+      "Help me": 1,
+      "Connect me": 1
+    },
+    "user_need_reps_tagged": 8
   },
   "a1b2c3d4-0001-4000-8000-000000000004": {
     "id": "a1b2c3d4-0001-4000-8000-000000000004",
@@ -180,9 +220,18 @@
     "performance_level": null,
     "editorial_quadrant": "too_early",
     "what_happened": "DPR memasukkan RUU Perlindungan Pekerja Rumah Tangga ke Prolegnas 2025, dua belas tahun setelah pertama kali diajukan pada 2012.",
-    "parties_involved": ["DPR RI Baleg", "Jaringan Nasional Advokasi PRT", "ILO", "Komnas HAM"],
+    "parties_involved": [
+      "DPR RI Baleg",
+      "Jaringan Nasional Advokasi PRT",
+      "ILO",
+      "Komnas HAM"
+    ],
     "editorial_angle": "Follow-up langsung ke Baleg DPR: siapa fraksi yang masih menghambat, dan perubahan apa dari draf 2012 yang membuat RUU ini berbeda kali ini?",
-    "bullet_insights": ["Artikel Tempo terlalu baru — GSC butuh 1–3 hari", "Pantau besok untuk melihat trafik awal", "4 kompetitor sudah menulis angle serupa"],
+    "bullet_insights": [
+      "Artikel Tempo terlalu baru — GSC butuh 1–3 hari",
+      "Pantau besok untuk melihat trafik awal",
+      "4 kompetitor sudah menulis angle serupa"
+    ],
     "insight_calculated_at": "2026-05-09T06:05:00Z",
     "is_stale": false,
     "sub_clusters": null,
@@ -225,7 +274,18 @@
         "source_name": "CNN Indonesia",
         "relevance_score": 0.74
       }
-    ]
+    ],
+    "user_need_distribution": {
+      "Update me": 3,
+      "Keep me engaged": 2,
+      "Educate me": 2,
+      "Give me perspective": 3,
+      "Inspire me": 1,
+      "Divert me": 3,
+      "Help me": 1,
+      "Connect me": 1
+    },
+    "user_need_reps_tagged": 8
   },
   "a1b2c3d4-0001-4000-8000-000000000005": {
     "id": "a1b2c3d4-0001-4000-8000-000000000005",
@@ -247,9 +307,18 @@
     "performance_level": "low",
     "editorial_quadrant": "opportunity",
     "what_happened": "Presiden Prabowo bertemu Xi Jinping di sela G20 Bali, menghasilkan komitmen investasi senilai $8,5 miliar di sektor infrastruktur dan transisi energi.",
-    "parties_involved": ["Prabowo Subianto", "Xi Jinping", "Kementerian Investasi", "BKPM"],
+    "parties_involved": [
+      "Prabowo Subianto",
+      "Xi Jinping",
+      "Kementerian Investasi",
+      "BKPM"
+    ],
     "editorial_angle": "Analisis konkret: bandingkan $8,5 miliar dengan realisasi janji investasi China era Jokowi — berapa yang benar-benar masuk vs tertahan sebagai komitmen di atas kertas.",
-    "bullet_insights": ["7 kompetitor menulis, Tempo belum hadir", "Angle komparatif era Jokowi vs Prabowo belum disentuh kompetitor", "2 keyword trend aktif terkait G20 Bali"],
+    "bullet_insights": [
+      "7 kompetitor menulis, Tempo belum hadir",
+      "Angle komparatif era Jokowi vs Prabowo belum disentuh kompetitor",
+      "2 keyword trend aktif terkait G20 Bali"
+    ],
     "insight_calculated_at": "2026-05-09T06:05:00Z",
     "is_stale": false,
     "sub_clusters": null,
@@ -272,7 +341,7 @@
         "first_paragraph": "Dari total $8,5 miliar komitmen investasi China, $4,2 miliar dialokasikan untuk proyek rel kereta Kalimantan Tengah-Selatan, $2,8 miliar untuk PLTS skala besar di NTT, dan sisanya untuk infrastruktur pelabuhan.",
         "published_at": "2025-05-06T09:00:00Z",
         "source_name": "Bisnis Indonesia",
-        "relevance_score": 0.90
+        "relevance_score": 0.9
       },
       {
         "id": "c5d6e7f8-0003-4000-8000-000000000001",
@@ -301,6 +370,17 @@
         "source_name": "CNN Indonesia",
         "relevance_score": 0.68
       }
-    ]
+    ],
+    "user_need_distribution": {
+      "Update me": 1,
+      "Keep me engaged": 2,
+      "Educate me": 5,
+      "Give me perspective": 2,
+      "Inspire me": 1,
+      "Divert me": 1,
+      "Help me": 2,
+      "Connect me": 2
+    },
+    "user_need_reps_tagged": 8
   }
 }

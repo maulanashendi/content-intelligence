@@ -103,7 +103,10 @@ _CLUSTER_INSIGHT_USER_API = (
     "satu kalimat sudut editorial untuk redaksi, dan beberapa klaim fakta penting. "
     "Tentukan juga desk_category, pilih TEPAT SATU dari: " + _DESK_OPTIONS + ". "
     "Dan user_need_category, pilih TEPAT SATU dari: " + _USER_NEED_OPTIONS + ". "
-    "Jika tidak yakin, pilih desk 'Lainnya'."
+    "Jika tidak yakin, pilih desk 'Lainnya'. "
+    "Terakhir, untuk SETIAP sudut liputan di atas (sesuai urutan), tentukan article_needs: "
+    "sebuah daftar berisi paling banyak 2 kebutuhan pembaca dari: " + _USER_NEED_OPTIONS + ". "
+    "Kembalikan article_needs sebagai list-of-list, satu sublist per sudut sesuai urutannya."
 )
 
 _LABEL_USER_API = (

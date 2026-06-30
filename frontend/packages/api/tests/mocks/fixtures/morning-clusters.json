@@ -20,10 +20,30 @@
       "performance_level": "low",
       "editorial_quadrant": "opportunity",
       "what_happened": "Pertamina menaikkan harga BBM non-subsidi Pertamax, Dexlite, dan Pertamina Dex mulai 1 Mei 2025, dipicu pelemahan rupiah dan lonjakan harga minyak dunia ke level $94/barel.",
-      "parties_involved": ["Pertamina", "DPR RI Komisi VII", "Asosiasi Pengusaha Logistik", "LPEM UI"],
+      "parties_involved": [
+        "Pertamina",
+        "DPR RI Komisi VII",
+        "Asosiasi Pengusaha Logistik",
+        "LPEM UI"
+      ],
       "editorial_angle": "Investigasi: apakah Pertamina melakukan kajian dampak inflasi sebelum menaikkan harga? Minta dokumen RKAP 2025 dan bandingkan proyeksi dampak inflasi BI vs kenaikan aktual.",
-      "bullet_insights": ["8 kompetitor sudah menulis, Tempo belum hadir", "3 keyword trend aktif minggu ini", "Topik konsumsi publik luas — potensi trafik tinggi"],
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "bullet_insights": [
+        "8 kompetitor sudah menulis, Tempo belum hadir",
+        "3 keyword trend aktif minggu ini",
+        "Topik konsumsi publik luas — potensi trafik tinggi"
+      ],
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 5,
+        "Keep me engaged": 1,
+        "Educate me": 3,
+        "Give me perspective": 2,
+        "Inspire me": 1,
+        "Divert me": 0,
+        "Help me": 2,
+        "Connect me": 1
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000002",
@@ -45,10 +65,30 @@
       "performance_level": "low",
       "editorial_quadrant": "opportunity",
       "what_happened": "MK menyidangkan sengketa hasil Pilkada Kaltim 2024 yang diajukan pasangan calon kalah, dengan potensi putusan dalam dua minggu ke depan.",
-      "parties_involved": ["Mahkamah Konstitusi", "Pasangan Calon Kaltim", "KPU Kaltim", "Bawaslu"],
+      "parties_involved": [
+        "Mahkamah Konstitusi",
+        "Pasangan Calon Kaltim",
+        "KPU Kaltim",
+        "Bawaslu"
+      ],
       "editorial_angle": "Liputan langsung sidang MK: fokus pada kualitas bukti yang diajukan dan kemungkinan preseden putusan untuk sengketa pilkada serupa di daerah lain.",
-      "bullet_insights": ["6 kompetitor aktif meliput, Tempo belum", "Deadline putusan menciptakan urgensi editorial", "2 keyword trend terkait aktif"],
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "bullet_insights": [
+        "6 kompetitor aktif meliput, Tempo belum",
+        "Deadline putusan menciptakan urgensi editorial",
+        "2 keyword trend terkait aktif"
+      ],
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 2,
+        "Keep me engaged": 1,
+        "Educate me": 6,
+        "Give me perspective": 2,
+        "Inspire me": 1,
+        "Divert me": 0,
+        "Help me": 2,
+        "Connect me": 1
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000003",
@@ -70,10 +110,30 @@
       "performance_level": "high",
       "editorial_quadrant": "winning",
       "what_happened": "Kejaksaan Tinggi Jawa Tengah menetapkan 12 kepala desa sebagai tersangka korupsi dana desa senilai Rp 4,8 miliar di 3 kabupaten melalui proyek fiktif dan markup material.",
-      "parties_involved": ["Kejati Jawa Tengah", "12 Kepala Desa", "Kemendesa", "BPK"],
+      "parties_involved": [
+        "Kejati Jawa Tengah",
+        "12 Kepala Desa",
+        "Kemendesa",
+        "BPK"
+      ],
       "editorial_angle": "Analisis pola: apakah ada distributor rekanan yang sama di ketiga kabupaten? Bandingkan modus dengan kasus korupsi dana desa di Jatim dan NTB — cari pola sistemik.",
-      "bullet_insights": ["Tempo sudah meliput 3 hari lalu dengan trafik bagus", "5 kompetitor aktif — butuh angle investigatif untuk membedakan", "BPK temukan pola serupa di 5 provinsi lain"],
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "bullet_insights": [
+        "Tempo sudah meliput 3 hari lalu dengan trafik bagus",
+        "5 kompetitor aktif — butuh angle investigatif untuk membedakan",
+        "BPK temukan pola serupa di 5 provinsi lain"
+      ],
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 3,
+        "Keep me engaged": 1,
+        "Educate me": 2,
+        "Give me perspective": 5,
+        "Inspire me": 1,
+        "Divert me": 0,
+        "Help me": 1,
+        "Connect me": 2
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000004",
@@ -95,10 +155,30 @@
       "performance_level": null,
       "editorial_quadrant": "too_early",
       "what_happened": "DPR memasukkan RUU Perlindungan Pekerja Rumah Tangga ke Prolegnas 2025, 12 tahun setelah pertama kali diajukan pada 2012.",
-      "parties_involved": ["DPR RI Baleg", "Jaringan Nasional Advokasi PRT", "ILO", "Komnas HAM"],
+      "parties_involved": [
+        "DPR RI Baleg",
+        "Jaringan Nasional Advokasi PRT",
+        "ILO",
+        "Komnas HAM"
+      ],
       "editorial_angle": "Follow-up langsung ke Baleg DPR: siapa fraksi yang masih menghambat, dan perubahan apa dari draf 2012 yang membuat RUU ini berbeda kali ini?",
-      "bullet_insights": ["Artikel Tempo terlalu baru — GSC butuh 1–3 hari", "Pantau besok untuk melihat trafik awal", "4 kompetitor sudah menulis angle serupa"],
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "bullet_insights": [
+        "Artikel Tempo terlalu baru — GSC butuh 1–3 hari",
+        "Pantau besok untuk melihat trafik awal",
+        "4 kompetitor sudah menulis angle serupa"
+      ],
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 4,
+        "Keep me engaged": 1,
+        "Educate me": 2,
+        "Give me perspective": 1,
+        "Inspire me": 3,
+        "Divert me": 0,
+        "Help me": 2,
+        "Connect me": 1
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000005",
@@ -120,10 +200,30 @@
       "performance_level": "low",
       "editorial_quadrant": "opportunity",
       "what_happened": "Presiden Prabowo bertemu Xi Jinping di sela G20 Bali, menghasilkan komitmen investasi senilai $8,5 miliar di sektor infrastruktur dan transisi energi.",
-      "parties_involved": ["Prabowo Subianto", "Xi Jinping", "Kementerian Investasi", "BKPM"],
+      "parties_involved": [
+        "Prabowo Subianto",
+        "Xi Jinping",
+        "Kementerian Investasi",
+        "BKPM"
+      ],
       "editorial_angle": "Analisis konkret: bandingkan $8,5 miliar dengan realisasi janji investasi China era Jokowi — berapa yang benar-benar masuk vs tertahan sebagai komitmen di atas kertas.",
-      "bullet_insights": ["7 kompetitor menulis, Tempo belum hadir", "Angle komparatif era Jokowi vs Prabowo belum disentuh kompetitor", "2 keyword trend aktif terkait G20 Bali"],
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "bullet_insights": [
+        "7 kompetitor menulis, Tempo belum hadir",
+        "Angle komparatif era Jokowi vs Prabowo belum disentuh kompetitor",
+        "2 keyword trend aktif terkait G20 Bali"
+      ],
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 2,
+        "Keep me engaged": 1,
+        "Educate me": 3,
+        "Give me perspective": 2,
+        "Inspire me": 5,
+        "Divert me": 0,
+        "Help me": 1,
+        "Connect me": 1
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000006",
@@ -145,10 +245,30 @@
       "performance_level": "high",
       "editorial_quadrant": "winning",
       "what_happened": "BPJS Kesehatan umumkan struktur iuran kelas baru (KRIS) per Juli 2025 dengan penggabungan kelas 1 dan 2 menjadi satu tarif standar Rp 150.000/bulan.",
-      "parties_involved": ["BPJS Kesehatan", "Kemenkes", "DPR Komisi IX", "IDI"],
+      "parties_involved": [
+        "BPJS Kesehatan",
+        "Kemenkes",
+        "DPR Komisi IX",
+        "IDI"
+      ],
       "editorial_angle": "Kalkulasi dampak ke peserta mandiri: hitung selisih iuran kelas baru vs kelas lama untuk berbagai segmen pendapatan dan tunjukkan siapa yang diuntungkan vs dirugikan.",
-      "bullet_insights": ["Artikel Tempo aktif mendapat trafik organik", "3 kompetitor menulis — butuh angle kalkulasi yang lebih tajam", "Berpotensi diperbarui menjelang Juli 2025"],
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "bullet_insights": [
+        "Artikel Tempo aktif mendapat trafik organik",
+        "3 kompetitor menulis — butuh angle kalkulasi yang lebih tajam",
+        "Berpotensi diperbarui menjelang Juli 2025"
+      ],
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 3,
+        "Keep me engaged": 1,
+        "Educate me": 2,
+        "Give me perspective": 1,
+        "Inspire me": 1,
+        "Divert me": 0,
+        "Help me": 5,
+        "Connect me": 2
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000007",
@@ -173,7 +293,18 @@
       "parties_involved": null,
       "editorial_angle": null,
       "bullet_insights": null,
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 2,
+        "Keep me engaged": 1,
+        "Educate me": 4,
+        "Give me perspective": 3,
+        "Inspire me": 1,
+        "Divert me": 0,
+        "Help me": 2,
+        "Connect me": 3
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000008",
@@ -198,7 +329,18 @@
       "parties_involved": null,
       "editorial_angle": null,
       "bullet_insights": null,
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 5,
+        "Keep me engaged": 1,
+        "Educate me": 2,
+        "Give me perspective": 2,
+        "Inspire me": 1,
+        "Divert me": 0,
+        "Help me": 1,
+        "Connect me": 3
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000009",
@@ -223,7 +365,18 @@
       "parties_involved": null,
       "editorial_angle": null,
       "bullet_insights": null,
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 2,
+        "Keep me engaged": 1,
+        "Educate me": 3,
+        "Give me perspective": 5,
+        "Inspire me": 2,
+        "Divert me": 0,
+        "Help me": 1,
+        "Connect me": 1
+      },
+      "user_need_reps_tagged": 8
     },
     {
       "id": "a1b2c3d4-0001-4000-8000-000000000010",
@@ -248,7 +401,18 @@
       "parties_involved": null,
       "editorial_angle": null,
       "bullet_insights": null,
-      "insight_calculated_at": "2026-05-09T06:05:00Z"
+      "insight_calculated_at": "2026-05-09T06:05:00Z",
+      "user_need_distribution": {
+        "Update me": 3,
+        "Keep me engaged": 1,
+        "Educate me": 2,
+        "Give me perspective": 1,
+        "Inspire me": 1,
+        "Divert me": 0,
+        "Help me": 5,
+        "Connect me": 1
+      },
+      "user_need_reps_tagged": 8
     }
   ],
   "served_at": "2026-05-09T06:05:00Z",

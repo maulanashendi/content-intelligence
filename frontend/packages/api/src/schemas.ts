@@ -59,6 +59,8 @@ export const ClusterSummarySchema = z.object({
   editorial_angle: z.string().nullable(),
   bullet_insights: z.array(z.string()).nullable(),
   insight_calculated_at: z.string().datetime().nullable(),
+  user_need_distribution: z.record(z.string(), z.number()).nullable(),
+  user_need_reps_tagged: z.number().int().nullable(),
 })
 export type ClusterSummary = z.infer<typeof ClusterSummarySchema>
 

@@ -505,6 +505,48 @@ async def test_run_skips_cluster_when_no_label_and_fallback_raises(clean_db, mon
 
 
 @pytest.mark.asyncio
+async def test_run_writes_user_need_distribution(clean_db, monkeypatch):
+    source = _source()
+    run_row = ClusterRun(id=uuid.uuid4())
+    async with get_session() as session:
+        session.add_all([source, run_row])
+        await session.flush()
+        cluster = ArticleCluster(id=uuid.uuid4(), run_id=run_row.id, is_current=True, member_count=2)
+        session.add(cluster)
+        await session.flush()
+        for j in range(2):
+            article = _article(source.id, f"Artikel {j}")
+            session.add(article)
+            await session.flush()
+            session.add(
+                ArticleClusterMember(cluster_id=cluster.id, article_id=article.id, relevance_score=1.0)
+            )
+        await session.commit()
+
+    async def fake(_reps):
+        return {
+            "label": "Topik uji",
+            "what_happened": "Sesuatu terjadi.",
+            "parties_involved": ["A", "B"],
+            "editorial_angle": "Sudut.",
+            "summary": ["x"],
+            "desk_category": "Politik",
+            "user_need_category": None,
+            "article_needs": [["Update me", "Give me perspective"], ["Update me"]],
+        }
+
+    monkeypatch.setattr("labeling.pipeline.generate_cluster_insight", fake)
+
+    await run()
+
+    async with get_session() as session:
+        row = (await session.execute(select(ClusterInsight))).scalars().one()
+    assert row.user_need_distribution["Update me"] == 2
+    assert row.user_need_reps_tagged == 2
+    assert row.user_need_category == "Update me"   # dominant, not the (None) holistic field
+
+
+@pytest.mark.asyncio
 async def test_upsert_insight_does_not_overwrite_existing_with_none(clean_db):
     """Non-destructive: calling _upsert_insight with None args preserves existing values."""
     run_row = ClusterRun(id=uuid.uuid4())

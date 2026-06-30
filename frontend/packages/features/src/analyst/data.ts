@@ -1,4 +1,5 @@
 import type { ArticleFeatures, UserNeedScore } from "@ei-fe/api"
+export { radarPoints } from "@ei-fe/ui"
 
 export const USER_NEED_ORDER = [
   { key: "Update me", label: "Beri tahu" },
@@ -61,20 +62,6 @@ export function groupedFeatures(features: ArticleFeatures) {
       reasoning: f[k]?.reasoning ?? "",
     }))
     return { id: a.id, label: a.label, flags, detected: flags.filter((x) => x.on).length }
-  })
-}
-
-export function radarPoints(
-  values: number[],
-  cx: number,
-  cy: number,
-  r: number,
-): [number, number][] {
-  const n = values.length
-  return values.map((v, i) => {
-    const angle = (-90 + i * (360 / n)) * (Math.PI / 180)
-    const radius = (Math.min(100, Math.max(0, v)) / 100) * r
-    return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)]
   })
 }
 

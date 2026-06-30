@@ -1,4 +1,4 @@
-interface Need { key: string; label: string; value: number }
+import type { UserNeedDatum as Need } from "./radar-points.js"
 
 export function UserNeedsBars({ needs }: { needs: Need[] }) {
   return (
