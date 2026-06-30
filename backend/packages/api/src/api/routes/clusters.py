@@ -15,7 +15,7 @@ from core.models import (
 )
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import exists, func, literal, or_, select
+from sqlalchemy import and_, exists, func, literal, or_, select
 from sqlalchemy.orm import aliased
 
 from api.deps import SessionDep
@@ -163,6 +163,18 @@ def _to_summary(
     )
 
 
+def _dna_filter() -> object:
+    """Tempo-DNA gate: allowed desk AND non-denied user need.
+
+    NULL desk or NULL user_need fails the gate (SQL IN/NOT IN three-valued logic).
+    Single source of truth — all four endpoints call this helper; no copy-pasting.
+    """
+    return and_(
+        ClusterInsight.desk_category.in_(settings.morning_allowed_desks),
+        ClusterInsight.user_need_category.notin_(settings.morning_denied_user_needs),
+    )
+
+
 def _leaf_guard() -> object:
     child = aliased(ArticleCluster)
     return ~exists(
@@ -238,9 +250,15 @@ class QuadrantSummary(BaseModel):
     total: int
 
 
-@router.get("/quadrant-summary", response_model=QuadrantSummary, summary="Quadrant distribution across all current clusters")
-async def quadrant_summary(session: SessionDep) -> QuadrantSummary:
+@router.get("/quadrant-summary", response_model=QuadrantSummary, summary="Quadrant distribution across all current clusters; pass dna=true to apply the Tempo-DNA gate")
+async def quadrant_summary(
+    session: SessionDep,
+    dna: bool = Query(default=False),
+) -> QuadrantSummary:
     run_filter = _resolve_cluster_filter()
+    where = [run_filter, _leaf_guard()]
+    if dna:
+        where.append(_dna_filter())
     stmt = (
         select(
             ClusterInsight.editorial_quadrant,
@@ -248,7 +266,7 @@ async def quadrant_summary(session: SessionDep) -> QuadrantSummary:
         )
         .select_from(ArticleCluster)
         .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
-        .where(run_filter, _leaf_guard())
+        .where(*where)
         .group_by(ClusterInsight.editorial_quadrant)
     )
     rows = (await session.execute(stmt)).all()
@@ -268,23 +286,23 @@ async def quadrant_summary(session: SessionDep) -> QuadrantSummary:
 _VALID_QUADRANTS = {"opportunity", "winning", "evergreen", "ignore", "too_early"}
 
 
-@router.get("/quadrant/{quadrant}", response_model=ClusterListResponse, summary="Top clusters for a given editorial quadrant")
+@router.get("/quadrant/{quadrant}", response_model=ClusterListResponse, summary="Top clusters for a given editorial quadrant; pass dna=true to apply the Tempo-DNA gate")
 async def clusters_by_quadrant(
     quadrant: str,
     session: SessionDep,
     limit: int = Query(default=8, ge=1, le=50),
+    dna: bool = Query(default=False),
 ) -> ClusterListResponse:
     if quadrant not in _VALID_QUADRANTS:
         raise HTTPException(status_code=422, detail=f"quadrant must be one of {sorted(_VALID_QUADRANTS)}")
     run_filter = _resolve_cluster_filter()
+    where = [run_filter, ClusterInsight.editorial_quadrant == quadrant, _leaf_guard()]
+    if dna:
+        where.append(_dna_filter())
     stmt = (
         select(ArticleCluster, ClusterInsight)
         .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
-        .where(
-            run_filter,
-            ClusterInsight.editorial_quadrant == quadrant,
-            _leaf_guard(),
-        )
+        .where(*where)
         .order_by(
             ClusterInsight.demand_score.desc().nullslast(),
             ArticleCluster.member_count.desc().nullslast(),
@@ -302,19 +320,19 @@ async def clusters_by_quadrant(
     )
 
 
-@router.get("/morning", response_model=ClusterListResponse, summary="Morning briefing — opportunity clusters ranked by demand × performance")
-async def morning_clusters(session: SessionDep) -> ClusterListResponse:
+@router.get("/morning", response_model=ClusterListResponse, summary="Morning briefing — opportunity clusters ranked by demand × performance; pass dna=false to bypass the Tempo-DNA gate")
+async def morning_clusters(
+    session: SessionDep,
+    dna: bool = Query(default=True),
+) -> ClusterListResponse:
     run_filter = _resolve_cluster_filter()
+    where = [run_filter, ClusterInsight.tempo_covered.is_(False), _leaf_guard()]
+    if dna:
+        where.append(_dna_filter())
     stmt = (
         select(ArticleCluster, ClusterInsight)
         .join(ClusterInsight, ClusterInsight.cluster_id == ArticleCluster.id)
-        .where(
-            run_filter,
-            ClusterInsight.tempo_covered.is_(False),
-            ClusterInsight.desk_category.in_(settings.morning_allowed_desks),
-            ClusterInsight.user_need_category.notin_(settings.morning_denied_user_needs),
-            _leaf_guard(),
-        )
+        .where(*where)
         .order_by(*_ranking_order())
         .limit(settings.scoring_morning_top_n)
     )
@@ -329,14 +347,15 @@ async def morning_clusters(session: SessionDep) -> ClusterListResponse:
     )
 
 
-@router.get("/bento", response_model=BentoListResponse, summary="All current clusters ranked, paginated, for the bento card grid")
+@router.get("/bento", response_model=BentoListResponse, summary="All current clusters ranked, paginated, for the bento card grid; pass dna=true to apply the Tempo-DNA gate")
 async def bento_clusters(
     session: SessionDep,
     limit: int = Query(default=8, ge=1, le=50),
     offset: int = Query(default=0, ge=0),
+    dna: bool = Query(default=False),
 ) -> BentoListResponse:
     run_filter = _resolve_cluster_filter()
-    base_where = (run_filter, _leaf_guard())
+    base_where = (run_filter, _leaf_guard()) if not dna else (run_filter, _leaf_guard(), _dna_filter())
 
     total: int = (
         await session.execute(

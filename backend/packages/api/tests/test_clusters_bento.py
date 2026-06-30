@@ -43,6 +43,8 @@ def _cluster_insight(
     demand_score: float | None = 0.5,
     gsc_clicks: int = 0,
     member_count: int | None = 1,
+    desk_category: str | None = None,
+    user_need_category: str | None = None,
 ) -> tuple[ArticleCluster, ClusterInsight]:
     cluster = ArticleCluster(
         id=uuid.uuid4(),
@@ -61,6 +63,8 @@ def _cluster_insight(
         editorial_quadrant=editorial_quadrant,
         demand_score=demand_score,
         gsc_clicks=gsc_clicks,
+        desk_category=desk_category,
+        user_need_category=user_need_category,
     )
     return cluster, insight
 
@@ -69,8 +73,13 @@ async def test_bento_includes_all_quadrants_unlike_morning(
     session: AsyncSession, client: AsyncClient
 ) -> None:
     run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    # Explicitly set on-DNA fields — covered by morning's tempo_covered filter, not the DNA gate.
     covered, covered_i = _cluster_insight(
-        run.id, tempo_covered=True, editorial_quadrant="winning"
+        run.id,
+        tempo_covered=True,
+        editorial_quadrant="winning",
+        desk_category="Politik",
+        user_need_category="Update me",
     )
     session.add_all([run, covered, covered_i])
     await session.flush()
@@ -175,3 +184,52 @@ async def test_bento_empty_when_no_run(client: AsyncClient) -> None:
     assert data["cards"] == []
     assert data["total"] == 0
     assert data["is_stale"] is True
+
+
+# --- dna param tests ---
+
+
+async def test_bento_dna_true_excludes_off_dna(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """?dna=true on /bento excludes clusters that fail the DNA gate."""
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    c_on, i_on = _cluster_insight(
+        run.id, desk_category="Politik", user_need_category="Update me"
+    )
+    c_off, i_off = _cluster_insight(
+        run.id, desk_category="Selebriti", user_need_category="Update me"
+    )
+    session.add_all([run, c_on, i_on, c_off, i_off])
+    await session.flush()
+
+    resp_dna = await client.get("/api/v1/clusters/bento?dna=true")
+    assert resp_dna.status_code == 200
+    data = resp_dna.json()
+    ids = [c["id"] for c in data["cards"]]
+    assert str(c_on.id) in ids
+    assert str(c_off.id) not in ids
+    assert data["total"] == 1
+
+
+async def test_bento_dna_false_default_returns_all(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    """Default /bento (dna=false) still returns all clusters regardless of DNA."""
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    c_on, i_on = _cluster_insight(
+        run.id, desk_category="Politik", user_need_category="Update me"
+    )
+    c_off, i_off = _cluster_insight(
+        run.id, desk_category="Selebriti", user_need_category="Update me"
+    )
+    session.add_all([run, c_on, i_on, c_off, i_off])
+    await session.flush()
+
+    resp = await client.get("/api/v1/clusters/bento")
+    assert resp.status_code == 200
+    data = resp.json()
+    ids = [c["id"] for c in data["cards"]]
+    assert str(c_on.id) in ids
+    assert str(c_off.id) in ids
+    assert data["total"] == 2

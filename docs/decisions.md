@@ -909,3 +909,9 @@ cluster detail.
 
 > Numbering note: created on branch `feat+cluster-user-need-distribution` off master.
 > The concurrent `feat/morning-dna-toggle` branch also adds a D39; renumber one at merge.
+
+---
+
+## D40. DNA filter promoted to an opt-in/opt-out query param across four cluster endpoints (2026-06-30)
+
+Scoped opt-out reversal of the `2026-06-29-morning-tempo-relevance-filter` "/morning only" scope. The DNA filter (desk allow-list + user-need deny-list, implemented as `_dna_filter()` in `api/routes/clusters.py`) is now an **opt-in** `?dna=true` query param on `/quadrant-summary`, `/quadrant/{q}`, and `/bento`, and an **opt-out** `?dna=false` param on `/morning`. Defaults preserve current per-endpoint behavior: morning defaults to `dna=true` (was always filtered), the other three default to `dna=false` (were never filtered). The toggle gates **only** the DNA axis — `tempo_covered`, top-N limit, `_leaf_guard()`, and ranking are unaffected. `_dna_filter()` is the single source of truth; all four endpoints call that one helper with no copy-pasted SQL. Frontend owns the page default (ON for the morning page UI).
