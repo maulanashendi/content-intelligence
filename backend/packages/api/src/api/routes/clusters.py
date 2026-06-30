@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, exists, func, literal, or_, select
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql.elements import ColumnElement
 
 from api.deps import SessionDep
 from api.types import UtcDateTime
@@ -163,7 +164,7 @@ def _to_summary(
     )
 
 
-def _dna_filter() -> object:
+def _dna_filter() -> ColumnElement[bool]:
     """Tempo-DNA gate: allowed desk AND non-denied user need.
 
     NULL desk or NULL user_need fails the gate (SQL IN/NOT IN three-valued logic).
@@ -355,7 +356,9 @@ async def bento_clusters(
     dna: bool = Query(default=False),
 ) -> BentoListResponse:
     run_filter = _resolve_cluster_filter()
-    base_where = (run_filter, _leaf_guard()) if not dna else (run_filter, _leaf_guard(), _dna_filter())
+    base_where = [run_filter, _leaf_guard()]
+    if dna:
+        base_where.append(_dna_filter())
 
     total: int = (
         await session.execute(

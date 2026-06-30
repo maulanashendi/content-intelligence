@@ -13,18 +13,14 @@ Surface-under-test:
 """
 
 import uuid
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
 from core.config import settings
 from core.models import ArticleCluster, ClusterInsight, ClusterRun
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-
-from api.deps import db_session
-from api.main import app
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 _NOW = datetime.now(UTC).replace(tzinfo=None)
 
@@ -62,6 +58,9 @@ _SEED = [
     _SeedCluster("Politik",          "Divert me",  "opportunity", False, 0.40),
     # 1 NULL / NULL / opportunity / uncovered  →  DNA-FAIL (null)
     _SeedCluster(None,               None,         "opportunity", False, 0.30),
+    # 2 too_early clusters: one DNA-pass, one DNA-FAIL (off-desk)
+    _SeedCluster("Politik",          "Update me",  "too_early",   True,  0.20),
+    _SeedCluster("Selebriti",        "Update me",  "too_early",   True,  0.19),
 ]
 # fmt: on
 
@@ -95,28 +94,6 @@ assert len(_MORNING_DNA_TRUE) < len(_MORNING_DNA_FALSE), "seed must have off-DNA
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(settings.database_url)
-    async with engine.connect() as conn:
-        await conn.begin()
-        async with AsyncSession(bind=conn, expire_on_commit=False) as sess:
-            yield sess
-        await conn.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
-    async def _override() -> AsyncIterator[AsyncSession]:
-        yield session
-
-    app.dependency_overrides[db_session] = _override
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -182,7 +159,7 @@ async def _fetch_all(client: AsyncClient, dna: bool) -> dict:
 
     # Fetch distinct quadrant endpoints for quadrants that have members.
     quadrant_ids: dict[str, list[str]] = {}
-    for q in ("opportunity", "winning", "evergreen", "ignore"):
+    for q in ("opportunity", "winning", "evergreen", "ignore", "too_early"):
         q_resp = await client.get(f"/api/v1/clusters/quadrant/{q}?dna={dna_str}&limit=50")
         assert q_resp.status_code == 200, f"quadrant/{q}?dna={dna_str} returned {q_resp.status_code}"
         quadrant_ids[q] = [c["id"] for c in q_resp.json()["clusters"]]

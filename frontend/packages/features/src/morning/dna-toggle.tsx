@@ -44,7 +44,6 @@ export function DnaToggle({ on, onChange }: DnaToggleProps) {
             height: 16,
             borderRadius: "50%",
             background: on ? "white" : "var(--line)",
-            "@media (prefers-reduced-motion: no-preference)": undefined,
             transition: "left 0.15s",
           } as React.CSSProperties}
         />
