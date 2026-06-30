@@ -476,6 +476,10 @@ export interface components {
             bullet_insights: string[] | null;
             /** Insight Calculated At */
             insight_calculated_at: string | null;
+            /** User Need Distribution */
+            user_need_distribution: { [key: string]: number } | null;
+            /** User Need Reps Tagged */
+            user_need_reps_tagged: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
