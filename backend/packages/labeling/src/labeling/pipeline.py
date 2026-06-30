@@ -42,6 +42,8 @@ def aggregate_user_needs(
         return None, None, 0
     dominant = max(USER_NEED_CATEGORIES, key=lambda need: distribution[need])
     return distribution, dominant, reps_tagged
+
+
 _SUB_CLUSTER_THRESHOLD = 0.90
 _MAX_REPRESENTATIVES = 20
 
@@ -221,6 +223,8 @@ async def _upsert_insight(
     summary: list[str] | None = None,
     desk_category: str | None = None,
     user_need_category: str | None = None,
+    user_need_distribution: dict[str, int] | None = None,
+    user_need_reps_tagged: int | None = None,
 ) -> None:
     """Non-destructive: only overwrites a field when the new value is non-None."""
     insight = (
@@ -243,6 +247,10 @@ async def _upsert_insight(
         insight.desk_category = desk_category
     if user_need_category is not None:
         insight.user_need_category = user_need_category
+    if user_need_distribution is not None:
+        insight.user_need_distribution = user_need_distribution
+    if user_need_reps_tagged is not None:
+        insight.user_need_reps_tagged = user_need_reps_tagged
 
 
 async def run() -> dict[str, int]:
@@ -329,6 +337,10 @@ async def run() -> dict[str, int]:
                 skipped += 1
                 continue
             cluster_row.label = label
+            distribution, dominant, reps_tagged = aggregate_user_needs(
+                result.get("article_needs")
+            )
+            user_need = dominant or normalize_user_need(result.get("user_need_category"))
             await _upsert_insight(
                 session,
                 cluster_id,
@@ -337,7 +349,9 @@ async def run() -> dict[str, int]:
                 result.get("editorial_angle"),
                 result.get("summary"),
                 desk_category=normalize_desk(result.get("desk_category")),
-                user_need_category=normalize_user_need(result.get("user_need_category")),
+                user_need_category=user_need,
+                user_need_distribution=distribution,
+                user_need_reps_tagged=reps_tagged or None,
             )
             await session.commit()
 

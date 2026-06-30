@@ -37,6 +37,57 @@ async def test_upsert_insight_persists_classification(clean_db) -> None:
         assert row.user_need_category == "Update me"
 
 
+async def test_upsert_insight_persists_distribution(clean_db) -> None:
+    async with get_session() as session:
+        run = ClusterRun(id=uuid.uuid4())
+        cluster = ArticleCluster(id=uuid.uuid4(), run_id=run.id, is_current=True)
+        session.add_all([run, cluster])
+        await session.flush()
+
+        await _upsert_insight(
+            session, cluster.id, None, None, None, None,
+            desk_category="Politik", user_need_category="Update me",
+            user_need_distribution={"Update me": 2, "Educate me": 1},
+            user_need_reps_tagged=3,
+        )
+        await session.commit()
+
+        row = (
+            await session.execute(
+                select(ClusterInsight).where(ClusterInsight.cluster_id == cluster.id)
+            )
+        ).scalar_one()
+        assert row.user_need_distribution == {"Update me": 2, "Educate me": 1}
+        assert row.user_need_reps_tagged == 3
+
+
+async def test_upsert_insight_none_distribution_does_not_overwrite(clean_db) -> None:
+    async with get_session() as session:
+        run = ClusterRun(id=uuid.uuid4())
+        cluster = ArticleCluster(id=uuid.uuid4(), run_id=run.id, is_current=True)
+        session.add_all([run, cluster])
+        await session.flush()
+
+        await _upsert_insight(
+            session, cluster.id, None, None, None, None,
+            user_need_distribution={"Update me": 1}, user_need_reps_tagged=1,
+        )
+        await session.commit()
+        await _upsert_insight(
+            session, cluster.id, None, None, None, None,
+            user_need_distribution=None, user_need_reps_tagged=None,
+        )
+        await session.commit()
+
+        row = (
+            await session.execute(
+                select(ClusterInsight).where(ClusterInsight.cluster_id == cluster.id)
+            )
+        ).scalar_one()
+        assert row.user_need_distribution == {"Update me": 1}
+        assert row.user_need_reps_tagged == 1
+
+
 async def test_upsert_insight_none_classification_left_unset(clean_db) -> None:
     async with get_session() as session:
         run = ClusterRun(id=uuid.uuid4())
