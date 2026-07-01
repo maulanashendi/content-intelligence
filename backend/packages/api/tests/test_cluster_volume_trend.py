@@ -24,11 +24,11 @@ def _source(source_type: SourceType, name: str) -> ContentSource:
     )
 
 
-def _article(source_id: uuid.UUID, published_at: datetime) -> Article:
+def _article(source_id: uuid.UUID, published_at: datetime, title: str = "A") -> Article:
     return Article(
         id=uuid.uuid4(),
         source_id=source_id,
-        title="A",
+        title=title,
         url=f"https://test-{uuid.uuid4()}.com/a",
         published_at=published_at,
     )
@@ -91,3 +91,71 @@ async def test_cluster_volume_trend_counts_only_this_clusters_members(
     d = (await client.get(f"/api/v1/clusters/{cluster.id}/volume-trend?bucket=hour")).json()
     assert sum(b["competitor_count"] for b in d["buckets"]) == 1
     assert sum(b["internal_count"] for b in d["buckets"]) == 1
+
+
+async def test_cluster_volume_trend_response_shape_includes_competitor_avg(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster = ArticleCluster(id=uuid.uuid4(), run_id=run.id, label="C", is_current=True)
+    session.add_all([run, cluster])
+    await session.flush()
+
+    d = (await client.get(f"/api/v1/clusters/{cluster.id}/volume-trend?bucket=hour")).json()
+    b = d["buckets"][0]
+    assert set(b.keys()) == {
+        "bucket_start",
+        "competitor_count",
+        "internal_count",
+        "competitor_avg_per_source",
+    }
+    assert b["competitor_avg_per_source"] == 0.0
+
+
+async def test_cluster_volume_trend_competitor_avg_per_source(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster = ArticleCluster(id=uuid.uuid4(), run_id=run.id, label="C", is_current=True)
+    source_a = _source(SourceType.rss, "Kompas")
+    source_b = _source(SourceType.rss, "Detik")
+    ts = _NOW - timedelta(hours=2)
+    a1 = _article(source_a.id, ts, title="A1")
+    a2 = _article(source_a.id, ts, title="A2")
+    a3 = _article(source_a.id, ts, title="A3")
+    b1 = _article(source_b.id, ts, title="B1")
+    session.add_all([run, cluster, source_a, source_b, a1, a2, a3, b1])
+    await session.flush()
+    session.add_all(
+        [
+            ArticleClusterMember(cluster_id=cluster.id, article_id=a1.id),
+            ArticleClusterMember(cluster_id=cluster.id, article_id=a2.id),
+            ArticleClusterMember(cluster_id=cluster.id, article_id=a3.id),
+            ArticleClusterMember(cluster_id=cluster.id, article_id=b1.id),
+        ]
+    )
+    await session.flush()
+
+    d = (await client.get(f"/api/v1/clusters/{cluster.id}/volume-trend?bucket=hour")).json()
+    total_competitor = sum(bkt["competitor_count"] for bkt in d["buckets"])
+    assert total_competitor == 4
+    matching = [bkt for bkt in d["buckets"] if bkt["competitor_count"] == 4]
+    assert len(matching) == 1
+    assert matching[0]["competitor_avg_per_source"] == 2.0
+
+
+async def test_cluster_volume_trend_competitor_avg_per_source_zero_when_no_competitor(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    run = ClusterRun(id=uuid.uuid4(), finished_at=_NOW)
+    cluster = ArticleCluster(id=uuid.uuid4(), run_id=run.id, label="C", is_current=True)
+    internal = _source(SourceType.internal, "Tempo")
+    ts = _NOW - timedelta(hours=2)
+    a_int = _article(internal.id, ts, title="Internal1")
+    session.add_all([run, cluster, internal, a_int])
+    await session.flush()
+    session.add_all([ArticleClusterMember(cluster_id=cluster.id, article_id=a_int.id)])
+    await session.flush()
+
+    d = (await client.get(f"/api/v1/clusters/{cluster.id}/volume-trend?bucket=hour")).json()
+    assert all(bkt["competitor_avg_per_source"] == 0.0 for bkt in d["buckets"])

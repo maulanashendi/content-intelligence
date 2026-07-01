@@ -15,6 +15,7 @@ class VolumeBucket(BaseModel):
     bucket_start: UtcDateTime
     competitor_count: int
     internal_count: int
+    competitor_avg_per_source: float
 
 
 class VolumeTrendResponse(BaseModel):

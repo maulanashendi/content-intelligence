@@ -583,6 +583,7 @@ async def cluster_volume_trend(
             wib_bucket.label("wib_bucket"),
             ContentSource.source_type.label("source_type"),
             func.count(Article.id).label("cnt"),
+            func.count(func.distinct(Article.source_id)).label("distinct_sources"),
         )
         .select_from(ArticleClusterMember)
         .join(Article, Article.id == ArticleClusterMember.article_id)
@@ -594,15 +595,24 @@ async def cluster_volume_trend(
     counts: dict[tuple[datetime, SourceType], int] = {
         (r.wib_bucket, r.source_type): r.cnt for r in rows
     }
+    distinct_sources: dict[tuple[datetime, SourceType], int] = {
+        (r.wib_bucket, r.source_type): r.distinct_sources for r in rows
+    }
 
-    buckets = [
-        VolumeBucket(
-            bucket_start=start - timedelta(hours=7),
-            competitor_count=counts.get((start, SourceType.rss), 0),
-            internal_count=counts.get((start, SourceType.internal), 0),
+    buckets = []
+    for start in starts_wib:
+        competitor_count = counts.get((start, SourceType.rss), 0)
+        competitor_sources = distinct_sources.get((start, SourceType.rss), 0)
+        buckets.append(
+            VolumeBucket(
+                bucket_start=start - timedelta(hours=7),
+                competitor_count=competitor_count,
+                internal_count=counts.get((start, SourceType.internal), 0),
+                competitor_avg_per_source=(
+                    competitor_count / competitor_sources if competitor_sources else 0.0
+                ),
+            )
         )
-        for start in starts_wib
-    ]
     return VolumeTrendResponse(bucket=bucket, buckets=buckets, generated_at=now_utc)
 
 

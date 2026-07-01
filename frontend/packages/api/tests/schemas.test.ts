@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { ContentSourceSchema, ContentSourceListSchema, ArticleSchema, PaginatedArticlesSchema, ClusterListResponseSchema, ClusterDetailSchema, BentoListResponseSchema, VolumeTrendResponseSchema } from "../src/schemas.js"
+import { ContentSourceSchema, ContentSourceListSchema, ArticleSchema, PaginatedArticlesSchema, ClusterListResponseSchema, ClusterDetailSchema, BentoListResponseSchema, VolumeTrendResponseSchema, VolumeBucketSchema } from "../src/schemas.js"
 import morningClusters from "./mocks/fixtures/morning-clusters.json"
 import clusterDetail from "./mocks/fixtures/cluster-detail.json"
 import clusterDetailsMap from "./mocks/fixtures/cluster-details-map.json"
@@ -247,6 +247,46 @@ describe("VolumeTrendResponseSchema — cluster-volume-trend fixture", () => {
     if (!result.success) return
     expect(result.data.buckets.length).toBe(48)
     expect(result.data.bucket).toBe("hour")
+  })
+
+  test("every bucket has a numeric competitor_avg_per_source", () => {
+    const result = VolumeTrendResponseSchema.safeParse(clusterVolumeTrend)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    for (const bucket of result.data.buckets) {
+      expect(typeof bucket.competitor_avg_per_source).toBe("number")
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// VolumeBucketSchema — competitor_avg_per_source
+// ---------------------------------------------------------------------------
+
+describe("VolumeBucketSchema — competitor_avg_per_source", () => {
+  const VALID_BUCKET = {
+    bucket_start: "2026-06-21T07:00:00Z",
+    competitor_count: 5,
+    internal_count: 1,
+    competitor_avg_per_source: 2.5,
+  }
+
+  test("accepts a decimal competitor_avg_per_source", () => {
+    expect(VolumeBucketSchema.safeParse(VALID_BUCKET).success).toBe(true)
+  })
+
+  test("accepts a whole-number competitor_avg_per_source", () => {
+    expect(VolumeBucketSchema.safeParse({ ...VALID_BUCKET, competitor_avg_per_source: 3 }).success).toBe(true)
+  })
+
+  test("rejects a string competitor_avg_per_source", () => {
+    const result = VolumeBucketSchema.safeParse({ ...VALID_BUCKET, competitor_avg_per_source: "2.5" })
+    expect(result.success).toBe(false)
+  })
+
+  test("rejects missing competitor_avg_per_source", () => {
+    const { competitor_avg_per_source: _omit, ...rest } = VALID_BUCKET
+    expect(VolumeBucketSchema.safeParse(rest).success).toBe(false)
   })
 })
 

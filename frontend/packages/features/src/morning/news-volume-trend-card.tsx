@@ -100,6 +100,7 @@ function Tooltip({ bar, containerWidth }: { bar: Bar; containerWidth: number }) 
         <LegendDot color={COMPETITOR_COLOR} />
         Kompetitor: {bar.bucket.competitor_count}
       </div>
+      <div>Rata-rata per kompetitor: {bar.bucket.competitor_avg_per_source.toFixed(1)} artikel</div>
       <div style={{ marginTop: 2, opacity: 0.85 }}>Total: {bar.total}</div>
     </div>
   )
@@ -112,7 +113,12 @@ function Chart({
 }: {
   width: number
   bucket: "hour" | "day"
-  buckets: { bucket_start: string; competitor_count: number; internal_count: number }[]
+  buckets: {
+    bucket_start: string
+    competitor_count: number
+    internal_count: number
+    competitor_avg_per_source: number
+  }[]
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const model = buildVolumeChart(buckets, { width, height: HEIGHT, ...PAD })

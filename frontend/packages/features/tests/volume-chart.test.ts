@@ -4,7 +4,7 @@ import { buildVolumeChart, formatBucketLabel, formatBucketTooltip } from "../src
 const DIMS = { width: 600, height: 200, padTop: 10, padRight: 10, padBottom: 30, padLeft: 30 }
 
 function bkt(bucket_start: string, c: number, i: number) {
-  return { bucket_start, competitor_count: c, internal_count: i }
+  return { bucket_start, competitor_count: c, internal_count: i, competitor_avg_per_source: c }
 }
 
 describe("buildVolumeChart", () => {

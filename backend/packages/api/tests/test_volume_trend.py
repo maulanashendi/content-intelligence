@@ -52,7 +52,12 @@ async def test_volume_trend_response_shape(client: AsyncClient) -> None:
     assert isinstance(d["buckets"], list)
     assert "generated_at" in d
     b = d["buckets"][0]
-    assert set(b.keys()) == {"bucket_start", "competitor_count", "internal_count"}
+    assert set(b.keys()) == {
+        "bucket_start",
+        "competitor_count",
+        "internal_count",
+        "competitor_avg_per_source",
+    }
 
 
 async def test_volume_trend_day_has_30_dense_buckets(client: AsyncClient) -> None:
@@ -143,3 +148,35 @@ async def test_volume_trend_bucket_starts_sorted_unique_utc(client: AsyncClient)
     assert all(s.endswith("Z") for s in starts)
     assert starts == sorted(starts)
     assert len(set(starts)) == len(starts)
+
+
+async def test_volume_trend_competitor_avg_per_source(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    source_a = _source(SourceType.rss, name="Kompas")
+    source_b = _source(SourceType.rss, name="Detik")
+    ts = _NOW - timedelta(hours=3)
+    session.add_all(
+        [
+            source_a,
+            source_b,
+            _article(source_a.id, published_at=ts, title="A1"),
+            _article(source_a.id, published_at=ts, title="A2"),
+            _article(source_a.id, published_at=ts, title="A3"),
+            _article(source_b.id, published_at=ts, title="B1"),
+        ]
+    )
+    await session.flush()
+
+    d = (await client.get("/api/v1/articles/volume-trend?bucket=day")).json()
+    by_start = {b["bucket_start"]: b for b in d["buckets"]}
+    target = _wib_day_bucket_utc_iso(ts)
+    assert by_start[target]["competitor_count"] == 4
+    assert by_start[target]["competitor_avg_per_source"] == 2.0
+
+
+async def test_volume_trend_competitor_avg_per_source_zero_when_no_competitor_articles(
+    client: AsyncClient,
+) -> None:
+    d = (await client.get("/api/v1/articles/volume-trend?bucket=day")).json()
+    assert all(b["competitor_avg_per_source"] == 0.0 for b in d["buckets"])

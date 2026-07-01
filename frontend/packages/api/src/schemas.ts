@@ -25,6 +25,7 @@ export const VolumeBucketSchema = z.object({
   bucket_start: z.string(),
   competitor_count: z.number().int(),
   internal_count: z.number().int(),
+  competitor_avg_per_source: z.number(),
 })
 export type VolumeBucket = z.infer<typeof VolumeBucketSchema>
 
