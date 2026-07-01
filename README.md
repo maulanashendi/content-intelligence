@@ -1,8 +1,8 @@
-# Editor Intelligence
+# Tempo Content Intelligence & Analysis
 
 > Internal dashboard that surfaces **topics worth writing** for Tempo's editorial team.
 
-Editor Intelligence ingests competitor RSS, the Tempo sitemap, and Google Trends, clusters
+Tempo Content Intelligence & Analysis ingests competitor RSS, the Tempo sitemap, and Google Trends, clusters
 articles into topics, scores each topic on **demand × performance**, and serves the result to a
 read-only dashboard. The goal is to answer one editorial question per topic every morning:
 *does reader demand exist for this story, and is Tempo capturing it?*
@@ -11,7 +11,7 @@ AI inference (embedding, cluster labeling, the editorial analyst) runs **off-box
 OpenAI-compatible API** (OpenRouter by default). Only classical ML — dimensionality reduction and
 clustering — runs locally. This keeps the production footprint inside a ~2 GB VPS.
 
-- **Repo:** `content-intelligence` · **Product name:** Editor Intelligence
+- **Repo:** `content-intelligence` · 
 - **Backend:** Python (`uv` workspace) · FastAPI · PostgreSQL 16 + pgvector
 - **Frontend:** Bun · Vite · React · Tailwind v4 (`frontend/`)
 - **Runtime:** Docker Compose, dev to prod
