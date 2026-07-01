@@ -154,7 +154,7 @@ function QuadrantPanel({
             Tidak ada topik di kuadran ini.
           </div>
         )}
-        {clusters.map((c) => (
+        {clusters.map((c: ClusterSummary) => (
           <ClusterRow key={c.id} cluster={c} onNavigate={onNavigate} />
         ))}
       </div>
@@ -285,7 +285,7 @@ export function OpportunityMatrixCard({ clusters: _clusters, dnaOn }: Opportunit
             <div className="grid grid-cols-2 gap-2">
               {QUADRANTS.map((def) => (
                 <QuadrantCell
-                  key={def.key}
+                  key={def.key as string}
                   def={def}
                   count={counts[def.key]}
                   active={selected === def.key}

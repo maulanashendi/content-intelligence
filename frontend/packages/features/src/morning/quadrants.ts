@@ -84,6 +84,7 @@ export const TOO_EARLY_DEF = {
   action: "Tunggu data GSC",
   description:
     "Tempo sudah punya artikel untuk topik ini, tapi data Google Search Console-nya belum tersedia — artikel terlalu baru (GSC butuh 1–3 hari untuk mencerminkan performa). Cek besok untuk melihat apakah artikel mendapat trafik yang signifikan.",
+  bg: "var(--bg-sunken)",
   border: "var(--line)",
   activeBorder: "var(--accent)",
   countColor: "var(--fg-muted)",

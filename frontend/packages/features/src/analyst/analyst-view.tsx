@@ -15,6 +15,8 @@ type Msg =
   | { id: string; role: "error"; text: string }
   | { id: string; role: "loading" }
 
+type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never
+
 let seq = 0
 const nextId = () => `m${seq++}`
 
@@ -34,8 +36,8 @@ export function AnalystView({ initialTitle, initialMode }: { initialTitle?: stri
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [messages])
 
-  function push(m: Omit<Msg, "id">) { setMessages((p) => [...p, { ...m, id: nextId() } as Msg]) }
-  function replaceLoading(m: Omit<Msg, "id">) {
+  function push(m: DistributiveOmit<Msg, "id">) { setMessages((p) => [...p, { ...m, id: nextId() } as Msg]) }
+  function replaceLoading(m: DistributiveOmit<Msg, "id">) {
     setMessages((p) => { const out = p.filter((x) => x.role !== "loading"); return [...out, { ...m, id: nextId() } as Msg] })
   }
 

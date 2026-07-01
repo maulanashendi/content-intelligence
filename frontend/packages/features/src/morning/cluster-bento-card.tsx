@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useClusterBento, useClusterVolumeTrend, clusterKeys } from "@ei-fe/api"
-import type { BentoCard as BentoCardData } from "@ei-fe/api"
+import type { BentoCard as BentoCardData, VolumeBucket } from "@ei-fe/api"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button, Skeleton, ErrorState, EmptyState, VelocityBar } from "@ei-fe/ui"
 import { QUADRANT_BY_KEY } from "./quadrants.js"
@@ -66,7 +66,7 @@ function BentoCard({ card, open, onToggle }: { card: BentoCardData; open: boolea
   const navigate = useNavigate()
   const q = quadrantStyle(card.editorial_quadrant)
   const series = useClusterVolumeTrend(card.id, open)
-  const values = (series.data?.buckets ?? []).map((b) => b.competitor_count)
+  const values = (series.data?.buckets ?? []).map((b: VolumeBucket) => b.competitor_count)
 
   return (
     <article
@@ -241,7 +241,7 @@ export function ClusterBentoCard({ dnaOn }: { dnaOn: boolean }) {
               alignItems: "start",
             }}
           >
-            {data.cards.map((c) => (
+            {data.cards.map((c: BentoCardData) => (
               <BentoCard
                 key={c.id}
                 card={c}

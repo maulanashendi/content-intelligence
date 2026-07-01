@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { useSources, useDeleteSource, useToggleSource, useUpdateSource, useTriggerClusterLabelScore, useTriggerAnalysis, usePipelineStatus } from "@ei-fe/api"
-import type { ContentSource, PipelineStatus } from "@ei-fe/api"
+import type { ContentSource, PipelineStatus, PipelineTriggerResult } from "@ei-fe/api"
 import { formatDateTime } from "@ei-fe/core"
 import { Button, LoadingState, ErrorState, EmptyState } from "@ei-fe/ui"
 
@@ -110,7 +110,7 @@ export function SourcesRoute() {
   ) {
     setPipelineMsg(null)
     mutation.mutate(undefined, {
-      onSuccess: (data) => {
+      onSuccess: (data: PipelineTriggerResult) => {
         if (data.notified) {
           triggeredRef.current[key] = Date.now()
           setWatching(true)
@@ -136,9 +136,9 @@ export function SourcesRoute() {
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />
 
   const list = sources ?? []
-  const totalArticles = list.reduce((sum, s) => sum + s.article_count_24h, 0)
-  const activeCount = list.filter((s) => s.status === "active").length
-  const problemCount = list.filter((s) => s.status !== "active" && s.status !== null).length
+  const totalArticles = list.reduce((sum: number, s: ContentSource) => sum + s.article_count_24h, 0)
+  const activeCount = list.filter((s: ContentSource) => s.status === "active").length
+  const problemCount = list.filter((s: ContentSource) => s.status !== "active" && s.status !== null).length
 
   function handleDelete(id: string, name: string) {
     if (!confirm(`Hapus sumber "${name}"? Tindakan ini tidak dapat dibatalkan.`)) return
@@ -252,7 +252,7 @@ export function SourcesRoute() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((s) => (
+                {list.map((s: ContentSource) => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 500 }}>{s.name || s.url}</td>
                     <td><span className={TYPE_BADGE[s.source_type] ?? "badge"}>{TYPE_LABEL[s.source_type] ?? s.source_type}</span></td>

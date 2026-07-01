@@ -2,7 +2,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { useMemo } from "react"
 import { useQueryClient, useQueries } from "@tanstack/react-query"
 import { useMorningClusters, useLatestClusterRun, clusterKeys, clusterDetailQueryOptions } from "@ei-fe/api"
-import type { ClusterDetail } from "@ei-fe/api"
+import type { ClusterDetail, ClusterSummary } from "@ei-fe/api"
 import { Kpi, LoadingState, ErrorState } from "@ei-fe/ui"
 import { ArticleClustersCard } from "./article-clusters-card.js"
 import { ClusterForceGraph } from "./cluster-force-graph.js"
@@ -60,7 +60,7 @@ export function MorningView() {
   const { data: run } = useLatestClusterRun()
 
   const detailQueries = useQueries({
-    queries: (data?.clusters ?? []).map((c) => clusterDetailQueryOptions(c.id)),
+    queries: (data?.clusters ?? []).map((c: ClusterSummary) => clusterDetailQueryOptions(c.id)),
   })
 
   const loadedDetails = useMemo(

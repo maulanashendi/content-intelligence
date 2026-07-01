@@ -79,7 +79,7 @@ export function TrendSignalCard({ sticky = false }: { sticky?: boolean }) {
             Belum ada data trend.
           </div>
         )}
-        {data?.map((s, i) => (
+        {data?.map((s: TrendSignal, i: number) => (
           <TrendRow key={s.id} signal={s} rank={i + 1} />
         ))}
       </div>

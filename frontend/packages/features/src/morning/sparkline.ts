@@ -33,8 +33,9 @@ export function buildSparkline(values: number[], dims: SparklineDims): Sparkline
     .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(2)} ${p[1].toFixed(2)}`)
     .join(" ")
   const baseline = height - pad
-  const first = points[0]
-  const last = points[points.length - 1]
+  // non-null: values.length === 0 already returned above, so points has ≥1 element
+  const first = points[0]!
+  const last = points[points.length - 1]!
   const areaPath = `${linePath} L${last[0].toFixed(2)} ${baseline.toFixed(2)} L${first[0].toFixed(2)} ${baseline.toFixed(2)} Z`
 
   return { linePath, areaPath, lastX: last[0], lastY: last[1] }

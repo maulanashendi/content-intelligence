@@ -58,6 +58,7 @@ export function UserNeedsRadar({ needs }: { needs: Need[] }) {
         {/* Spokes */}
         {dataPts.map((_, i) => {
           const spoke = radarPoints(needs.map((_, j) => (j === i ? 100 : 0)), VB.cx, VB.cy, VB.r)[i]
+          if (!spoke) return null
           return (
             <line
               key={i}

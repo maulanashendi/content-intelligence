@@ -15,12 +15,16 @@ export function distributionToNeeds(
   distribution: Record<string, number> | null,
 ): UserNeedDatum[] {
   if (!distribution) return []
-  const counts = CLUSTER_USER_NEED_ORDER.map((n) => distribution[n.key] ?? 0)
-  const max = Math.max(0, ...counts)
-  if (max === 0) return []
-  return CLUSTER_USER_NEED_ORDER.map((n, i) => ({
+  const entries = CLUSTER_USER_NEED_ORDER.map((n) => ({
     key: n.key,
     label: n.label,
-    value: Math.round((counts[i] / max) * 100),
+    count: distribution[n.key] ?? 0,
+  }))
+  const max = Math.max(0, ...entries.map((e) => e.count))
+  if (max === 0) return []
+  return entries.map((e) => ({
+    key: e.key,
+    label: e.label,
+    value: Math.round((e.count / max) * 100),
   }))
 }

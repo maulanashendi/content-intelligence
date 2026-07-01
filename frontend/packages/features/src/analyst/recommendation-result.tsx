@@ -8,14 +8,16 @@ import { RankedBars } from "./ranked-bars.js"
 const NEED_HINTS = ["user_need", "user_need_category", "need", "category"]
 
 function inferNeedColumn(rows: Record<string, unknown>[]): string | null {
-  if (!rows.length) return null
-  const keys = Object.keys(rows[0])
+  const [first] = rows
+  if (!first) return null
+  const keys = Object.keys(first)
   return keys.find((k) => NEED_HINTS.includes(k.toLowerCase())) ?? null
 }
 
 function RawDataTable({ rows }: { rows: Record<string, unknown>[] }) {
   const [open, setOpen] = useState(false)
-  const cols = rows.length ? Object.keys(rows[0]) : []
+  const [firstRow] = rows
+  const cols = firstRow ? Object.keys(firstRow) : []
 
   return (
     <Section title="Data mentah">
@@ -91,8 +93,9 @@ export function RecommendationResultCard({ result }: { result: RecommendationOut
   const filters = activeFilters(result.filters_applied)
   const rows = result.sample_data
   const valueCol = inferNumericColumn(rows)
-  const cols = rows.length ? Object.keys(rows[0]) : []
-  const labelCol = cols.find((c) => typeof rows[0]?.[c] === "string") ?? cols[0] ?? ""
+  const [firstRow] = rows
+  const cols = firstRow ? Object.keys(firstRow) : []
+  const labelCol = cols.find((c) => typeof firstRow?.[c] === "string") ?? cols[0] ?? ""
   const needCol = inferNeedColumn(rows) ?? undefined
 
   return (

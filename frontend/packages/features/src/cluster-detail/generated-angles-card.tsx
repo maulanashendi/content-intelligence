@@ -63,7 +63,7 @@ export function GeneratedAnglesCard({ cluster }: GeneratedAnglesCardProps) {
                 </span>
               </div>
               <ul className="ci-bullets" style={{ marginTop: 4 }}>
-                {parties_involved.map((party) => (
+                {parties_involved.map((party: string) => (
                   <li key={party}>{party}</li>
                 ))}
               </ul>
@@ -78,7 +78,7 @@ export function GeneratedAnglesCard({ cluster }: GeneratedAnglesCardProps) {
                 </span>
               </div>
               <ul className="ci-bullets" style={{ marginTop: 4 }}>
-                {bullet_insights.map((item) => (
+                {bullet_insights.map((item: string) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>

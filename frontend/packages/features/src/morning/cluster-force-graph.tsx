@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from "react"
 import * as d3 from "d3"
-import type { ClusterDetail } from "@ei-fe/api"
+import type { ClusterDetail, ArticleMember } from "@ei-fe/api"
 
 function clusterColor(velocity: number | null): { color: string; colorLight: string } {
   const v = velocity ?? 0
@@ -65,7 +65,7 @@ function buildGraph(
     })
 
     const articles = cluster.members.slice(0, 10)
-    const articleNodes: GraphNode[] = articles.map((a) => {
+    const articleNodes: GraphNode[] = articles.map((a: ArticleMember) => {
       const size = 4 + (a.relevance_score ?? 0.5) * 5
       return {
         id: `article-${a.id}`,

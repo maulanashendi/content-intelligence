@@ -32,6 +32,7 @@ export function Composer({ mode, onModeChange, onSubmit, disabled, initialText, 
     if (!value || disabled) return
     if (mode === "analyze") {
       const [firstLine, ...rest] = value.split("\n")
+      if (firstLine === undefined) return
       const title = firstLine.trim().slice(0, 200)
       const content = (rest.join("\n").trim() || firstLine).slice(0, 20000)
       if (content.length < 1) { setError("Tempel isi draf untuk dianalisis."); return }

@@ -68,8 +68,9 @@ export function groupedFeatures(features: ArticleFeatures) {
 const VIEWS_HINTS = ["page_views", "pageviews", "views", "pv", "reads"]
 
 export function inferNumericColumn(rows: Record<string, unknown>[]): string | null {
-  if (rows.length === 0) return null
-  const keys = Object.keys(rows[0])
+  const [first] = rows
+  if (!first) return null
+  const keys = Object.keys(first)
   const isNum = (k: string) => rows.every((row) => typeof row[k] === "number")
   const hinted = keys.find((k) => VIEWS_HINTS.includes(k.toLowerCase()) && isNum(k))
   if (hinted) return hinted
@@ -112,11 +113,15 @@ export const PHRASE: Record<string, string> = {
 
 export function analyzeVerdict(
   needs: { key: string; label: string; value: number }[],
-  detected: number,
+  _detected: number,
 ): { leadLabel: string; weakestLabel: string; sentence: string } {
   const sorted = [...needs].sort((a, b) => b.value - a.value)
-  const lead = sorted[0]
-  const weakest = sorted[sorted.length - 1]
+  const [firstSorted, ...restSorted] = sorted
+  if (!firstSorted) {
+    return { leadLabel: "", weakestLabel: "", sentence: "" }
+  }
+  const lead = firstSorted
+  const weakest = restSorted.at(-1) ?? lead
 
   // Secondary: 2nd-highest if value ≥ 50 AND within 15 points of lead
   const second = sorted[1]

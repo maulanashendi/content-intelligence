@@ -137,7 +137,7 @@ function ClusterInsightPanel({ cluster, run }: { cluster: ClusterSummary | undef
               Pihak Terlibat
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {cluster.parties_involved.map((party, i) => (
+              {cluster.parties_involved.map((party: string, i: number) => (
                 <span key={i} className="score-chip">
                   <span className="v">{party}</span>
                 </span>
@@ -184,7 +184,7 @@ export function ClusteringRoute() {
   const clusters = _listData?.clusters ?? []
 
   const effectiveId = clusters[0]?.id ?? null
-  const selectedCluster = clusters.find(c => c.id === effectiveId)
+  const selectedCluster = clusters.find((c: ClusterSummary) => c.id === effectiveId)
 
   if (clusters.length === 0 && run == null) {
     return (
@@ -202,7 +202,7 @@ export function ClusteringRoute() {
         <div>
           <h1 className="page-title">Topic <span className="serif">Clustering</span></h1>
           <p className="page-sub">
-            Hasil clustering run terbaru — {clusters.filter(c => c.is_current).length} kluster aktif
+            Hasil clustering run terbaru — {clusters.filter((c: ClusterSummary) => c.is_current).length} kluster aktif
           </p>
         </div>
         <div className="page-actions">
@@ -240,7 +240,7 @@ export function ClusteringRoute() {
           <RunInfoCard run={run} />
           <ArticleClustersCard
             selected={effectiveId}
-            onSelect={(id) => navigate(`/clusters/${id}`)}
+            onSelect={(id: string) => navigate(`/clusters/${id}`)}
           />
           {selectedCluster && <ClusterInsightPanel cluster={selectedCluster} run={run} />}
         </div>
