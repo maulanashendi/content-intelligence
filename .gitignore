@@ -46,6 +46,7 @@ backend/logs/
 
 # Temporary docs (local only)
 docs/tmp/
+docs/superpowers/
 
 # Local artifacts / screenshots (not committed)
 .playwright-mcp/
